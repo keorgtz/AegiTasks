@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/server/">
+    <Project Path="server/AegiTasks.Api/AegiTasks.Api.csproj" />
+  </Folder>
+</Solution>

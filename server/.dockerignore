@@ -1,0 +1,6 @@
+**/bin
+**/obj
+**/.local-data
+**/uploads
+**/*.db*
+**/appsettings.Local.json

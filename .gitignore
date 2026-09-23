@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/TestResults/
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/.local-data/
+**/uploads/
+**/*.db*
+artifacts/
+.DS_Store
+.vs/

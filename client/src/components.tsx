@@ -1,0 +1,99 @@
+import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { X, CheckCheck } from 'lucide-react';
+export function Brand() {
+  return (
+    <div className="brand">
+      <div className="brand-mark">
+        <CheckCheck size={25} />
+      </div>
+      <div>
+        <strong>AegiTasks</strong>
+        <span>PASTEL PULSE</span>
+      </div>
+    </div>
+  );
+}
+export function Modal({
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const id = useId();
+  useEffect(() => {
+    const d = ref.current!;
+    d.showModal();
+    return () => d.close();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className={`modal ${wide ? 'modal-wide' : ''}`}
+      aria-labelledby={id}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+    >
+      <div className="modal-head">
+        <h2 id={id}>{title}</h2>
+        <button className="btn-icon" aria-label="Cerrar" onClick={onClose}>
+          <X size={20} />
+        </button>
+      </div>
+      {children}
+    </dialog>
+  );
+}
+export function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="field">
+      <label>
+        <span>{label}</span>
+        {children}
+      </label>
+      {hint && <small>{hint}</small>}
+    </div>
+  );
+}
+export function Badge({ children, color = 'neutral' }: { children: ReactNode; color?: string }) {
+  return <span className={`badge tone-${color}`}>{children}</span>;
+}
+export function ErrorBox({ message }: { message: string }) {
+  return message ? (
+    <div className="error-box" role="alert">
+      {message}
+    </div>
+  ) : null;
+}
+export function Empty({
+  icon,
+  title,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="empty">
+      <div className="empty-icon">{icon}</div>
+      <h3>{title}</h3>
+      <p>{children}</p>
+    </div>
+  );
+}

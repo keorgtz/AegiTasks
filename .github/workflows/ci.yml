@@ -1,0 +1,34 @@
+name: Validate AegiTasks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: dotnet build
+      - run: npm --prefix client ci
+      - run: npm --prefix client run typecheck
+      - run: npm --prefix client run lint
+      - run: npm --prefix client run build
+      - run: npx --prefix client playwright install --with-deps chromium
+      - run: npm --prefix client run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence
+          path: artifacts/
+          retention-days: 7

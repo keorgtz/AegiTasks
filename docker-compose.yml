@@ -1,0 +1,72 @@
+name: aegitasks
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: aegitasks-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aegitasks
+      POSTGRES_USER: aegitasks
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U aegitasks -d aegitasks"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+  api:
+    build:
+      context: ./server
+      dockerfile: AegiTasks.Api/Dockerfile
+    container_name: aegitasks-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      DatabaseProvider: Postgres
+      ConnectionStrings__Default: Host=db;Port=5432;Database=aegitasks;Username=aegitasks;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:?Set SEED_ADMIN_EMAIL in .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in .env}
+      StoragePath: /app/storage/uploads
+      DataProtectionPath: /app/storage/keys
+    volumes:
+      - storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
+    networks: [internal]
+  web:
+    build: ./client
+    container_name: aegitasks-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [CMD-SHELL, "wget -q -O /dev/null http://localhost/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks: [internal, proxy]
+    labels:
+      - traefik.enable=false
+volumes:
+  pgdata:
+    name: aegitasks-pgdata
+  storage:
+    name: aegitasks-storage
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    external: true
