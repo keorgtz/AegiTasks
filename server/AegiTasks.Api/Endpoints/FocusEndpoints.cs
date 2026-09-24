@@ -34,8 +34,12 @@ public static class FocusEndpoints
         group.MapPost("/start", async (StartInput input, AppDb db, ClaimsPrincipal user) => {
             var id = user.UserId(); if (await db.FocusSessions.AnyAsync(s => s.UserId == id && s.FinishedAt == null)) return Results.Conflict(new { error = "Ya tienes una sesión activa. Retómala o finalízala primero." });
             var ids = (input.TaskIds ?? []).Distinct().ToArray();
-            if (ids.Length > 10 || await db.Tasks.CountAsync(t => ids.Contains(t.Id)) != ids.Length) throw new InputError("Selecciona hasta 10 pendientes de este espacio.");
             if (ids.Length > 0 && !await Access.Can(db, user, "tasks")) return Results.Forbid();
+            var available = db.Tasks.ForAssignee("mine-or-unassigned", id).Where(t => !t.Archived
+                && db.Projects.Any(p => p.Id == t.ProjectId && !p.Archived)
+                && db.Statuses.Any(s => s.Id == t.StatusId && !s.IsDone));
+            if (ids.Length > 10 || await available.CountAsync(t => ids.Contains(t.Id)) != ids.Length)
+                throw new InputError("Selecciona hasta 10 pendientes sin completar, asignados a ti o sin responsable, de este espacio. Alguno pudo cambiar; revisa la lista.");
             var p = await db.FocusProfiles.FindAsync(id) ?? new FocusProfile();
             var s = new FocusSession { UserId = id, SpaceId = db.CurrentSpaceId, Goal = Rules.Text(input.Goal, 2000, "Objetivos", false), TaskIdsJson = JsonSerializer.Serialize(ids), FocusMinutes = p.FocusMinutes, ShortBreakMinutes = p.ShortBreakMinutes, LongBreakMinutes = p.LongBreakMinutes, Cycles = p.Cycles, RemainingSeconds = p.FocusMinutes * 60, EndsAt = DateTime.UtcNow.AddMinutes(p.FocusMinutes) };
             db.FocusSessions.Add(s); await db.SaveChangesAsync(); return Results.Ok(s);

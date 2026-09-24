@@ -405,10 +405,11 @@ export async function testExpansionUi({
   }
   await page.getByRole('button', { name: 'Guardar preferencias', exact: true }).click();
   await page.getByText('Preferencias de enfoque guardadas.').waitFor();
-  await page.getByRole('button', { name: 'Pantalla completa', exact: true }).click();
+  await page.getByRole('button', { name: 'Ampliar en esta pestaña', exact: true }).click();
   await page.locator('.focus-stage.is-immersive').waitFor();
   await page.screenshot({ path: path.join(artifacts, 'focus-immersive.png') });
-  await page.getByRole('button', { name: 'Salir de pantalla completa', exact: true }).click();
+  assert.equal(await page.evaluate(() => document.fullscreenElement), null);
+  await page.getByRole('button', { name: 'Salir de vista ampliada', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(artifacts, 'focus-mobile.png'), fullPage: true });
   for (const width of [320, 390, 768, 1024]) {

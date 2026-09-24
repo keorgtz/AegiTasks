@@ -307,6 +307,11 @@ function WorkspaceApp({
   const [tag, setTag] = useState('');
   const [priority, setPriority] = useState('');
   const [scope, setScope] = useState('open');
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+  const assignee =
+    route === 'mine'
+      ? 'mine'
+      : (assigneeFilter ?? (route === 'inbox' ? 'mine-or-unassigned' : 'all'));
   const [sort, setSort] = useState('priority');
   const [view, setView] = useState('list');
   const [page, setPage] = useState(1);
@@ -351,6 +356,7 @@ function WorkspaceApp({
         return;
       }
       setRoute(location.hash.slice(1) || 'inbox');
+      setAssigneeFilter(null);
       if (!location.hash.startsWith('#project/')) setView('list');
       setFolder('');
       setStatus('');
@@ -398,6 +404,7 @@ function WorkspaceApp({
       scope: route === 'mine' ? 'mine' : route === 'archived' ? 'archived' : scope,
       sort,
       page: String(page),
+      assignee,
     });
     if (projectId) params.set('project', projectId);
     if (folder) params.set('folder', folder);
@@ -407,7 +414,12 @@ function WorkspaceApp({
     if (query) params.set('q', query);
     Promise.all([
       api<TaskPage>(`/tasks?${params}`, 'GET', undefined, controller.signal),
-      api<Summary>('/tasks/summary', 'GET', undefined, controller.signal),
+      api<Summary>(
+        `/tasks/summary?assignee=${encodeURIComponent(assignee)}`,
+        'GET',
+        undefined,
+        controller.signal,
+      ),
     ])
       .then(([tasks, counts]) => {
         setResult(tasks);
@@ -430,6 +442,7 @@ function WorkspaceApp({
     priority,
     query,
     scope,
+    assignee,
     sort,
     page,
     route,
@@ -439,6 +452,7 @@ function WorkspaceApp({
   ]);
   const navigate = (to: string) => {
     setMoreMenu(false);
+    setAssigneeFilter(null);
     if (to === 'settings' && projectId) setSettingsProject(projectId);
     location.hash = to;
     setPage(1);
@@ -474,6 +488,7 @@ function WorkspaceApp({
     setPage(1);
   };
   const clearFilters = () => {
+    setAssigneeFilter(null);
     setSearch('');
     setQuery('');
     setFolder('');
@@ -894,7 +909,9 @@ function WorkspaceApp({
                   <div className="section-heading">
                     <div>
                       <h2>
-                        {route === 'inbox' ? 'Los pendientes del equipo' : 'Pendientes'}{' '}
+                        {route === 'inbox' && assignee === 'mine-or-unassigned'
+                          ? 'Tus pendientes y los que puedes tomar'
+                          : 'Pendientes'}{' '}
                         <span className="count">{result.total}</span>
                       </h2>
                       <p className="muted small">
@@ -977,6 +994,24 @@ function WorkspaceApp({
                               {s.name}
                             </option>
                           ))}
+                      </select>
+                    )}
+                    {route !== 'mine' && (
+                      <select
+                        aria-label="Filtrar por responsable"
+                        value={assignee}
+                        onChange={(e) => filter(() => setAssigneeFilter(e.target.value))}
+                      >
+                        <option value="mine-or-unassigned">Míos y sin responsable</option>
+                        <option value="mine">Solo míos</option>
+                        <option value="unassigned">Sin responsable</option>
+                        <option value="all">Todos los responsables</option>
+                        {w.users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                            {!u.active ? ' (inactivo)' : ''}
+                          </option>
+                        ))}
                       </select>
                     )}
                     <select

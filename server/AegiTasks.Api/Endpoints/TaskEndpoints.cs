@@ -11,9 +11,10 @@ public static class TaskEndpoints
     public static void MapTasks(this WebApplication app)
     {
         var group = app.MapGroup("/api/tasks").RequireAuthorization("page:tasks");
-        group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page) =>
+        group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page, string? assignee) =>
         {
             var query = db.Tasks.AsNoTracking().Where(x => x.Archived == (scope == "archived") && db.Projects.Any(p => p.Id == x.ProjectId && !p.Archived));
+            query = query.ForAssignee(assignee, user.UserId());
             if (project != null) query = query.Where(x => x.ProjectId == project);
             if (folder != null) query = query.Where(x => x.FolderId == folder);
             if (status != null) query = query.Where(x => x.StatusId == status);
@@ -38,9 +39,10 @@ public static class TaskEndpoints
             var items = await query.Skip((currentPage - 1) * 50).Take(50).Include(x => x.Tags).ToListAsync();
             return Results.Ok(new { items, total, page = currentPage, pageSize = 50 });
         });
-        group.MapGet("/summary", async (AppDb db) =>
+        group.MapGet("/summary", async (AppDb db, ClaimsPrincipal user, string? assignee) =>
         {
             var query = db.Tasks.AsNoTracking().Where(x => !x.Archived && db.Projects.Any(p => p.Id == x.ProjectId && !p.Archived));
+            query = query.ForAssignee(assignee, user.UserId());
             var open = query.Where(x => db.Statuses.Any(s => s.Id == x.StatusId && !s.IsDone));
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             return Results.Ok(new { open = await open.CountAsync(), urgent = await open.CountAsync(x => x.Priority >= 3), overdue = await open.CountAsync(x => x.DueDate < today), done = await query.CountAsync(x => db.Statuses.Any(s => s.Id == x.StatusId && s.IsDone)) });

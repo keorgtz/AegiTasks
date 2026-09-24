@@ -85,7 +85,6 @@ export function FocusPage({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const stage = useRef<HTMLDivElement>(null);
   const audio = useRef<AudioContext | null>(null);
   const alerted = useRef('');
   const loadVersion = useRef(0);
@@ -127,7 +126,7 @@ export function FocusPage({
     const timer = setTimeout(
       () =>
         void api<TaskPage>(
-          `/tasks?scope=open&page=${taskPage}&q=${encodeURIComponent(taskQuery)}`,
+          `/tasks?scope=open&assignee=mine-or-unassigned&page=${taskPage}&q=${encodeURIComponent(taskQuery)}`,
           'GET',
           undefined,
           c.signal,
@@ -284,25 +283,15 @@ export function FocusPage({
     lines[index] = `${done ? '[ ]' : '[x]'} ${line.replace(/^(?:- )?\[[ x]\] /i, '')}`;
     void action('goals', lines.join('\n'));
   };
-  async function fullScreen() {
-    setImmersive(true);
-    try {
-      await stage.current?.requestFullscreen();
-    } catch {
-      /* Immersive layout also works without the Fullscreen API. */
-    }
-  }
-  useEffect(() => {
-    const changed = () => {
-      if (!document.fullscreenElement) setImmersive(false);
-    };
-    document.addEventListener('fullscreenchange', changed);
-    return () => document.removeEventListener('fullscreenchange', changed);
-  }, []);
-  const leave = () => {
+  const leave = () => setImmersive(false);
+  function chooseTasks() {
     setImmersive(false);
-    if (document.fullscreenElement) void document.exitFullscreen();
-  };
+    requestAnimationFrame(() => {
+      const plan = document.getElementById('focus-plan');
+      plan?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      plan?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+    });
+  }
   return (
     <>
       <div className="page-heading">
@@ -321,7 +310,6 @@ export function FocusPage({
         </p>
       )}
       <div
-        ref={stage}
         data-update-blocked={
           busy ||
           !!changingTask ||
@@ -358,8 +346,9 @@ export function FocusPage({
           </span>
           <button
             className="btn-icon"
-            aria-label={immersive ? 'Salir de pantalla completa' : 'Pantalla completa'}
-            onClick={() => (immersive ? leave() : void fullScreen())}
+            aria-label={immersive ? 'Salir de vista ampliada' : 'Ampliar en esta pestaña'}
+            title="La vista ampliada conserva las pestañas del navegador"
+            onClick={() => setImmersive((value) => !value)}
           >
             {immersive ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
           </button>
@@ -455,14 +444,7 @@ export function FocusPage({
             )}
           </div>
           {!session && canTasks && (
-            <button
-              className="btn focus-secondary"
-              onClick={() =>
-                document
-                  .getElementById('focus-plan')
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-            >
+            <button className="btn focus-secondary focus-choose-tasks" onClick={chooseTasks}>
               Elegir pendientes · {selected.length} seleccionados
             </button>
           )}
@@ -633,6 +615,12 @@ export function FocusPage({
         </section>
         <section className="card" id="focus-plan">
           <h2>{session ? 'Tu sesión actual' : '¿Qué quieres avanzar?'}</h2>
+          {!session && canTasks && (
+            <p className="muted small">
+              Pendientes sin completar asignados a ti o sin responsable, de todos los proyectos de
+              este espacio.
+            </p>
+          )}
           {!session ? (
             <>
               <Field label="Objetivos de la sesión">
@@ -682,7 +670,9 @@ export function FocusPage({
                     ))}
                   </div>
                   {!tasks.length && (
-                    <p className="muted small">No hay pendientes abiertos que coincidan.</p>
+                    <p className="muted small">
+                      No hay pendientes abiertos propios o sin responsable que coincidan.
+                    </p>
                   )}
                   {taskTotal > 50 && (
                     <div className="pagination">
@@ -709,6 +699,11 @@ export function FocusPage({
                     {selected.length} de 10 seleccionados. Durante la sesión puedes cambiar su
                     estado o marcarlos como resueltos directamente en el timer.
                   </p>
+                  {selected.length > 0 && (
+                    <button className="btn btn-ghost" onClick={() => setSelected([])}>
+                      Limpiar selección
+                    </button>
+                  )}
                 </>
               )}
             </>

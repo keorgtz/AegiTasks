@@ -1,6 +1,7 @@
 import { chromium, request } from 'playwright';
 import { testSpaces, testExpansionUi } from './expansion-tests.mjs';
 import { testWorkflow } from './workflow-tests.mjs';
+import { testAssignments } from './assignment-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -37,6 +38,9 @@ const run = (command, args, options) => {
   });
   child.stderr.on('data', (b) => {
     apiLog += b.toString();
+  });
+  child.on('exit', (code, signal) => {
+    apiLog += `\nTEST SERVICE EXIT ${command} ${args[0]} code=${code} signal=${signal}\n`;
   });
   return child;
 };
@@ -497,6 +501,17 @@ try {
     pass,
     artifacts,
     password,
+  });
+  await testAssignments({
+    page,
+    context,
+    admin,
+    support,
+    shared,
+    adminUser,
+    json,
+    pass,
+    artifacts,
   });
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));

@@ -12,9 +12,9 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **62 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **66 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**, más una comprobación opcional de migración del worker anterior |
-| `node client/scripts/postgres-tests.mjs`                                        | **62 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `node client/scripts/postgres-tests.mjs`                                        | **66 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -23,6 +23,19 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Responsables y vista ampliada de Focus
+
+Se añadieron cuatro verificaciones integradas a la suite:
+
+- Filtros de responsable aplicados antes de paginar, con 52 pendientes elegibles entre dos páginas, identidad distinta para Admin/User y métricas coherentes con el filtro.
+- Focus rechaza desde la API pendientes completados, archivados, de proyectos archivados o asignados a otra persona. Mantiene las comprobaciones existentes de espacio y permisos.
+- Bandejas reales de Admin y User muestran sus pendientes y los no asignados; permiten filtrar otra persona y recuperan el valor inicial al volver a entrar o recargar. Vista móvil sin desbordamiento.
+- Selección de Focus conservada entre búsquedas, botones separados al menos 16 px, vista ampliada limitada al viewport en 1366, 390 y 320 px. `document.fullscreenElement` permanece vacío. Elegir pendientes sale de la vista ampliada y enfoca el buscador; cambiar de pestaña o salir con Esc mantiene el timer activo.
+
+Se revisaron las capturas `artifacts/assignment-focus-expanded-1366.png`, `assignment-focus-expanded-390.png`, `assignment-focus-expanded-320.png` y `assignment-inbox-mobile.png`. La validación corrigió un conflicto de capas que permitía al encabezado interceptar el botón de salida. No hay cambios de esquema ni nuevas migraciones.
+
+Las 66 verificaciones pasaron en SQLite y PostgreSQL 18.4. En un intento intermedio de PostgreSQL, el puerto del preview Vite dejó de aceptar conexiones (`ERR_CONNECTION_RESET` y `ERR_CONNECTION_REFUSED`), mientras la API directa seguía respondiendo. Se conservó `artifacts/assignment-postgres-failure.log`, se añadió registro de salida de procesos de prueba y la ejecución completa posterior pasó; no se añadieron reintentos de escrituras ni cambios al proxy de producción.
 
 ### Actualización automática entre despliegues
 
@@ -46,7 +59,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite de 62 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite de 66 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.
@@ -84,7 +97,7 @@ El script genera `artifacts/test-results.json` y capturas locales. También se c
 
 La prueba de migración crea una base con el esquema anterior, usuarios Admin/Member, proyecto, etiqueta personalizada, pendiente, comentario y relación de etiqueta. Aplica la migración de Spaces y comprueba que conserva esos datos, crea el workspace compartido y dos espacios Personal, migra Member a User e inicializa permisos. Una segunda base vacía se levanta mediante la API y sus migraciones automáticas para ejecutar la suite completa.
 
-El build Vite conserva una advertencia de tamaño en el módulo de notas (~524 KB sin comprimir, ~164 KB gzip), cargado bajo demanda; el módulo principal es ~308 KB sin comprimir. El resaltado de código y el procesamiento Markdown explican la mayor parte del módulo. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
+El build Vite conserva una advertencia de tamaño en el módulo de notas (~524 KB sin comprimir, ~164 KB gzip), cargado bajo demanda; el módulo principal es ~316 KB sin comprimir. El resaltado de código y el procesamiento Markdown explican la mayor parte del módulo. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
 
 En ejecuciones intermedias aparecieron cortes `ECONNRESET` en peticiones del cliente de pruebas a Vite, antes de llegar a la API. Las pruebas HTTP se dirigen directamente a la API (5213); las pruebas de navegador siguen pasando por el proxy Vite (4174). No se añadieron reintentos automáticos de mutaciones. No se atribuye este fallo al servidor de producción, cuyo proxy es Nginx.
 

@@ -679,6 +679,17 @@ svg.focus-waves path + path {
   gap: 12px;
   flex-wrap: wrap;
 }
+.focus-choose-tasks {
+  margin-top: 16px;
+  max-width: 100%;
+  white-space: normal;
+}
+body:has(.focus-stage.is-immersive) {
+  overflow: hidden;
+}
+.app-content:has(.focus-stage.is-immersive) {
+  z-index: 150;
+}
 .focus-primary {
   background: #c2afff;
   color: #1d1438;
@@ -735,18 +746,21 @@ svg.focus-waves path + path {
 .focus-goals span {
   overflow-wrap: anywhere;
 }
-.focus-stage.is-immersive,
-.focus-stage:fullscreen {
+.focus-stage.is-immersive {
   position: fixed;
   inset: 0;
   z-index: 180;
   border-radius: 0;
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 32px 5vw;
+}
+.focus-stage.is-immersive > :not(.focus-art) {
+  flex-shrink: 0;
 }
 .focus-stage.is-immersive .focus-topline {
   position: absolute;
