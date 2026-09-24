@@ -17,7 +17,7 @@ Espacios personales y compartidos para organizar pendientes, documentar conocimi
 - **Usuarios y roles:** Admin, User y roles personalizados. Solo Admin crea/gestiona cuentas y roles desde **Usuarios y roles**. Los roles nuevos tienen todas las páginas operativas habilitadas por defecto; el administrador puede restringirlas. Sin registro público ni correo saliente.
 - **Archivo reversible:** conserva pendientes e historial. Los proyectos archivados se restauran desde Ajustes → Organización.
 - **Cambios simultáneos:** un pendiente modificado por otra persona rechaza una edición antigua con un mensaje para recargar; no sobrescribe silenciosamente.
-- **PWA:** pulsa el logo en el sidebar o en la cabecera móvil para abrir el diálogo de instalación; actualización desde navegación lateral o Ajustes en móvil; fuentes e iconos locales.
+- **PWA:** pulsa el logo en el sidebar o en la cabecera móvil para instalar; los nuevos despliegues se aplican automáticamente sin borrar caché. Fuentes e iconos locales.
 - **Borradores sin conexión:** el texto de reportes nuevos se conserva por usuario y espacio en el dispositivo. Enviar requiere conexión y una sesión vigente. La PWA conserva su interfaz, pero **no almacena respuestas privadas de la API ni sincroniza cambios automáticamente en segundo plano**.
 
 Las vistas reciben avisos del servidor al cambiar su contenido, sin consultar datos cada 30 segundos. La reconexión sincroniza la vista y los avisos recibidos en segundo plano se aplican al recuperar visibilidad. Los formularios abiertos conservan sus borradores y detectan conflictos al guardar. Las notas se guardan explícitamente; no son un editor de texto colaborativo simultáneo. Las tarjetas de métricas filtran la bandeja. Los estados se cambian desde el detalle o Focus; el tablero funciona también con touch y teclado.
@@ -93,7 +93,7 @@ Requisitos: Ubuntu, Docker con Compose, Nginx Proxy Manager en la red externa `p
      service: http://npm:80
    ```
 
-   Conserva tus entradas actuales y coloca esta entrada antes del `http_status:404` final. Crea la ruta DNS/CNAME hacia tu túnel como haces para `fitness`. Si usas el panel de Cloudflare, añade un Public Hostname equivalente. Desactiva reglas de caché generales para `/api/*`, `/sw.js` e `/index.html`.
+   Conserva tus entradas actuales y coloca esta entrada antes del `http_status:404` final. Crea la ruta DNS/CNAME hacia tu túnel como haces para `fitness`. Si usas el panel de Cloudflare, añade un Public Hostname equivalente. Excluye de las reglas generales de caché `/api/*`, `/`, `/index.html`, `/sw.js`, `/sw-version.js` y `/version.json`. Respeta las cabeceras de Nginx; `/assets/*` conserva caché inmutable por nombre de archivo.
 
 5. Abre `https://task.tudominio.com` e ingresa con `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`. Cambia tu contraseña desde **Mi cuenta**, agrega cuentas en **Usuarios y roles**, crea un workspace e invita al equipo antes de crear los proyectos compartidos.
 
@@ -110,7 +110,9 @@ docker compose logs --tail=80 api
 
 Realiza un respaldo antes de actualizar. La API aplica migraciones al arrancar. El administrador y sus claves se siembran **solo cuando no hay usuarios**: editar las variables de seed no cambia una contraseña existente. Los proyectos, etiquetas personalizadas y estados guardados no se reemplazan al desplegar. Ejecuta una sola instancia de API durante las migraciones.
 
-En los clientes ya instalados, usa **Actualización disponible** en la navegación o en Ajustes móvil. Guarda los cambios abiertos antes de actualizar.
+Cada build genera su propia versión. La app comprueba nuevos despliegues al abrir, volver al primer plano, recuperar conexión y cada minuto mientras está visible. Instala el nuevo service worker y recarga automáticamente cuando sus archivos están listos. No elimina sesiones, preferencias ni borradores. Si hay un editor abierto, un formulario con cambios pendientes, una operación de guardado o Focus en pantalla inmersiva, espera a terminar/cerrar esa edición o salir del modo inmersivo. No copia notas ni contraseñas a almacenamiento local para actualizar.
+
+Los dispositivos desconectados reciben la actualización al reconectar y abrir la app. **Transición desde la versión anterior:** una pestaña que ya estaba abierta con el actualizador antiguo puede necesitar cerrarse y abrirse de nuevo, o una recarga normal después de descargar el nuevo worker. No necesita borrar caché ni reinstalar. Las siguientes versiones se actualizan automáticamente. Detalles y diagnóstico en [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Desarrollo local en Windows
 
@@ -142,9 +144,12 @@ npm --prefix client run lint
 npm --prefix client run build
 npx --prefix client playwright install chromium
 npm --prefix client run test:e2e
+npm --prefix client run test:pwa
 ```
 
 Las pruebas levantan una API y un cliente de producción con BD temporal independiente. Los puertos 5213 y 4174 deben estar libres. Cubren permisos, validaciones entre proyectos, persistencia, conflictos de edición, adjuntos, archivo, filtros, paginación, UI, temas, tamaños móviles, PWA y recuperación de borradores tras perder conexión. Sus datos de muestra **no se siembran en producción**. Evidencia y capturas: `artifacts/` (ignorado por Git).
+
+`test:pwa` compila dos versiones en carpetas temporales y alterna su publicación en el mismo origen con service workers reales de Chromium. Verifica actualizaciones automáticas, varias pestañas, formularios, modo offline y reintentos. No necesita base de datos y no reemplaza el build de `client/dist`.
 
 Para ejecutar también la suite contra PostgreSQL local, coloca `initdb`, `pg_ctl` y `psql` en PATH y ejecuta `node client/scripts/postgres-tests.mjs`. Usa un cluster temporal en el puerto 55439, verifica una migración con datos anteriores y una instalación nueva, y lo detiene al finalizar.
 

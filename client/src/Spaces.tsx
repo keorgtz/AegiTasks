@@ -219,7 +219,7 @@ export function SpacesPage({
           <h2>
             <Plus size={19} /> Crear workspace
           </h2>
-          <form onSubmit={create}>
+          <form onSubmit={create} data-update-blocked={!!name || busy}>
             <Field label="Nombre del workspace">
               <input
                 required
@@ -236,7 +236,7 @@ export function SpacesPage({
         </section>
         <section className="card">
           <h2>Unirme a un workspace</h2>
-          <form onSubmit={join}>
+          <form onSubmit={join} data-update-blocked={!!code || busy}>
             <Field label="Código de invitación">
               <input
                 required

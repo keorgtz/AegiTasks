@@ -67,6 +67,7 @@ export function FocusPage({
   openTask: (id: string) => void;
 }) {
   const [profile, setProfile] = useState<Profile>(defaults);
+  const [savedProfile, setSavedProfile] = useState<Profile>(defaults);
   const [session, setSession] = useState<Session | null>(null);
   const [history, setHistory] = useState<Session[]>([]);
   const [goal, setGoal] = useState('');
@@ -93,7 +94,10 @@ export function FocusPage({
     const d = await api<FocusData>('/focus');
     if (version !== loadVersion.current) return;
     setSession(d.session);
-    if (includeProfile) setProfile(d.profile);
+    if (includeProfile) {
+      setProfile(d.profile);
+      setSavedProfile(d.profile);
+    }
     setHistory(d.history);
     setOffset(new Date(d.serverNow).getTime() - Date.now());
   }
@@ -238,9 +242,12 @@ export function FocusPage({
     setError('');
     try {
       await api('/focus/profile', 'PUT', profile);
+      setSavedProfile(profile);
       const s = await api<Session>('/focus/start', 'POST', { goal, taskIds: selected });
       loadVersion.current++;
       setSession(s);
+      setGoal('');
+      setSelected([]);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -315,6 +322,13 @@ export function FocusPage({
       )}
       <div
         ref={stage}
+        data-update-blocked={
+          busy ||
+          !!changingTask ||
+          immersive ||
+          JSON.stringify(profile) !== JSON.stringify(savedProfile) ||
+          (!session && (!!goal || selected.length > 0))
+        }
         className={`focus-stage focus-${profile.theme} ${profile.animated ? 'is-animated' : ''} ${immersive ? 'is-immersive' : ''}`}
       >
         <div className="focus-art" aria-hidden="true">
@@ -605,6 +619,7 @@ export function FocusPage({
               setError('');
               try {
                 await api('/focus/profile', 'PUT', profile);
+                setSavedProfile(profile);
                 setMessage('Preferencias de enfoque guardadas.');
               } catch (e) {
                 setError(errorMessage(e));

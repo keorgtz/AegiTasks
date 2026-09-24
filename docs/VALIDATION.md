@@ -13,6 +13,7 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
 | `npm --prefix client run test:e2e`                                              | **62 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**, más una comprobación opcional de migración del worker anterior |
 | `node client/scripts/postgres-tests.mjs`                                        | **62 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
@@ -22,6 +23,14 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Actualización automática entre despliegues
+
+Se ejecutó la suite PWA con dos builds reales distintos servidos sucesivamente desde el mismo origen. Chromium conservó sus service workers, cookies y almacenamiento durante el cambio. Se verificaron múltiples pestañas, viewport móvil, editor abierto, valores de un formulario React, recarga offline, reconexión, retorno al primer plano (evento de visibilidad emulado), recuperación tras fallar la descarga del worker, actualización con workers bloqueados y ausencia de recargas repetidas o excepciones JavaScript. El reloj de página se adelanta para disparar la comprobación periódica; las descargas y activaciones de workers son reales.
+
+También se comprobó la transición desde un build anterior a este cambio mediante `AEGITASKS_LEGACY_DIST`: el worker con actualización manual fue reemplazado y una recarga normal abrió la nueva versión sin borrar caché. Esta prueba registra el worker anterior directamente porque la versión antigua solo lo registraba después del login; no afirma recarga automática de pestañas que todavía ejecutan el coordinador antiguo.
+
+Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build y **13 comprobaciones** en la ejecución que incluye la migración. La suite principal de 62 comprobaciones volvió a pasar con estos cambios. Build/TypeScript y lint correctos. Se incorporó `test:pwa` al workflow de GitHub Actions. El servidor de esta prueba simula la publicación de archivos y respuestas anónimas de API; no sustituye la validación de cabeceras y caché en Docker, NPM, Cloudflare ni Safari/iOS del entorno real.
 
 ### Cambios del 24 de septiembre
 

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, lazy, Suspense, type FormEvent } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
 import {
   Archive,
   ArrowDownToLine,
@@ -230,7 +229,7 @@ function Login({
               <RefreshCw size={16} /> Reintentar conexión
             </button>
           )}
-          <form onSubmit={submit}>
+          <form onSubmit={submit} data-update-blocked={!!email || !!password || busy}>
             <fieldset disabled={busy}>
               <Field label="Correo electrónico">
                 <input
@@ -324,23 +323,6 @@ function WorkspaceApp({
   const [installHelp, setInstallHelp] = useState(false);
   const [install, setInstall] = useState<InstallPrompt | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW();
-  useEffect(() => {
-    const timer = setInterval(
-      () => {
-        if (navigator.onLine && 'serviceWorker' in navigator)
-          void navigator.serviceWorker
-            .getRegistration()
-            .then((r) => r?.update())
-            .catch(() => {});
-      },
-      60 * 60 * 1000,
-    );
-    return () => clearInterval(timer);
-  }, []);
   const projectId = route.startsWith('project/') ? route.split('/')[1] || '' : '';
   const project = w?.projects.find((p) => p.id === projectId);
   useEffect(() => {
@@ -567,17 +549,6 @@ function WorkspaceApp({
               <Archive size={19} /> Archivados
             </button>
           )}
-          {needRefresh && (
-            <button
-              className="sidebar-link update-link"
-              onClick={() => {
-                if (confirm('¿Actualizar la aplicación? Guarda primero los cambios abiertos.'))
-                  void updateServiceWorker(true);
-              }}
-            >
-              <RefreshCw size={19} /> Actualización disponible
-            </button>
-          )}
           <div className="sidebar-note">
             <Sparkles size={18} />
             <p>
@@ -710,14 +681,6 @@ function WorkspaceApp({
                 />
                 <section className="card mobile-tools">
                   <h2>La app, siempre a mano</h2>
-                  {needRefresh && (
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => void updateServiceWorker(true)}
-                    >
-                      <RefreshCw size={17} /> Actualizar aplicación
-                    </button>
-                  )}
                   <button className="btn btn-ghost" onClick={() => navigate('archived')}>
                     <Archive size={17} /> Ver archivados
                   </button>

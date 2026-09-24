@@ -9,6 +9,9 @@ import './styles/tokens.css';
 import './styles/app.css';
 import './styles/features.css';
 import App from './App';
+import { startAppUpdates } from './pwaUpdates';
+
+startAppUpdates();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

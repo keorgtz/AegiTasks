@@ -101,6 +101,7 @@ export function AdminAccess() {
         </div>
         <form
           className="inline-form"
+          data-update-blocked={!!name || busy}
           onSubmit={(e) => {
             e.preventDefault();
             void run(async () => {

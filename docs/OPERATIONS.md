@@ -42,6 +42,29 @@ Ensaya primero en un servidor aislado. Conserva un respaldo del estado actual. L
 
 ## Diagnóstico
 
+### Actualizaciones automáticas de la PWA
+
+El build genera un UUID compartido por el cliente, `version.json` y `sw-version.js`. La app registra `/sw.js` desde el arranque, incluso antes del login, con `updateViaCache: none`. El nuevo worker descarga su precaché, se activa y toma control; cada pestaña comprueba su versión por `MessageChannel` antes de recargar. Una descarga fallida conserva el worker anterior y se reintenta. La app comprueba despliegues cada minuto visible y al volver al primer plano o recuperar conexión; los eventos consecutivos se limitan a una comprobación cada 15 segundos. Estas comprobaciones no consultan listas de pendientes ni sustituyen SSE.
+
+La recarga espera si hay diálogos abiertos, formularios pendientes, escrituras a la API, preferencias/objetivos de Focus sin guardar o pantalla inmersiva. Al cerrar/guardar esos cambios o salir de pantalla inmersiva, aplica la actualización pendiente. Los intervalos Focus guardados siguen calculándose desde la fecha de finalización del servidor. Cookies, preferencias y borradores existentes permanecen intactos; no se guardan notas sensibles ni contraseñas en el navegador para efectuar la actualización.
+
+`version.json` y `sw-version.js` quedan fuera de la precaché. Nginx sirve HTML, metadatos de versión y worker con `no-store` también para Cloudflare. Conserva esas reglas en NPM y evita reglas de Cloudflare que las sobrescriban. Solo los recursos con hash bajo `/assets/` tienen caché inmutable. Para comprobar el despliegue:
+
+```bash
+curl -I https://task.tudominio.com/version.json
+curl -I https://task.tudominio.com/sw.js
+curl -I https://task.tudominio.com/sw-version.js
+curl https://task.tudominio.com/version.json
+```
+
+Si se sirve una versión anterior, compara la respuesta pública con `docker compose exec web cat /usr/share/nginx/html/version.json`, revisa las reglas de caché y confirma que reconstruiste `web`. Un servidor/proxy que entrega archivos de versiones mezcladas limita las recargas automáticas a una por minuto. No borres almacenamiento de los usuarios como parte del despliegue.
+
+La versión anterior no tenía este coordinador: una pestaña que siga ejecutándola puede necesitar una reapertura o recarga normal una vez instalado el nuevo worker. No requiere borrar caché. Las siguientes actualizaciones usan el mecanismo automático. No es posible ejecutar actualizaciones mientras el navegador está cerrado o el dispositivo está sin conexión.
+
+Referencias de implementación: [Vite PWA, activación automática](https://vite-pwa-org.netlify.app/guide/auto-update) y [MDN, cambio de controlador](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/controllerchange_event). El registro se gestiona directamente para aplazar la recarga durante la edición.
+
+### Comprobaciones del servidor
+
 ```bash
 docker compose ps
 docker compose logs --tail=100 api

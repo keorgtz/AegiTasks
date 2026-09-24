@@ -1,11 +1,41 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { randomUUID } from 'node:crypto';
+
+const buildVersion = randomUUID();
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(buildVersion) },
   plugins: [
     react(),
+    {
+      name: 'aegitasks-build-version',
+      transformIndexHtml() {
+        return [
+          {
+            tag: 'meta',
+            attrs: { name: 'aegitasks-version', content: buildVersion },
+            injectTo: 'head',
+          },
+        ];
+      },
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({ version: buildVersion }),
+        });
+        this.emitFile({
+          type: 'asset',
+          fileName: 'sw-version.js',
+          source: `self.addEventListener('message', event => { if (event.data?.type === 'AEGITASKS_VERSION') event.ports[0]?.postMessage(${JSON.stringify(buildVersion)}); });`,
+        });
+      },
+    },
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: [
         'aegitasks-favicon-32.png',
         'aegitasks-favicon-64.png',
@@ -37,7 +67,11 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        navigateFallbackDenylist: [/^\/api\//],
+        skipWaiting: true,
+        clientsClaim: true,
+        importScripts: ['/sw-version.js'],
+        globIgnores: ['**/sw-version.js', '**/version.json'],
+        navigateFallbackDenylist: [/^\/api\//, /^\/version\.json$/, /^\/sw(?:-version)?\.js$/],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       },
     }),

@@ -513,7 +513,10 @@ export function Settings({
           <h2>{user.name}</h2>
           <p className="muted">{user.email}</p>
           <h3 className="subsection">Cambiar contraseña</h3>
-          <form onSubmit={password}>
+          <form
+            onSubmit={password}
+            data-update-blocked={!!currentPassword || !!newPassword || busy}
+          >
             <fieldset disabled={busy}>
               <Field label="Contraseña actual">
                 <input
