@@ -7,13 +7,11 @@ import {
   type ReactNode,
   type HTMLAttributes,
 } from 'react';
-import { X, CheckCheck } from 'lucide-react';
+import { X } from 'lucide-react';
 export function Brand() {
   return (
     <div className="brand">
-      <div className="brand-mark">
-        <CheckCheck size={25} />
-      </div>
+      <img className="brand-mark" src="/aegitasks-icon-192.png" alt="" width={39} height={39} />
       <div>
         <strong>AegiTasks</strong>
         <span>PASTEL PULSE</span>

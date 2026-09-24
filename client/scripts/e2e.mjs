@@ -238,7 +238,7 @@ try {
     { body: 'Se reproduce al cambiar una reserva que ya tiene anticipo. Adjunto evidencia.' },
     204,
   );
-  const png = await readFile(path.join(root, 'client/public/icon-192.png'));
+  const png = await readFile(path.join(root, 'client/public/aegitasks-icon-192.png'));
   let response = await support.post(`/api/tasks/${task.id}/attachments`, {
     multipart: { file: { name: 'captura.png', mimeType: 'image/png', buffer: png } },
   });

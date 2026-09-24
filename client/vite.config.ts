@@ -6,7 +6,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+      includeAssets: [
+        'aegitasks-favicon-32.png',
+        'aegitasks-favicon-64.png',
+        'aegitasks-icon-192.png',
+        'aegitasks-icon-512.png',
+        'aegitasks-apple-touch-icon.png',
+      ],
       manifest: {
         name: 'AegiTasks',
         short_name: 'AegiTasks',
@@ -20,9 +26,13 @@ export default defineConfig({
         scope: '/',
         id: '/',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/aegitasks-icon-192.png', sizes: '192x192', type: 'image/png' },
+          {
+            src: '/aegitasks-icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
         ],
       },
       workbox: {

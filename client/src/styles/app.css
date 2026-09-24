@@ -106,14 +106,13 @@ small {
   flex-shrink: 0;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
   width: 39px;
   height: 39px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #7b61ff, #e0517f);
   box-shadow: var(--glow-primary);
-  color: white;
 }
 .brand strong {
   display: block;

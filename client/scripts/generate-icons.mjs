@@ -1,25 +1,39 @@
-// Rasterize our own SVG mark at installable PWA sizes. No external image service.
+// Resize the approved artwork without redrawing or changing its colors.
 import { chromium } from 'playwright';
-import { readFile } from 'node:fs/promises';
-const svg = await readFile(new URL('../public/favicon.svg', import.meta.url), 'utf8');
+import { readFile, writeFile } from 'node:fs/promises';
+
+const source = new URL(
+  '../../design/branding/aegitasks-logo-waves-double-check-v2-purple.png',
+  import.meta.url,
+);
+const dataUrl = `data:image/png;base64,${(await readFile(source)).toString('base64')}`;
 const browser = await chromium.launch({ headless: true });
 try {
+  const page = await browser.newPage();
   for (const [size, name] of [
-    [192, 'icon-192.png'],
-    [512, 'icon-512.png'],
-    [180, 'apple-touch-icon.png'],
+    [32, 'aegitasks-favicon-32.png'],
+    [64, 'aegitasks-favicon-64.png'],
+    [180, 'aegitasks-apple-touch-icon.png'],
+    [192, 'aegitasks-icon-192.png'],
+    [512, 'aegitasks-icon-512.png'],
   ]) {
-    const page = await browser.newPage({
-      viewport: { width: size, height: size },
-      deviceScaleFactor: 1,
-    });
-    await page.setContent(
-      `<style>html,body{margin:0;background:#7b61ff;width:100%;height:100%}svg{width:100%;height:100%}</style>${svg}`,
+    const png = await page.evaluate(
+      async ({ dataUrl, size }) => {
+        const image = new Image();
+        image.src = dataUrl;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const context = canvas.getContext('2d');
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(image, 0, 0, size, size);
+        return canvas.toDataURL('image/png').split(',')[1];
+      },
+      { dataUrl, size },
     );
-    await page.screenshot({
-      path: new URL(`../public/${name}`, import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'),
-    });
-    await page.close();
+    await writeFile(new URL(`../public/${name}`, import.meta.url), Buffer.from(png, 'base64'));
+    console.log(`Generated ${name} (${size}x${size})`);
   }
 } finally {
   await browser.close();
