@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'Member';
+  role: string;
   active: boolean;
 }
 export interface Project {
@@ -36,6 +36,37 @@ export interface Workspace {
   statuses: Status[];
   tags: Tag[];
   users: User[];
+}
+export interface Space {
+  id: string;
+  name: string;
+  ownerId: string;
+  isPersonal: boolean;
+}
+export interface SpaceSession {
+  spaces: Space[];
+  permissions: string[];
+}
+export interface NoteFolder {
+  id: string;
+  spaceId: string;
+  parentId: string | null;
+  name: string;
+}
+export interface Note {
+  id: string;
+  spaceId: string;
+  title: string;
+  markdown: string;
+  folderId: string | null;
+  projectId: string | null;
+  linkedTaskId: string | null;
+  font: string;
+  color: string;
+  pinned: boolean;
+  archived: boolean;
+  version: string;
+  updatedAt: string;
 }
 export interface TaskItem {
   id: string;

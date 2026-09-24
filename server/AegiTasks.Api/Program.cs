@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<SpaceScope>();
 builder.Services.AddDbContext<AppDb>(o =>
 {
     if (builder.Configuration["DatabaseProvider"] == "Sqlite") o.UseSqlite(builder.Configuration.GetConnectionString("Default"));
@@ -33,7 +34,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         if (u is null || !u.Active || c.Principal!.FindFirstValue("sv") != u.SessionVersion.ToString()) c.RejectPrincipal();
     };
 });
-builder.Services.AddAuthorization(o => o.AddPolicy("Admin", p => p.RequireRole("Admin")));
+builder.Services.AddAuthorization(o => {
+    o.AddPolicy("Admin", p => p.RequireRole("Admin"));
+    foreach (var page in Access.Pages) o.AddPolicy("page:" + page, p => p.RequireAuthenticatedUser().RequireAssertion(async c => {
+        var http = (HttpContext)c.Resource!;
+        return await Access.Can(http.RequestServices.GetRequiredService<AppDb>(), c.User, page);
+    }));
+});
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
@@ -55,9 +62,29 @@ app.Use(async (c, next) =>
     catch (DbUpdateConcurrencyException) { c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "Otra persona actualizó este pendiente. Cierra y vuelve a abrirlo antes de guardar." }); }
     catch (DbUpdateException e) { app.Logger.LogWarning(e, "Database rejected a mutation"); c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "No se pudo guardar: el nombre ya existe o el elemento está en uso." }); }
 });
-app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
+app.UseRateLimiter(); app.UseAuthentication();
+app.Use(async (c, next) => {
+    if (c.User.Identity?.IsAuthenticated == true) {
+        var scope = c.RequestServices.GetRequiredService<SpaceScope>();
+        scope.UserId = c.User.UserId();
+        var paths = new[] { "/api/workspace", "/api/projects", "/api/folders", "/api/statuses", "/api/tags", "/api/tasks", "/api/attachments", "/api/notes", "/api/note-folders", "/api/focus" };
+        if (paths.Any(p => c.Request.Path.StartsWithSegments(p))) {
+            var db = c.RequestServices.GetRequiredService<AppDb>();
+            var raw = c.Request.Headers["X-Space-Id"].ToString();
+            if (string.IsNullOrEmpty(raw) && c.Request.Path.StartsWithSegments("/api/attachments")) raw = c.Request.Query["space"].ToString();
+            Space? space;
+            if (string.IsNullOrEmpty(raw)) space = await db.Spaces.SingleOrDefaultAsync(s => s.IsPersonal && s.OwnerId == scope.UserId);
+            else if (Guid.TryParse(raw, out var id)) space = await Access.SpacesFor(db, scope.UserId).SingleOrDefaultAsync(s => s.Id == id);
+            else space = null;
+            if (space == null) { c.Response.StatusCode = 403; await c.Response.WriteAsJsonAsync(new { error = "No tienes acceso a este espacio. Selecciona otro espacio." }); return; }
+            scope.SpaceId = space.Id;
+        }
+    }
+    await next();
+});
+app.UseAuthorization();
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
-app.MapAuth(); app.MapCatalog(); app.MapTasks();
+app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();

@@ -1,9 +1,12 @@
 # AegiTasks
 
-Un espacio compartido para que soporte reporte hallazgos y desarrollo los convierta en avances. PWA responsive con la identidad **AegiPulse de AegiFitness**, tema claro y oscuro, y despliegue mediante Docker + Nginx Proxy Manager + Cloudflare Tunnel.
+Espacios personales y compartidos para organizar pendientes, documentar conocimiento y concentrarse en lo que sigue. PWA responsive con la identidad **AegiPulse de AegiFitness**, tema claro y oscuro, y despliegue mediante Docker + Nginx Proxy Manager + Cloudflare Tunnel.
 
 ## Qué incluye
 
+- **Spaces:** cada cuenta recibe un espacio Personal privado. Crea workspaces independientes, invita a usuarios existentes mediante códigos con vencimiento, revoca invitaciones, retira miembros o transfiere la propiedad. Cada workspace comparte proyectos, pendientes y notas solo entre sus integrantes.
+- **Notas Markdown:** carpetas y subcarpetas, búsqueda por contenido, notas fijadas o archivadas, proyecto opcional, plantillas, tablas GFM, citas, checklists, bloques de código con resaltado, colores, callouts y tres familias tipográficas. Vista dividida o previa, importación `.md`, exportación Markdown/HTML/PDF mediante impresión y ZIP de todo el espacio con su estructura. Las notas pueden generar un pendiente vinculado sin perder el original.
+- **Focus Mode personal:** enfoque, pausa corta/larga y ciclos configurables; objetivos marcables y hasta 10 pendientes asociados. Aurora, Waves y Terminal con fondos animados, modo inmersivo/pantalla completa y movimiento reducido. Sesión guardada en el servidor, pausa/reanudación, sonido opcional e historial personal.
 - **Bandeja del equipo:** pendientes abiertos, alta prioridad, vencidos y resueltos; búsqueda por título y descripción.
 - **Proyectos separados:** PMS, POS, CRM o los productos que necesites; carpetas por módulo, cliente o área.
 - **Lista y tablero:** filtros por proyecto, carpeta, estado, etiqueta y prioridad; orden por prioridad, fecha o creación. Paginación de 50 elementos, también visible en el tablero.
@@ -11,25 +14,25 @@ Un espacio compartido para que soporte reporte hallazgos y desarrollo los convie
 - **Estados personalizables por proyecto:** nombre, color, orden y si cuenta como resuelto. Las carpetas del proyecto comparten ese recorrido.
 - **Etiquetas del equipo:** BUG, ADD y FIX iniciales; crea y modifica las que necesites.
 - **Conversación y evidencias:** comentarios, historial de cambios de estado y adjuntos PNG/JPG/WebP/PDF de hasta 10 MB, máximo 20 por pendiente.
-- **Equipo y cuentas:** administrador y miembros. Alta, desactivación, cambio de rol y restablecimiento de contraseñas desde Ajustes. Sin registro público ni dependencia de correo saliente.
+- **Usuarios y roles:** Admin, User y roles personalizados. Solo Admin crea/gestiona cuentas y roles desde **Usuarios y roles**. Los roles nuevos tienen todas las páginas operativas habilitadas por defecto; el administrador puede restringirlas. Sin registro público ni correo saliente.
 - **Archivo reversible:** conserva pendientes e historial. Los proyectos archivados se restauran desde Ajustes → Organización.
 - **Cambios simultáneos:** un pendiente modificado por otra persona rechaza una edición antigua con un mensaje para recargar; no sobrescribe silenciosamente.
 - **PWA:** instalación en computadora y teléfono; actualización desde navegación lateral o Ajustes en móvil; fuentes e iconos locales.
-- **Borradores sin conexión:** el texto de reportes nuevos se conserva por usuario en el dispositivo. Enviar requiere conexión y una sesión vigente. La PWA conserva su interfaz, pero **no almacena respuestas privadas de la API ni sincroniza cambios automáticamente en segundo plano**.
+- **Borradores sin conexión:** el texto de reportes nuevos se conserva por usuario y espacio en el dispositivo. Enviar requiere conexión y una sesión vigente. La PWA conserva su interfaz, pero **no almacena respuestas privadas de la API ni sincroniza cambios automáticamente en segundo plano**.
 
-La interfaz se actualiza cada 30 segundos mientras está visible. Las tarjetas de métricas filtran la bandeja. El estado se cambia desde el detalle; el tablero no requiere arrastrar tarjetas, por lo que funciona también con touch y teclado.
+La bandeja y los permisos se actualizan cada 30 segundos mientras la interfaz está visible. Las notas se guardan explícitamente; no son un editor colaborativo en tiempo real. Las tarjetas de métricas filtran la bandeja. El estado se cambia desde el detalle; el tablero no requiere arrastrar tarjetas, por lo que funciona también con touch y teclado.
 
 ## Arquitectura
 
-| Capa | Tecnología |
-| --- | --- |
-| Cliente | React 19, TypeScript, Vite, vite-plugin-pwa, Lucide |
-| Diseño | Tokens originales de AegiFitness, Inter local, temas AegiPulse |
-| API | ASP.NET Core 10, EF Core 10, endpoints HTTP |
-| Producción | PostgreSQL 17, migraciones versionadas |
-| Desarrollo y pruebas locales | SQLite en archivo aislado, sin instalar un servidor de BD |
-| Autenticación | Cookie HttpOnly, SameSite Strict, Secure en producción; contraseñas con PasswordHasher de ASP.NET Core |
-| Infraestructura | Docker Compose: PostgreSQL + API + Nginx; red externa `proxy` |
+| Capa                         | Tecnología                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Cliente                      | React 19, TypeScript, Vite, vite-plugin-pwa, Lucide                                                    |
+| Diseño                       | Tokens originales de AegiFitness, Inter local, temas AegiPulse                                         |
+| API                          | ASP.NET Core 10, EF Core 10, endpoints HTTP                                                            |
+| Producción                   | PostgreSQL 17, migraciones versionadas                                                                 |
+| Desarrollo y pruebas locales | SQLite en archivo aislado, sin instalar un servidor de BD                                              |
+| Autenticación                | Cookie HttpOnly, SameSite Strict, Secure en producción; contraseñas con PasswordHasher de ASP.NET Core |
+| Infraestructura              | Docker Compose: PostgreSQL + API + Nginx; red externa `proxy`                                          |
 
 Redis no es necesario para esta versión: los pendientes se consultan directamente con índices y paginación. Esto evita invalidaciones de caché innecesarias en un espacio compartido. Se puede incorporar cuando las mediciones justifiquen su uso.
 
@@ -40,7 +43,7 @@ server/AegiTasks.Api/
   Domain/                      Entidades
   Data/                        DbContext, bootstrap y migraciones PostgreSQL
   Services/                    Validación y reglas compartidas
-  Endpoints/                   Autenticación, catálogos y pendientes
+  Endpoints/                   Autenticación, espacios, roles, notas, enfoque y pendientes
 scripts/                       Preparación y desarrollo local
 docs/                          Operación, validación y decisiones
 docker-compose.yml             Stack para la misma red proxy que AegiFitness
@@ -72,14 +75,14 @@ Requisitos: Ubuntu, Docker con Compose, Nginx Proxy Manager en la red externa `p
 
 3. En **Nginx Proxy Manager**, crea un Proxy Host:
 
-   | Campo | Valor |
-   | --- | --- |
-   | Domain Names | `task.tudominio.com` |
-   | Scheme | `http` |
-   | Forward Hostname | `aegitasks-web` |
-   | Forward Port | `80` |
-   | SSL | Certificado válido y HTTPS forzado según tu instalación de NPM/Tunnel |
-   | Advanced | `client_max_body_size 11m;` para evidencias de hasta 10 MB |
+   | Campo            | Valor                                                                 |
+   | ---------------- | --------------------------------------------------------------------- |
+   | Domain Names     | `task.tudominio.com`                                                  |
+   | Scheme           | `http`                                                                |
+   | Forward Hostname | `aegitasks-web`                                                       |
+   | Forward Port     | `80`                                                                  |
+   | SSL              | Certificado válido y HTTPS forzado según tu instalación de NPM/Tunnel |
+   | Advanced         | `client_max_body_size 11m;` para evidencias de hasta 10 MB            |
 
 4. En el mismo Cloudflare Tunnel de AegiFitness, agrega el hostname `task.tudominio.com` apuntando a NPM. Ejemplo de túnel administrado por archivo:
 
@@ -90,7 +93,7 @@ Requisitos: Ubuntu, Docker con Compose, Nginx Proxy Manager en la red externa `p
 
    Conserva tus entradas actuales y coloca esta entrada antes del `http_status:404` final. Crea la ruta DNS/CNAME hacia tu túnel como haces para `fitness`. Si usas el panel de Cloudflare, añade un Public Hostname equivalente. Desactiva reglas de caché generales para `/api/*`, `/sw.js` e `/index.html`.
 
-5. Abre `https://task.tudominio.com` e ingresa con `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`. Cambia tu contraseña desde **Ajustes → Mi cuenta**, crea los proyectos y agrega a tu equipo.
+5. Abre `https://task.tudominio.com` e ingresa con `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`. Cambia tu contraseña desde **Mi cuenta**, agrega cuentas en **Usuarios y roles**, crea un workspace e invita al equipo antes de crear los proyectos compartidos.
 
 El dominio real queda a tu elección: el stack no contiene una referencia fija al subdominio fitness. Ningún puerto de base de datos o API se publica en el host. Los nombres y volúmenes tienen prefijo `aegitasks` para coexistir con AegiFitness.
 
@@ -141,19 +144,29 @@ npm --prefix client run test:e2e
 
 Las pruebas levantan una API y un cliente de producción con BD temporal independiente. Los puertos 5213 y 4174 deben estar libres. Cubren permisos, validaciones entre proyectos, persistencia, conflictos de edición, adjuntos, archivo, filtros, paginación, UI, temas, tamaños móviles, PWA y recuperación de borradores tras perder conexión. Sus datos de muestra **no se siembran en producción**. Evidencia y capturas: `artifacts/` (ignorado por Git).
 
+Para ejecutar también la suite contra PostgreSQL local, coloca `initdb`, `pg_ctl` y `psql` en PATH y ejecuta `node client/scripts/postgres-tests.mjs`. Usa un cluster temporal en el puerto 55439, verifica una migración con datos anteriores y una instalación nueva, y lo detiene al finalizar.
+
 Consulta [docs/VALIDATION.md](docs/VALIDATION.md) para los resultados efectivamente ejecutados y las verificaciones pendientes de infraestructura.
 
 ## Primer uso del equipo
 
-1. El administrador crea un proyecto por producto, por ejemplo PMS, POS y CRM.
-2. En Ajustes crea carpetas como Reservaciones o Caja, ordena los estados y agrega personas.
+1. El administrador da de alta las cuentas desde **Usuarios y roles**. Cada persona recibe su espacio Personal.
+2. Crea un workspace en **Spaces**, genera una invitación y comparte su código con las cuentas que deben unirse. Selecciona ese workspace antes de crear proyectos como PMS, POS y CRM. En **Ajustes → Organización**, crea carpetas, estados y etiquetas.
 3. Soporte pulsa **Nuevo pendiente**, selecciona el producto y cuenta qué encontró. Después de guardarlo puede adjuntar capturas y comentar.
 4. Desarrollo revisa la bandeja, asigna responsable/prioridad y avanza el estado desde el detalle.
 5. Un estado marcado como resuelto se refleja en las métricas. Archivar conserva el historial.
 
 ## Alcance de acceso
 
-Es una aplicación para **un equipo compartido**. Todo miembro autenticado puede ver proyectos, pendientes, comentarios y evidencias; crear reportes y modificar pendientes. Los administradores también gestionan cuentas, estructura, catálogos y archivo. Los permisos se validan en el servidor. No hay aislamiento por cliente, organización o proyecto privado; no uses este espacio para equipos que deban estar separados entre sí.
+El límite de acceso a datos es el **espacio**. El Personal solo es accesible por su propietario, incluso frente a otras cuentas Admin. En un workspace, sus miembros pueden leer y modificar su contenido; no hay notas privadas dentro de un espacio compartido. Para eso se usa Personal. El rol Admin gestiona cuentas y permisos, pero no evita la comprobación de membresía de espacios.
+
+Las páginas operativas configurables son Pendientes, Proyectos, Notas, Focus, Spaces y Ajustes. Los permisos se comprueban en cada llamada de API; la navegación se actualiza al recuperar visibilidad y cada 30 segundos. Revocar una página no equivale a ocultar referencias de catálogos necesarias para otras páginas autorizadas. La cuenta propia sigue accesible para cambiar contraseña. Usuarios y roles permanecen exclusivos de Admin.
+
+Solo el propietario del workspace genera/revoca invitaciones, retira a otros miembros o transfiere la propiedad; un miembro puede salir. Las invitaciones duran 7 días, se almacenan como hash y regenerarlas invalida el código anterior. Es necesario tener cuenta para unirse. Las sesiones Focus y su historial son privados y continúan al cambiar de espacio.
+
+## Actualización desde la primera versión
+
+La migración PostgreSQL conserva los proyectos y pendientes existentes dentro de **Equipo existente**, une a los usuarios anteriores y crea sus espacios Personal. Convierte `Member` en `User` e invalida esas sesiones. La actualización no copia contenido compartido a espacios privados ni cambia contraseñas. Su reversión requiere restaurar un respaldo anterior; no se elimina el aislamiento de datos mediante una migración descendente.
 
 ## Git
 

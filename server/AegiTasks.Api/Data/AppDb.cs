@@ -1,11 +1,21 @@
 using AegiTasks.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using AegiTasks.Api.Services;
 using TaskStatus = AegiTasks.Api.Domain.TaskStatus;
 
 namespace AegiTasks.Api.Data;
 
-public class AppDb(DbContextOptions<AppDb> options) : DbContext(options)
+public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContext(options)
 {
+    public Guid CurrentSpaceId => scope.SpaceId;
+    public DbSet<Space> Spaces => Set<Space>();
+    public DbSet<SpaceMember> SpaceMembers => Set<SpaceMember>();
+    public DbSet<AppRole> Roles => Set<AppRole>();
+    public DbSet<PagePermission> PagePermissions => Set<PagePermission>();
+    public DbSet<NoteFolder> NoteFolders => Set<NoteFolder>();
+    public DbSet<Note> Notes => Set<Note>();
+    public DbSet<FocusProfile> FocusProfiles => Set<FocusProfile>();
+    public DbSet<FocusSession> FocusSessions => Set<FocusSession>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Folder> Folders => Set<Folder>();
@@ -17,6 +27,45 @@ public class AppDb(DbContextOptions<AppDb> options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<Space>().Property(x => x.Name).HasMaxLength(80);
+        b.Entity<Space>().HasIndex(x => x.OwnerId).IsUnique().HasFilter("\"IsPersonal\" = TRUE");
+        b.Entity<Space>().HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SpaceMember>().HasKey(x => new { x.SpaceId, x.UserId });
+        b.Entity<SpaceMember>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SpaceMember>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<AppRole>().HasKey(x => x.Name);
+        b.Entity<AppRole>().Property(x => x.Name).HasMaxLength(40);
+        b.Entity<PagePermission>().HasKey(x => new { x.RoleName, x.Page });
+        b.Entity<PagePermission>().HasOne<AppRole>().WithMany().HasForeignKey(x => x.RoleName).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<User>().HasOne<AppRole>().WithMany().HasForeignKey(x => x.Role).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Project>().HasQueryFilter(x => x.SpaceId == CurrentSpaceId);
+        b.Entity<Project>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Project>().HasAlternateKey(x => new { x.Id, x.SpaceId });
+        b.Entity<Folder>().HasQueryFilter(x => Projects.Any(p => p.Id == x.ProjectId));
+        b.Entity<TaskStatus>().HasQueryFilter(x => Projects.Any(p => p.Id == x.ProjectId));
+        b.Entity<WorkItem>().HasQueryFilter(x => Projects.Any(p => p.Id == x.ProjectId));
+        b.Entity<Activity>().HasQueryFilter(x => Tasks.Any(t => t.Id == x.WorkItemId));
+        b.Entity<Attachment>().HasQueryFilter(x => Tasks.Any(t => t.Id == x.WorkItemId));
+        b.Entity<Tag>().HasQueryFilter(x => x.SpaceId == CurrentSpaceId);
+        b.Entity<Tag>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<NoteFolder>().HasQueryFilter(x => x.SpaceId == CurrentSpaceId);
+        b.Entity<NoteFolder>().HasAlternateKey(x => new { x.Id, x.SpaceId });
+        b.Entity<NoteFolder>().Property(x => x.Name).HasMaxLength(80);
+        b.Entity<NoteFolder>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<NoteFolder>().HasOne<NoteFolder>().WithMany().HasForeignKey(x => new { x.ParentId, x.SpaceId }).HasPrincipalKey(x => new { x.Id, x.SpaceId }).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Note>().HasQueryFilter(x => x.SpaceId == CurrentSpaceId);
+        b.Entity<Note>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Note>().HasOne<NoteFolder>().WithMany().HasForeignKey(x => new { x.FolderId, x.SpaceId }).HasPrincipalKey(x => new { x.Id, x.SpaceId }).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Note>().HasOne<Project>().WithMany().HasForeignKey(x => new { x.ProjectId, x.SpaceId }).HasPrincipalKey(x => new { x.Id, x.SpaceId }).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Note>().Property(x => x.Title).HasMaxLength(200);
+        b.Entity<Note>().Property(x => x.Markdown).HasMaxLength(200000);
+        b.Entity<Note>().Property(x => x.Version).IsConcurrencyToken();
+        b.Entity<Note>().HasIndex(x => new { x.SpaceId, x.FolderId, x.Archived });
+        b.Entity<FocusProfile>().HasKey(x => x.UserId);
+        b.Entity<FocusProfile>().HasOne<User>().WithOne().HasForeignKey<FocusProfile>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<FocusSession>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<FocusSession>().HasIndex(x => x.UserId).IsUnique().HasFilter("\"FinishedAt\" IS NULL");
+        b.Entity<FocusSession>().Property(x => x.Version).IsConcurrencyToken();
         b.Entity<User>().HasIndex(x => x.Email).IsUnique();
         b.Entity<User>().Property(x => x.Email).HasMaxLength(200);
         b.Entity<User>().Property(x => x.Name).HasMaxLength(80);
@@ -30,7 +79,7 @@ public class AppDb(DbContextOptions<AppDb> options) : DbContext(options)
         b.Entity<TaskStatus>().HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
         b.Entity<TaskStatus>().Property(x => x.Name).HasMaxLength(80);
         b.Entity<TaskStatus>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Tag>().HasIndex(x => x.Name).IsUnique();
+        b.Entity<Tag>().HasIndex(x => new { x.SpaceId, x.Name }).IsUnique();
         b.Entity<Tag>().Property(x => x.Name).HasMaxLength(30);
         b.Entity<WorkItem>().Property(x => x.Title).HasMaxLength(200);
         b.Entity<WorkItem>().Property(x => x.Description).HasMaxLength(12000);

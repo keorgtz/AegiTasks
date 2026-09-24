@@ -16,12 +16,12 @@ public static class CatalogEndpoints
             folders = await db.Folders.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
             statuses = await db.Statuses.AsNoTracking().OrderBy(x => x.Position).ThenBy(x => x.Name).ToListAsync(),
             tags = await db.Tags.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
-            users = await db.Users.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Email, x.Role, x.Active }).ToListAsync()
+            users = await Access.Members(db, db.CurrentSpaceId).AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Email, x.Role, x.Active }).ToListAsync()
         })).RequireAuthorization();
-        var group = app.MapGroup("/api").RequireAuthorization("Admin");
+        var group = app.MapGroup("/api").RequireAuthorization("page:projects");
         group.MapPost("/projects", async (ProjectInput input, AppDb db) =>
         {
-            var project = new Project { Name = Rules.Text(input.Name, 80, "Nombre"), Description = Rules.Text(input.Description, 1000, "Descripción", false), Color = Rules.Color(input.Color) };
+            var project = new Project { SpaceId = db.CurrentSpaceId, Name = Rules.Text(input.Name, 80, "Nombre"), Description = Rules.Text(input.Description, 1000, "Descripción", false), Color = Rules.Color(input.Color) };
             db.Projects.Add(project);
             db.Statuses.AddRange(new TaskStatus { ProjectId = project.Id, Name = "Por revisar", Color = "blue", Position = 0 }, new TaskStatus { ProjectId = project.Id, Name = "En progreso", Color = "purple", Position = 1 }, new TaskStatus { ProjectId = project.Id, Name = "Resuelto", Color = "green", Position = 2, IsDone = true });
             await db.SaveChangesAsync(); return Results.Ok(project);
@@ -70,7 +70,7 @@ public static class CatalogEndpoints
         });
         group.MapPost("/tags", async (TagInput input, AppDb db) =>
         {
-            var tag = new Tag { Name = Rules.Text(input.Name, 30, "Etiqueta"), Color = Rules.Color(input.Color) }; db.Tags.Add(tag); await db.SaveChangesAsync(); return Results.Ok(tag);
+            var tag = new Tag { SpaceId = db.CurrentSpaceId, Name = Rules.Text(input.Name, 30, "Etiqueta"), Color = Rules.Color(input.Color) }; db.Tags.Add(tag); await db.SaveChangesAsync(); return Results.Ok(tag);
         });
         group.MapPut("/tags/{id:guid}", async (Guid id, TagInput input, AppDb db) =>
         {

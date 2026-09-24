@@ -29,7 +29,7 @@ public static class Rules
         if (!await db.Projects.AnyAsync(x => x.Id == input.ProjectId && !x.Archived)) throw new InputError("Selecciona un proyecto activo.");
         if (!await db.Statuses.AnyAsync(x => x.Id == input.StatusId && x.ProjectId == input.ProjectId)) throw new InputError("El estado no pertenece al proyecto.");
         if (input.FolderId != null && !await db.Folders.AnyAsync(x => x.Id == input.FolderId && x.ProjectId == input.ProjectId)) throw new InputError("La carpeta no pertenece al proyecto.");
-        if (input.AssigneeId != null && !await db.Users.AnyAsync(x => x.Id == input.AssigneeId && x.Active)) throw new InputError("El responsable no está activo.");
+        if (input.AssigneeId != null && !await Access.Members(db, db.CurrentSpaceId).AnyAsync(x => x.Id == input.AssigneeId && x.Active)) throw new InputError("El responsable no pertenece al espacio o no está activo.");
         if (input.Priority is < 1 or > 4) throw new InputError("Prioridad no válida.");
         if (input.EstimateMinutes is < 1 or > 600000) throw new InputError("La estimación debe ser de 1 a 600000 minutos.");
         var ids = (input.TagIds ?? []).Distinct().ToArray();

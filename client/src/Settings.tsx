@@ -4,7 +4,6 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Users,
   LockKeyhole,
   SlidersHorizontal,
   Tags,
@@ -14,7 +13,6 @@ import { Badge, ErrorBox, Field, Modal } from './components';
 import {
   colors,
   colorNames,
-  initials,
   type Folder,
   type Project,
   type Status,
@@ -38,7 +36,13 @@ export function CatalogEditor({
   projectId,
   onClose,
   onSaved,
-}: Editor & { projectId?: string; onClose: () => void; onSaved: () => Promise<void> }) {
+  roles = ['Admin', 'User'],
+}: Editor & {
+  projectId?: string;
+  roles?: string[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const [name, setName] = useState(value.name || '');
   const [description, setDescription] = useState(value.description || '');
   const [color, setColor] = useState(value.color || 'purple');
@@ -47,7 +51,7 @@ export function CatalogEditor({
   const [archived, setArchived] = useState(value.archived || false);
   const [email, setEmail] = useState(value.email || '');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState(value.role || 'Member');
+  const [role, setRole] = useState(value.role || 'User');
   const [active, setActive] = useState(value.active ?? true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -187,10 +191,11 @@ export function CatalogEditor({
               </Field>
               <Field label="Rol">
                 <select value={role} onChange={(e) => setRole(e.target.value as User['role'])}>
-                  <option value="Member">Miembro · reporta y resuelve pendientes</option>
-                  <option value="Admin">
-                    Administrador · también organiza y gestiona el equipo
-                  </option>
+                  {roles.map((r) => (
+                    <option key={r} value={r}>
+                      {r === 'Admin' ? 'Admin · gestiona usuarios y roles' : r}
+                    </option>
+                  ))}
                 </select>
               </Field>
               {value.id && (
@@ -225,6 +230,7 @@ export function Settings({
   notify,
   logout,
   initialProject,
+  canOrganize = true,
 }: {
   workspace: Workspace;
   user: User;
@@ -232,8 +238,9 @@ export function Settings({
   notify: (s: string) => void;
   logout: () => void;
   initialProject: string;
+  canOrganize?: boolean;
 }) {
-  const [tab, setTab] = useState('organization');
+  const [tab, setTab] = useState(canOrganize ? 'organization' : 'account');
   const [project, setProject] = useState(
     initialProject || w.projects.find((p) => !p.archived)?.id || '',
   );
@@ -283,7 +290,7 @@ export function Settings({
         </div>
       </div>
       <div className="tabs">
-        {user.role === 'Admin' && (
+        {canOrganize && (
           <>
             <button
               className={tab === 'organization' ? 'active' : ''}
@@ -291,20 +298,14 @@ export function Settings({
             >
               <SlidersHorizontal size={17} /> Organización
             </button>
-            <button className={tab === 'team' ? 'active' : ''} onClick={() => setTab('team')}>
-              <Users size={17} /> Equipo
-            </button>
           </>
         )}
-        <button
-          className={tab === 'account' || user.role !== 'Admin' ? 'active' : ''}
-          onClick={() => setTab('account')}
-        >
+        <button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>
           <LockKeyhole size={17} /> Mi cuenta
         </button>
       </div>
       <ErrorBox message={error} />
-      {tab === 'organization' && user.role === 'Admin' && (
+      {tab === 'organization' && canOrganize && (
         <div className="settings-grid">
           <section className="card">
             <div className="section-heading">
@@ -463,44 +464,7 @@ export function Settings({
           </section>
         </div>
       )}
-      {tab === 'team' && user.role === 'Admin' && (
-        <section className="card">
-          <div className="section-heading">
-            <div>
-              <h2>Tu equipo</h2>
-              <p className="muted small">
-                Todos los miembros comparten los proyectos y pendientes de este espacio.
-              </p>
-            </div>
-            <button
-              className="btn btn-primary"
-              onClick={() => setEditor({ kind: 'users', value: {} })}
-            >
-              <Plus size={17} /> Agregar persona
-            </button>
-          </div>
-          {w.users.map((u) => (
-            <div className="settings-row" key={u.id}>
-              <div className="avatar">{initials(u.name)}</div>
-              <span>
-                <strong>{u.name}</strong>
-                <small>{u.email}</small>
-              </span>
-              <Badge color={u.active ? 'green' : 'neutral'}>
-                {u.active ? (u.role === 'Admin' ? 'Administrador' : 'Miembro') : 'Inactivo'}
-              </Badge>
-              <button
-                className="btn-icon"
-                aria-label={`Editar persona ${u.name}`}
-                onClick={() => setEditor({ kind: 'users', value: u })}
-              >
-                <Pencil size={16} />
-              </button>
-            </div>
-          ))}
-        </section>
-      )}
-      {(tab === 'account' || user.role !== 'Admin') && (
+      {tab === 'account' && (
         <section className="card account-card">
           <h2>{user.name}</h2>
           <p className="muted">{user.email}</p>

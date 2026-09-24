@@ -39,15 +39,15 @@ public static class AuthEndpoints
             var email = Rules.Text(input.Email, 200, "Correo").ToLowerInvariant();
             if (!MailAddress.TryCreate(email, out var parsed) || parsed.Address != email) throw new InputError("Correo no válido.");
             Rules.Password(input.Password ?? "");
-            if (input.Role is not ("Admin" or "Member")) throw new InputError("Rol no válido.");
+            if (!await db.Roles.AnyAsync(r => r.Name == input.Role)) throw new InputError("Rol no válido.");
             var user = new User { Email = email, Name = Rules.Text(input.Name, 80, "Nombre"), Role = input.Role };
-            user.PasswordHash = hash.HashPassword(user, input.Password!); db.Users.Add(user); await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
+            user.PasswordHash = hash.HashPassword(user, input.Password!); db.Users.Add(user); Access.AddPersonal(db, user); await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
         admin.MapPut("/{id:guid}", async (Guid id, UserUpdate input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal) =>
         {
             var user = await db.Users.FindAsync(id); if (user == null) return Results.NotFound();
             if (id == principal.UserId() && (!input.Active || input.Role != "Admin")) throw new InputError("No puedes desactivar tu propia cuenta ni quitarte el rol de administrador.");
-            if (input.Role is not ("Admin" or "Member")) throw new InputError("Rol no válido.");
+            if (!await db.Roles.AnyAsync(r => r.Name == input.Role)) throw new InputError("Rol no válido.");
             user.Name = Rules.Text(input.Name, 80, "Nombre"); user.Active = input.Active; user.Role = input.Role; user.SessionVersion++;
             if (!string.IsNullOrWhiteSpace(input.Password)) { Rules.Password(input.Password); user.PasswordHash = hash.HashPassword(user, input.Password); }
             await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));

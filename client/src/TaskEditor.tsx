@@ -8,7 +8,7 @@ import {
   Paperclip,
   Send,
 } from 'lucide-react';
-import { api, errorMessage } from './api';
+import { api, errorMessage, getActiveSpace } from './api';
 import { Badge, ErrorBox, Field, Modal } from './components';
 import {
   dateLabel,
@@ -50,7 +50,7 @@ export function TaskEditor({
   onSaved: (task: TaskItem) => void;
   notify: (text: string) => void;
 }) {
-  const draftKey = `aegitasks-draft-${user.id}`;
+  const draftKey = `aegitasks-draft-${user.id}-${getActiveSpace()}`;
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [draft, setDraft] = useState<Draft>(() => {
     if (!id) {
@@ -448,7 +448,11 @@ export function TaskEditor({
                   </p>
                   <div className="attachment-list">
                     {detail.attachments.map((a) => (
-                      <a href={`/api/attachments/${a.id}`} key={a.id} className="attachment">
+                      <a
+                        href={`/api/attachments/${a.id}?space=${getActiveSpace()}`}
+                        key={a.id}
+                        className="attachment"
+                      >
                         <Paperclip size={17} />
                         <span>
                           {a.name}
@@ -500,7 +504,7 @@ export function TaskEditor({
                     </button>
                   </form>
                 </section>
-                {user.role === 'Admin' && (
+                {
                   <button
                     className="btn btn-ghost archive-action"
                     disabled={busy}
@@ -509,7 +513,7 @@ export function TaskEditor({
                     <Archive size={17} />
                     {detail.item.archived ? 'Restaurar pendiente' : 'Archivar pendiente'}
                   </button>
-                )}
+                }
               </>
             )}
           </>

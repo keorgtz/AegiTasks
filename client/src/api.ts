@@ -6,6 +6,13 @@ export class ApiError extends Error {
     super(message);
   }
 }
+let activeSpace = '';
+export function setActiveSpace(id: string) {
+  activeSpace = id;
+}
+export function getActiveSpace() {
+  return activeSpace;
+}
 export async function api<T>(
   path: string,
   method = 'GET',
@@ -19,6 +26,7 @@ export async function api<T>(
     signal,
     headers: {
       'X-AegiTasks': '1',
+      ...(activeSpace ? { 'X-Space-Id': activeSpace } : {}),
       ...(!form && body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(body !== undefined && method !== 'GET' && method !== 'HEAD'

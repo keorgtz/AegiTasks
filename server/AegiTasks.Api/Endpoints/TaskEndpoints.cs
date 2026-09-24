@@ -10,7 +10,7 @@ public static class TaskEndpoints
 {
     public static void MapTasks(this WebApplication app)
     {
-        var group = app.MapGroup("/api/tasks").RequireAuthorization();
+        var group = app.MapGroup("/api/tasks").RequireAuthorization("page:tasks");
         group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page) =>
         {
             var query = db.Tasks.AsNoTracking().Where(x => x.Archived == (scope == "archived") && db.Projects.Any(p => p.Id == x.ProjectId && !p.Archived));
@@ -71,7 +71,7 @@ public static class TaskEndpoints
             if (item.Version != input.Version) return Results.Conflict(new { error = "El pendiente cambió. Vuelve a abrirlo." });
             item.Archived = input.Archived; item.Version = Guid.NewGuid(); item.UpdatedAt = DateTime.UtcNow;
             Rules.Log(db, id, user.UserId(), input.Archived ? "Archivó el pendiente." : "Restauró el pendiente."); await db.SaveChangesAsync(); return Results.Ok(item);
-        }).RequireAuthorization("Admin");
+        });
         group.MapPost("/{id:guid}/comments", async (Guid id, CommentInput input, AppDb db, ClaimsPrincipal user) =>
         {
             if (!await db.Tasks.AnyAsync(x => x.Id == id)) return Results.NotFound();
@@ -103,7 +103,7 @@ public static class TaskEndpoints
             var a = await db.Attachments.FindAsync(id); if (a == null) return Results.NotFound();
             var path = Path.Combine(Path.GetFullPath(config["StoragePath"] ?? "uploads"), id.ToString("N"));
             return File.Exists(path) ? Results.File(path, a.ContentType, a.Name) : Results.NotFound();
-        }).RequireAuthorization();
+        }).RequireAuthorization("page:tasks");
     }
     public record ArchiveInput(bool Archived, Guid Version);
     public record CommentInput(string Body);

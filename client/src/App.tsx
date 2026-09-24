@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, lazy, Suspense, type FormEvent } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import {
   Archive,
@@ -29,11 +29,19 @@ import {
   UserRound,
   WifiOff,
   X,
+  FileText,
+  Timer,
+  Globe2,
+  MoreHorizontal,
 } from 'lucide-react';
-import { api, ApiError, errorMessage } from './api';
+import { api, ApiError, errorMessage, setActiveSpace } from './api';
 import { Badge, Brand, Empty, ErrorBox, Field, Modal } from './components';
 import { CatalogEditor, Settings } from './Settings';
 import { TaskEditor } from './TaskEditor';
+import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
+const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
+import { FocusPage } from './Focus';
+import { AdminAccess } from './AdminAccess';
 import {
   dateLabel,
   initials,
@@ -45,6 +53,8 @@ import {
   type TaskPage,
   type User,
   type Workspace,
+  type Space,
+  type SpaceSession,
 } from './types';
 
 type InstallPrompt = Event & {
@@ -90,7 +100,11 @@ export default function App() {
   const logout = async () => {
     try {
       await api('/auth/logout', 'POST');
-      if (user) localStorage.removeItem(`aegitasks-draft-${user.id}`);
+      if (user)
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith(`aegitasks-draft-${user.id}`))
+          .forEach((k) => localStorage.removeItem(k));
+      setActiveSpace('');
       setUser(null);
     } catch (e) {
       setAuthError(errorMessage(e));
@@ -104,13 +118,22 @@ export default function App() {
       </div>
     );
   return user ? (
-    <WorkspaceApp
-      user={user}
-      logout={() => void logout()}
-      theme={theme}
-      toggleTheme={toggleTheme}
-      globalError={authError}
-    />
+    <SpaceGate user={user}>
+      {(session, active, switchSpace, reloadSpaces) => (
+        <WorkspaceApp
+          key={active.id}
+          spaceSession={session}
+          space={active}
+          switchSpace={switchSpace}
+          reloadSpaces={reloadSpaces}
+          user={user}
+          logout={() => void logout()}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          globalError={authError}
+        />
+      )}
+    </SpaceGate>
   ) : (
     <Login
       onLogin={setUser}
@@ -248,13 +271,31 @@ function WorkspaceApp({
   theme,
   toggleTheme,
   globalError,
+  spaceSession,
+  space,
+  switchSpace,
+  reloadSpaces,
 }: {
   user: User;
   logout: () => void;
   theme: string;
   toggleTheme: () => void;
   globalError: string;
+  spaceSession: SpaceSession;
+  space: Space;
+  switchSpace: (id: string) => void;
+  reloadSpaces: () => Promise<void>;
 }) {
+  const permissions = spaceSession.permissions;
+  const [moreMenu, setMoreMenu] = useState(false);
+  const routePage = (r: string) =>
+    r.startsWith('project/')
+      ? 'tasks'
+      : ['inbox', 'mine', 'archived'].includes(r)
+        ? 'tasks'
+        : r === 'admin'
+          ? 'users'
+          : r;
   const [w, setWorkspace] = useState<Workspace | null>(null);
   const [route, setRoute] = useState(location.hash.slice(1) || 'inbox');
   const [folder, setFolder] = useState('');
@@ -313,7 +354,14 @@ function WorkspaceApp({
     });
   }, [reload]);
   useEffect(() => {
-    const onHash = () => {
+    const onHash = (event: HashChangeEvent) => {
+      if (
+        document.querySelector('[data-unsaved-note="true"]') &&
+        !confirm('Hay una nota con cambios sin guardar. ¿Salir y descartar el borrador?')
+      ) {
+        history.replaceState(null, '', event.oldURL);
+        return;
+      }
       setRoute(location.hash.slice(1) || 'inbox');
       if (!location.hash.startsWith('#project/')) setView('list');
       setFolder('');
@@ -354,7 +402,12 @@ function WorkspaceApp({
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (!w) return;
+    if (
+      !w ||
+      !permissions.includes('tasks') ||
+      !(['inbox', 'mine', 'archived'].includes(route) || route.startsWith('project/'))
+    )
+      return;
     const controller = new AbortController();
     setLoading(true);
     const params = new URLSearchParams({
@@ -398,8 +451,10 @@ function WorkspaceApp({
     route,
     revision,
     online,
+    permissions,
   ]);
   const navigate = (to: string) => {
+    setMoreMenu(false);
     if (to === 'settings' && projectId) setSettingsProject(projectId);
     location.hash = to;
     setPage(1);
@@ -448,20 +503,30 @@ function WorkspaceApp({
     { id: 'inbox', name: 'Bandeja', icon: Inbox },
     { id: 'mine', name: 'Mis pendientes', icon: UserRound },
     { id: 'projects', name: 'Proyectos', icon: FolderKanban },
+    { id: 'notes', name: 'Notas', icon: FileText },
+    { id: 'focus', name: 'Focus', icon: Timer },
+    { id: 'spaces', name: 'Spaces', icon: Globe2 },
     { id: 'settings', name: 'Ajustes', icon: SettingsIcon },
+    { id: 'admin', name: 'Usuarios y roles', icon: ShieldCheck },
   ];
   const navigation = (mobile = false) =>
-    nav.map((n) => (
-      <button
-        key={n.id}
-        className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'projects' && !!projectId) ? 'active' : ''}`}
-        onClick={() => navigate(n.id)}
-      >
-        <n.icon size={21} />
-        <span>{n.name}</span>
-        {!mobile && n.id === 'inbox' && <span className="nav-count">{summary.open}</span>}
-      </button>
-    ));
+    nav
+      .filter(
+        (n) =>
+          permissions.includes(routePage(n.id)) &&
+          (!mobile || ['inbox', 'notes', 'focus', 'spaces'].includes(n.id)),
+      )
+      .map((n) => (
+        <button
+          key={n.id}
+          className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'projects' && !!projectId) ? 'active' : ''}`}
+          onClick={() => navigate(n.id)}
+        >
+          <n.icon size={21} />
+          <span>{n.name}</span>
+          {!mobile && n.id === 'inbox' && <span className="nav-count">{summary.open}</span>}
+        </button>
+      ));
   const title =
     project?.name ||
     (route === 'mine' ? 'Mis pendientes' : route === 'archived' ? 'Archivados' : 'Tu bandeja');
@@ -472,11 +537,14 @@ function WorkspaceApp({
       </a>
       <aside className="sidebar">
         <Brand />
-        <div className="workspace-label">ESPACIO DEL EQUIPO</div>
+        <SpaceSelector spaces={spaceSession.spaces} active={space} onChange={switchSpace} />
+        <div className="workspace-label">
+          {space.isPersonal ? 'SOLO TÚ' : 'WORKSPACE COMPARTIDO'}
+        </div>
         <nav aria-label="Navegación principal">{navigation()}</nav>
         <div className="sidebar-section">
           <span>PROYECTOS</span>
-          {user.role === 'Admin' && (
+          {permissions.includes('projects') && (
             <button
               className="btn-icon"
               aria-label="Nuevo proyecto"
@@ -488,7 +556,7 @@ function WorkspaceApp({
         </div>
         <div className="project-nav">
           {w?.projects
-            .filter((p) => !p.archived)
+            .filter((p) => !p.archived && permissions.includes('tasks'))
             .map((p) => (
               <button
                 key={p.id}
@@ -505,12 +573,14 @@ function WorkspaceApp({
           )}
         </div>
         <div className="sidebar-bottom">
-          <button
-            className={`sidebar-link ${route === 'archived' ? 'active' : ''}`}
-            onClick={() => navigate('archived')}
-          >
-            <Archive size={19} /> Archivados
-          </button>
+          {permissions.includes('tasks') && (
+            <button
+              className={`sidebar-link ${route === 'archived' ? 'active' : ''}`}
+              onClick={() => navigate('archived')}
+            >
+              <Archive size={19} /> Archivados
+            </button>
+          )}
           <button className="sidebar-link" onClick={() => void installApp()}>
             <ArrowDownToLine size={19} /> Instalar aplicación
           </button>
@@ -537,7 +607,7 @@ function WorkspaceApp({
             <div className="avatar">{initials(user.name)}</div>
             <span>
               <strong>{user.name}</strong>
-              <small>{user.role === 'Admin' ? 'Administrador' : 'Miembro del equipo'}</small>
+              <small>{user.role === 'Admin' ? 'Administrador' : user.role}</small>
             </span>
             <button className="btn-icon" onClick={logout} aria-label="Cerrar sesión">
               <LogOut size={17} />
@@ -550,10 +620,10 @@ function WorkspaceApp({
           <Brand />
         </div>
         <div className="breadcrumb">
-          <span>Mi espacio</span>
+          <span>{space.isPersonal ? 'Personal' : space.name}</span>
           <ChevronRight size={15} />
           <strong>
-            {route === 'projects' ? 'Proyectos' : route === 'settings' ? 'Ajustes' : title}
+            {nav.find((n) => n.id === route)?.name || (route === 'account' ? 'Mi cuenta' : title)}
           </strong>
         </div>
         <div className="header-actions">
@@ -571,12 +641,15 @@ function WorkspaceApp({
           >
             {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
           </button>
-          <button className="avatar" onClick={() => navigate('settings')} aria-label="Mi cuenta">
+          <button className="avatar" onClick={() => navigate('account')} aria-label="Mi cuenta">
             {initials(user.name)}
           </button>
         </div>
       </header>
       <main id="main-content" className="app-content">
+        <div className="mobile-space">
+          <SpaceSelector spaces={spaceSession.spaces} active={space} onChange={switchSpace} />
+        </div>
         <ErrorBox message={globalError} />
         {!online && (
           <div className="offline-banner">
@@ -605,15 +678,51 @@ function WorkspaceApp({
           </div>
         ) : (
           <>
-            {route === 'settings' ? (
+            {route !== 'account' && !permissions.includes(routePage(route)) ? (
+              <section className="card">
+                <Empty icon={<ShieldCheck size={32} />} title="Página sin acceso">
+                  Tu rol no tiene permiso para esta página.
+                </Empty>
+                <button className="btn btn-ghost" onClick={() => navigate('account')}>
+                  Mi cuenta
+                </button>
+              </section>
+            ) : route === 'notes' ? (
+              <Suspense fallback={<p>Cargando notas…</p>}>
+                <NotesPage
+                  space={space}
+                  workspace={w}
+                  canTasks={permissions.includes('tasks')}
+                  openTask={openTask}
+                />
+              </Suspense>
+            ) : route === 'focus' ? (
+              <FocusPage
+                space={space}
+                canTasks={permissions.includes('tasks')}
+                openTask={openTask}
+              />
+            ) : route === 'spaces' ? (
+              <SpacesPage
+                user={user}
+                active={space}
+                session={spaceSession}
+                reload={reloadSpaces}
+                switchSpace={switchSpace}
+              />
+            ) : route === 'admin' ? (
+              <AdminAccess />
+            ) : route === 'settings' || route === 'account' ? (
               <>
                 <Settings
+                  key={route}
                   workspace={w}
                   user={user}
                   reload={reload}
                   notify={notify}
                   logout={logout}
                   initialProject={settingsProject}
+                  canOrganize={route !== 'account' && permissions.includes('projects')}
                 />
                 <section className="card mobile-tools">
                   <h2>La app, siempre a mano</h2>
@@ -644,7 +753,7 @@ function WorkspaceApp({
                     <h1>Tus proyectos</h1>
                     <p>Un espacio para cada producto. La misma claridad en todos.</p>
                   </div>
-                  {user.role === 'Admin' && (
+                  {permissions.includes('projects') && (
                     <button className="btn btn-primary" onClick={() => setProjectModal(true)}>
                       <Plus size={19} /> Nuevo proyecto
                     </button>
@@ -679,9 +788,9 @@ function WorkspaceApp({
                 {!w.projects.some((p) => !p.archived) && (
                   <section className="card">
                     <Empty icon={<FolderKanban size={36} />} title="El primer paso: un proyecto">
-                      {user.role === 'Admin'
+                      {permissions.includes('projects')
                         ? 'Crea un proyecto para tu PMS, POS o CRM y empieza a reunir los pendientes.'
-                        : 'El administrador creará los proyectos para que puedas reportar tus hallazgos.'}
+                        : 'Una persona con permiso de Proyectos puede crear la estructura del espacio.'}
                     </Empty>
                   </section>
                 )}
@@ -821,7 +930,7 @@ function WorkspaceApp({
                           {f.name}
                         </button>
                       ))}
-                    {user.role === 'Admin' && (
+                    {permissions.includes('projects') && (
                       <button onClick={() => navigate('settings')}>
                         <SettingsIcon size={16} /> Organizar
                       </button>
@@ -999,9 +1108,9 @@ function WorkspaceApp({
                       >
                         {w.projects.some((p) => !p.archived)
                           ? 'No hay pendientes con estos filtros. Puedes cambiar la búsqueda o registrar un nuevo hallazgo.'
-                          : user.role === 'Admin'
+                          : permissions.includes('projects')
                             ? 'Ve a Proyectos y crea el espacio para tu primer producto.'
-                            : 'Pide al administrador que cree un proyecto para tu equipo.'}
+                            : 'Pide a alguien con permiso de Proyectos que cree uno en este espacio.'}
                       </Empty>
                     </div>
                   ) : view === 'board' ? (
@@ -1101,7 +1210,21 @@ function WorkspaceApp({
       </main>
       <nav className="bottom-nav" aria-label="Navegación móvil">
         {navigation(true)}
+        <button className="nav-item" onClick={() => setMoreMenu(true)}>
+          <MoreHorizontal size={21} />
+          <span>Más</span>
+        </button>
       </nav>
+      {moreMenu && (
+        <Modal title="Más opciones" onClose={() => setMoreMenu(false)}>
+          <div className="modal-body mobile-menu">
+            {navigation()}
+            <button className="sidebar-link" onClick={() => navigate('account')}>
+              Mi cuenta
+            </button>
+          </div>
+        </Modal>
+      )}
       {toast && (
         <div className="toast" role="status">
           <Check size={18} />

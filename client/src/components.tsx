@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+  type HTMLAttributes,
+} from 'react';
 import { X, CheckCheck } from 'lucide-react';
 export function Brand() {
   return (
@@ -60,13 +68,23 @@ export function Field({
   children: ReactNode;
   hint?: string;
 }) {
+  const id = useId();
+  const control =
+    isValidElement<HTMLAttributes<HTMLElement>>(children) &&
+    ['input', 'select', 'textarea'].includes(children.type as string)
+      ? cloneElement(children, {
+          id,
+          'aria-labelledby': `${id}-label`,
+          'aria-describedby': hint ? `${id}-hint` : undefined,
+        })
+      : children;
   return (
     <div className="field">
-      <label>
-        <span>{label}</span>
-        {children}
+      <label htmlFor={id}>
+        <span id={`${id}-label`}>{label}</span>
+        {control}
       </label>
-      {hint && <small>{hint}</small>}
+      {hint && <small id={`${id}-hint`}>{hint}</small>}
     </div>
   );
 }

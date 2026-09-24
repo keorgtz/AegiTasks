@@ -1,4 +1,5 @@
 import { chromium, request } from 'playwright';
+import { testSpaces, testExpansionUi } from './expansion-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,6 +11,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const data = await mkdtemp(path.join(tmpdir(), 'aegitasks-test-'));
 const artifacts = path.join(root, 'artifacts');
 await mkdir(artifacts, { recursive: true });
+const apiBase = 'http://localhost:5213';
 const password = 'Test-only-AegiTasks-2026!';
 let checks = 0;
 const results = [];
@@ -64,8 +66,9 @@ try {
       env: {
         ...process.env,
         ASPNETCORE_ENVIRONMENT: 'Development',
-        DatabaseProvider: 'Sqlite',
-        ConnectionStrings__Default: `Data Source=${path.join(data, 'test.db')}`,
+        DatabaseProvider: process.env.AEGITASKS_TEST_POSTGRES ? 'Postgres' : 'Sqlite',
+        ConnectionStrings__Default:
+          process.env.AEGITASKS_TEST_POSTGRES || `Data Source=${path.join(data, 'test.db')}`,
         StoragePath: path.join(data, 'uploads'),
         DataProtectionPath: path.join(data, 'keys'),
         SEED_ADMIN_EMAIL: 'admin@example.com',
@@ -80,7 +83,7 @@ try {
   );
   await ready('http://localhost:5213/api/health');
   await ready('http://localhost:4174');
-  const anon = await request.newContext({ baseURL: 'http://localhost:4174' });
+  const anon = await request.newContext({ baseURL: apiBase });
   assert.equal((await anon.get('/api/workspace')).status(), 401);
   pass('Unauthenticated requests rejected');
   assert.equal(
@@ -90,8 +93,8 @@ try {
     400,
   );
   pass('Cross-origin simple mutation rejected');
-  const admin = await request.newContext({
-    baseURL: 'http://localhost:4174',
+  let admin = await request.newContext({
+    baseURL: apiBase,
     extraHTTPHeaders: { 'X-AegiTasks': '1' },
   });
   const adminUser = await json(admin, 'POST', '/auth/login', {
@@ -99,27 +102,37 @@ try {
     password,
   });
   pass('Seed administrator can sign in');
+  const personalAdmin = admin;
+  const shared = await json(admin, 'POST', '/spaces', { name: 'Equipo AegiTasks' });
+  const invitation = await json(admin, 'POST', `/spaces/${shared.id}/invite`);
+  admin = await request.newContext({
+    baseURL: apiBase,
+    storageState: await personalAdmin.storageState(),
+    extraHTTPHeaders: { 'X-AegiTasks': '1', 'X-Space-Id': shared.id },
+  });
+
   await json(
     admin,
     'PUT',
     `/users/${adminUser.id}`,
-    { name: adminUser.name, role: 'Member', active: true },
+    { name: adminUser.name, role: 'User', active: true },
     400,
   );
   pass('Administrator cannot remove own admin role');
   const member = await json(admin, 'POST', '/users', {
     name: 'María López',
     email: 'support@example.com',
-    role: 'Member',
+    role: 'User',
     password,
   });
   const support = await request.newContext({
-    baseURL: 'http://localhost:4174',
-    extraHTTPHeaders: { 'X-AegiTasks': '1' },
+    baseURL: apiBase,
+    extraHTTPHeaders: { 'X-AegiTasks': '1', 'X-Space-Id': shared.id },
   });
   await json(support, 'POST', '/auth/login', { email: member.email, password });
-  await json(support, 'POST', '/projects', { name: 'Forbidden', color: 'blue' }, 403);
-  pass('Members cannot administer projects');
+  await json(support, 'POST', '/spaces/join', { code: invitation.code });
+  await json(support, 'POST', '/roles', { name: 'Forbidden' }, 403);
+  pass('Users cannot administer roles');
   const pms = await json(admin, 'POST', '/projects', {
     name: 'PMS · Hotel',
     description: 'Reservas, huéspedes y una mejor experiencia de estancia.',
@@ -249,13 +262,6 @@ try {
   assert.ok(detail.activities.some((a) => a.kind === 'comment'));
   assert.ok(detail.activities.some((a) => a.body.includes('En revisión')));
   pass('Comments and status audit persisted');
-  await json(
-    support,
-    'POST',
-    `/tasks/${task.id}/archive`,
-    { archived: true, version: task.version },
-    403,
-  );
   task = await json(admin, 'POST', `/tasks/${task.id}/archive`, {
     archived: true,
     version: task.version,
@@ -329,7 +335,26 @@ try {
   assert.equal(new Set([...page1.items, ...page2.items].map((t) => t.id)).size, 53);
   pass('Pagination has stable, non-overlapping pages');
   await json(admin, 'PUT', `/projects/${qa.id}`, { ...qa, archived: true });
+  const spaceTests = await testSpaces({
+    request,
+    admin,
+    personalAdmin,
+    support,
+    shared,
+    member,
+    adminUser,
+    password,
+    json,
+    pass,
+    pms,
+    task,
+    attachment,
+  });
   const storedSession = await admin.storageState();
+  storedSession.origins.push({
+    origin: 'http://localhost:4174',
+    localStorage: [{ name: `aegitasks-space-${adminUser.id}`, value: shared.id }],
+  });
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     baseURL: 'http://localhost:4174',
@@ -423,10 +448,13 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .getByRole('navigation', { name: 'Navegación móvil' })
-    .getByRole('button', { name: 'Ajustes' })
+    .getByRole('button', { name: 'Más', exact: true })
     .click();
-  await page.getByRole('heading', { name: 'Ajustes', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Equipo', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Más opciones' })
+    .getByRole('button', { name: 'Usuarios y roles' })
+    .click();
+  await page.getByRole('heading', { name: 'Usuarios y roles', exact: true }).waitFor();
   await page.getByText('María López', { exact: true }).waitFor();
   pass('Mobile settings and team navigation');
   assert.equal((await page.request.get('/manifest.webmanifest')).status(), 200);
@@ -437,6 +465,35 @@ try {
     await navigator.serviceWorker.ready;
   });
   pass('Installable manifest, actual PNG icons and registered service worker');
+  await testExpansionUi({
+    page,
+    context,
+    artifacts,
+    pass,
+    pms,
+    admin,
+    personalAdmin,
+    json,
+    spaceTests,
+    shared,
+  });
+  const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
+  if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));
+  let clockSession = await json(support, 'POST', `/focus/${spaceTests.clockSession.id}/action`, {
+    action: 'next',
+    version: spaceTests.clockSession.version,
+  });
+  assert.equal(clockSession.completedCycles, 1);
+  assert.equal(clockSession.phase, 'longBreak');
+  assert.equal(clockSession.remainingSeconds, 120);
+  clockSession = await json(support, 'POST', `/focus/${clockSession.id}/action`, {
+    action: 'finish',
+    version: clockSession.version,
+  });
+  assert.equal(clockSession.completedCycles, 1);
+  pass(
+    'Real elapsed server interval advances to configured long break and counts one completed focus cycle',
+  );
   // Verify the installed shell can reopen offline; server data is intentionally not cached.
   await context.setOffline(true);
   await page.reload();
@@ -448,7 +505,7 @@ try {
   pass('No uncaught browser errors');
   await json(admin, 'PUT', `/users/${member.id}`, {
     name: member.name,
-    role: 'Member',
+    role: 'User',
     active: false,
   });
   assert.equal((await support.get('/api/workspace')).status(), 401);
@@ -469,7 +526,9 @@ try {
         checks,
         results,
         testedAt: new Date().toISOString(),
-        database: 'SQLite (real persistence)',
+        database: process.env.AEGITASKS_TEST_POSTGRES
+          ? 'PostgreSQL (real persistence)'
+          : 'SQLite (real persistence)',
         productionDockerTested: false,
       },
       null,

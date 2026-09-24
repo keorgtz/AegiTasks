@@ -7,6 +7,7 @@ import '@fontsource/inter/latin-700.css';
 import '@fontsource/inter/latin-800.css';
 import './styles/tokens.css';
 import './styles/app.css';
+import './styles/features.css';
 import App from './App';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
