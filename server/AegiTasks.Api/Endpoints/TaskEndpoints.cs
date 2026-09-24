@@ -65,6 +65,30 @@ public static class TaskEndpoints
             var message = oldStatus == item.StatusId ? "Actualizó los detalles del pendiente." : $"Cambió el estado a {(await db.Statuses.FindAsync(item.StatusId))!.Name}.";
             Rules.Log(db, item.Id, user.UserId(), message); await db.SaveChangesAsync(); return Results.Ok(item);
         });
+        group.MapPut("/{id:guid}/status", async (Guid id, StatusChangeInput input, AppDb db, ClaimsPrincipal user) =>
+        {
+            var item = await db.Tasks.Include(t => t.Tags).SingleOrDefaultAsync(t => t.Id == id);
+            if (item == null) return Results.NotFound();
+            if (item.Version != input.Version) return Results.Conflict(new { error = "El pendiente cambió. Actualiza antes de volver a intentarlo." });
+            if (item.Archived || !await db.Projects.AnyAsync(p => p.Id == item.ProjectId && !p.Archived)) throw new InputError("Restaura el pendiente y su proyecto antes de cambiar el estado.");
+            var status = await db.Statuses.SingleOrDefaultAsync(s => s.Id == input.StatusId && s.ProjectId == item.ProjectId);
+            if (status == null) throw new InputError("Selecciona un estado de este pendiente.");
+            item.StatusId = status.Id; item.Version = Guid.NewGuid(); item.UpdatedAt = DateTime.UtcNow;
+            Rules.Log(db, id, user.UserId(), $"Cambió el estado a {status.Name}.");
+            await db.SaveChangesAsync(); return Results.Ok(item);
+        });
+        group.MapDelete("/{id:guid}", async (Guid id, Guid version, AppDb db, IConfiguration config, ChangeFeed feed) =>
+        {
+            var item = await db.Tasks.SingleOrDefaultAsync(t => t.Id == id);
+            if (item == null) return Results.NotFound();
+            if (item.Version != version) return Results.Conflict(new { error = "El pendiente cambió. Vuelve a abrirlo antes de eliminarlo." });
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var files = await Deletion.RemoveTasks(db, [item]);
+            await transaction.CommitAsync();
+            Deletion.RemoveFiles(files.Files, config, app.Logger);
+            foreach (var focusUser in files.FocusUsers) feed.Publish(null, focusUser, "focus");
+            return Results.NoContent();
+        });
         group.MapPost("/{id:guid}/archive", async (Guid id, ArchiveInput input, AppDb db, ClaimsPrincipal user) =>
         {
             var item = await db.Tasks.FindAsync(id); if (item == null) return Results.NotFound();
@@ -106,5 +130,6 @@ public static class TaskEndpoints
         }).RequireAuthorization("page:tasks");
     }
     public record ArchiveInput(bool Archived, Guid Version);
+    public record StatusChangeInput(Guid StatusId, Guid Version);
     public record CommentInput(string Body);
 }

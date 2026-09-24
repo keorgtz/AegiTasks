@@ -1,5 +1,6 @@
 import { chromium, request } from 'playwright';
 import { testSpaces, testExpansionUi } from './expansion-tests.mjs';
+import { testWorkflow } from './workflow-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,6 +23,7 @@ const pass = (label) => {
 };
 const children = [];
 let browser;
+let failurePage;
 let apiLog = '';
 const run = (command, args, options) => {
   const child = spawn(command, args, {
@@ -359,10 +361,15 @@ try {
   const context = await browser.newContext({
     baseURL: 'http://localhost:4174',
     viewport: { width: 1440, height: 1080 },
+    timezoneId: 'America/Mexico_City',
     storageState: storedSession,
     colorScheme: 'light',
   });
   const page = await context.newPage();
+  failurePage = page;
+  page.on('requestfailed', (r) => {
+    apiLog += `\nBROWSER REQUEST FAILED ${r.method()} ${r.url()} ${r.failure()?.errorText}\n`;
+  });
   const browserErrors = [];
   page.on('pageerror', (e) => browserErrors.push(e.message));
   await page.goto('http://localhost:4174');
@@ -477,6 +484,20 @@ try {
     spaceTests,
     shared,
   });
+  await testWorkflow({
+    page,
+    context,
+    admin,
+    personalAdmin,
+    support,
+    shared,
+    adminUser,
+    request,
+    json,
+    pass,
+    artifacts,
+    password,
+  });
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));
   let clockSession = await json(support, 'POST', `/focus/${spaceTests.clockSession.id}/action`, {
@@ -538,6 +559,8 @@ try {
   console.log(`\n${checks} checks passed. Screenshots: ${artifacts}`);
 } catch (e) {
   await writeFile(path.join(artifacts, 'test-server.log'), apiLog);
+  if (failurePage && !failurePage.isClosed())
+    await failurePage.screenshot({ path: path.join(artifacts, 'failure.png') }).catch(() => {});
   throw e;
 } finally {
   if (browser) await browser.close();

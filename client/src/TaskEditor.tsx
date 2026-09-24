@@ -7,8 +7,10 @@ import {
   MessageSquare,
   Paperclip,
   Send,
+  Trash2,
 } from 'lucide-react';
 import { api, errorMessage, getActiveSpace } from './api';
+import { useChanges } from './changes';
 import { Badge, ErrorBox, Field, Modal } from './components';
 import {
   dateLabel,
@@ -39,6 +41,7 @@ export function TaskEditor({
   user,
   onClose,
   onSaved,
+  onDeleted,
   notify,
 }: {
   id?: string;
@@ -48,6 +51,7 @@ export function TaskEditor({
   user: User;
   onClose: () => void;
   onSaved: (task: TaskItem) => void;
+  onDeleted: () => void;
   notify: (text: string) => void;
 }) {
   const draftKey = `aegitasks-draft-${user.id}-${getActiveSpace()}`;
@@ -80,6 +84,16 @@ export function TaskEditor({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState('');
+  const [remoteChange, setRemoteChange] = useState(false);
+  useChanges(['tasks'], () => {
+    if (!id || !detail) return;
+    void api<TaskDetail>(`/tasks/${id}`)
+      .then((latest) => {
+        setRemoteChange(latest.item.version !== detail.item.version);
+        setDetail((previous) => (previous ? { ...latest, item: previous.item } : latest));
+      })
+      .catch(() => setRemoteChange(true));
+  });
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setDirty(true);
@@ -148,6 +162,7 @@ export function TaskEditor({
         version: detail?.item.version,
       });
       setDirty(false);
+      setRemoteChange(false);
       if (!id) localStorage.removeItem(draftKey);
       notify(id ? 'Cambios guardados.' : 'Pendiente creado. Ya puedes adjuntar evidencias.');
       onSaved(task);
@@ -218,10 +233,36 @@ export function TaskEditor({
       setBusy(false);
     }
   }
+  async function remove() {
+    if (
+      !detail ||
+      !confirm(
+        `¿Eliminar «${detail.item.title}» y sus comentarios y adjuntos? No se puede deshacer. Las notas vinculadas se conservarán.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/tasks/${id}?version=${encodeURIComponent(detail.item.version)}`, 'DELETE');
+      notify('Pendiente eliminado.');
+      onDeleted();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <Modal title={id ? 'Detalle del pendiente' : '¿Qué encontraste?'} onClose={close} wide>
       <div className="modal-body">
         <ErrorBox message={error} />
+        {remoteChange && (
+          <p className="small" role="status">
+            Este pendiente cambió o fue eliminado en otra sesión. Tu borrador se conserva; vuelve a
+            abrirlo para consultar la versión actual.
+          </p>
+        )}
         {id && !detail ? (
           <p className="muted">
             {error
@@ -504,7 +545,7 @@ export function TaskEditor({
                     </button>
                   </form>
                 </section>
-                {
+                <>
                   <button
                     className="btn btn-ghost archive-action"
                     disabled={busy}
@@ -513,7 +554,15 @@ export function TaskEditor({
                     <Archive size={17} />
                     {detail.item.archived ? 'Restaurar pendiente' : 'Archivar pendiente'}
                   </button>
-                }
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={busy}
+                    onClick={() => void remove()}
+                  >
+                    <Trash2 size={16} /> Eliminar pendiente
+                  </button>
+                </>
               </>
             )}
           </>

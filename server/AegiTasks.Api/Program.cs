@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<SpaceScope>();
+builder.Services.AddSingleton<ChangeFeed>();
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new UtcDateTimeConverter()));
 builder.Services.AddDbContext<AppDb>(o =>
 {
     if (builder.Configuration["DatabaseProvider"] == "Sqlite") o.UseSqlite(builder.Configuration.GetConnectionString("Default"));
@@ -83,6 +85,32 @@ app.Use(async (c, next) => {
     await next();
 });
 app.UseAuthorization();
+app.Use(async (c, next) => {
+    await next();
+    if (c.Request.Method is "GET" or "HEAD" or "OPTIONS" || c.Response.StatusCode >= 300 || c.User.Identity?.IsAuthenticated != true) return;
+    var feed = c.RequestServices.GetRequiredService<ChangeFeed>();
+    var space = c.RequestServices.GetRequiredService<SpaceScope>().SpaceId;
+    var area = c.Request.Path.Value?.Split('/').ElementAtOrDefault(2);
+    switch (area) {
+        case "projects":
+            feed.Publish(space, null, "catalog", "tasks");
+            if (c.Request.Method == "DELETE") feed.Publish(space, null, "notes");
+            break;
+        case "folders": case "statuses": case "tags": feed.Publish(space, null, "catalog", "tasks"); break;
+        case "tasks":
+            feed.Publish(space, null, "tasks");
+            if (c.Request.Method == "DELETE") feed.Publish(space, null, "notes");
+            break;
+        case "notes": case "note-folders":
+            feed.Publish(space, null, "notes");
+            if (c.Request.Path.Value!.EndsWith("/task", StringComparison.OrdinalIgnoreCase)) feed.Publish(space, null, "tasks");
+            break;
+        case "focus": feed.Publish(null, c.User.UserId(), "focus"); break;
+        case "spaces": case "users": case "roles": feed.Publish(null, null, "access", "catalog"); break;
+        case "auth": feed.Publish(null, c.User.UserId(), "access"); break;
+    }
+});
+app.MapGet("/api/events", (HttpContext c, Guid space, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(c, space, scopes)).RequireAuthorization();
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
 app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles();
 if (!app.Environment.IsEnvironment("Testing"))
@@ -93,6 +121,17 @@ if (!app.Environment.IsEnvironment("Testing"))
     {
         if (app.Environment.IsProduction()) throw new InvalidOperationException("Production requires PostgreSQL.");
         await db.Database.EnsureCreatedAsync();
+        // EnsureCreated does not apply migrations to an existing local database.
+        await db.Database.OpenConnectionAsync();
+        try {
+            await using var command = db.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "PRAGMA table_info('Projects')";
+            var hasLabels = false;
+            await using (var columns = await command.ExecuteReaderAsync())
+                while (await columns.ReadAsync()) hasLabels |= columns.GetString(1) == "Labels";
+            if (!hasLabels) await db.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN Labels TEXT NOT NULL DEFAULT ''");
+        }
+        finally { await db.Database.CloseConnectionAsync(); }
     }
     else await db.Database.MigrateAsync();
     await Bootstrap.Seed(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>(), app.Configuration);

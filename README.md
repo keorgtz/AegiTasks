@@ -6,21 +6,23 @@ Espacios personales y compartidos para organizar pendientes, documentar conocimi
 
 - **Spaces:** cada cuenta recibe un espacio Personal privado. Crea workspaces independientes, invita a usuarios existentes mediante códigos con vencimiento, revoca invitaciones, retira miembros o transfiere la propiedad. Cada workspace comparte proyectos, pendientes y notas solo entre sus integrantes.
 - **Notas Markdown:** carpetas y subcarpetas, búsqueda por contenido, notas fijadas o archivadas, proyecto opcional, plantillas, tablas GFM, citas, checklists, bloques de código con resaltado, colores, callouts y tres familias tipográficas. Vista dividida o previa, importación `.md`, exportación Markdown/HTML/PDF mediante impresión y ZIP de todo el espacio con su estructura. Las notas pueden generar un pendiente vinculado sin perder el original.
-- **Focus Mode personal:** enfoque, pausa corta/larga y ciclos configurables; objetivos marcables y hasta 10 pendientes asociados. Aurora, Waves y Terminal con fondos animados, modo inmersivo/pantalla completa y movimiento reducido. Sesión guardada en el servidor, pausa/reanudación, sonido opcional e historial personal.
+- **Focus Mode personal:** enfoque, pausa corta/larga y ciclos configurables; objetivos manuales y selección de hasta 10 pendientes, con búsqueda y paginación. Desde el timer puedes cambiar su estado, resolverlos o reabrirlos; esos cambios se guardan en el pendiente y se comparten con el equipo. Aurora, Waves y Terminal con fondos animados, modo inmersivo/pantalla completa y movimiento reducido. Sesión guardada en el servidor, pausa/reanudación, sonido opcional e historial personal.
 - **Bandeja del equipo:** pendientes abiertos, alta prioridad, vencidos y resueltos; búsqueda por título y descripción.
-- **Proyectos separados:** PMS, POS, CRM o los productos que necesites; carpetas por módulo, cliente o área.
+- **Proyectos separados:** productos permanentes con etiquetas opcionales como PMS, POS y CRM; carpetas por módulo, cliente o área. Las etiquetas del proyecto no son estados de avance.
 - **Lista y tablero:** filtros por proyecto, carpeta, estado, etiqueta y prioridad; orden por prioridad, fecha o creación. Paginación de 50 elementos, también visible en el tablero.
 - **Reporte simple:** solo título y proyecto obligatorios. El estado inicial se asigna automáticamente. Descripción, etiquetas, responsable, prioridad, fecha límite y estimación en minutos son opcionales.
-- **Estados personalizables por proyecto:** nombre, color, orden y si cuenta como resuelto. Las carpetas del proyecto comparten ese recorrido.
+- **Estados de pendientes personalizables:** cada proyecto define el recorrido de sus pendientes mediante nombre, color, orden y si cuenta como resuelto. Los proyectos nuevos incluyen Pendiente, Por iniciar, En progreso, Resuelto y Resuelto y revisado. Los estados de proyectos existentes se conservan.
 - **Etiquetas del equipo:** BUG, ADD y FIX iniciales; crea y modifica las que necesites.
 - **Conversación y evidencias:** comentarios, historial de cambios de estado y adjuntos PNG/JPG/WebP/PDF de hasta 10 MB, máximo 20 por pendiente.
 - **Usuarios y roles:** Admin, User y roles personalizados. Solo Admin crea/gestiona cuentas y roles desde **Usuarios y roles**. Los roles nuevos tienen todas las páginas operativas habilitadas por defecto; el administrador puede restringirlas. Sin registro público ni correo saliente.
 - **Archivo reversible:** conserva pendientes e historial. Los proyectos archivados se restauran desde Ajustes → Organización.
 - **Cambios simultáneos:** un pendiente modificado por otra persona rechaza una edición antigua con un mensaje para recargar; no sobrescribe silenciosamente.
-- **PWA:** instalación en computadora y teléfono; actualización desde navegación lateral o Ajustes en móvil; fuentes e iconos locales.
+- **PWA:** pulsa el logo en el sidebar o en la cabecera móvil para abrir el diálogo de instalación; actualización desde navegación lateral o Ajustes en móvil; fuentes e iconos locales.
 - **Borradores sin conexión:** el texto de reportes nuevos se conserva por usuario y espacio en el dispositivo. Enviar requiere conexión y una sesión vigente. La PWA conserva su interfaz, pero **no almacena respuestas privadas de la API ni sincroniza cambios automáticamente en segundo plano**.
 
-La bandeja y los permisos se actualizan cada 30 segundos mientras la interfaz está visible. Las notas se guardan explícitamente; no son un editor colaborativo en tiempo real. Las tarjetas de métricas filtran la bandeja. El estado se cambia desde el detalle; el tablero no requiere arrastrar tarjetas, por lo que funciona también con touch y teclado.
+Las vistas reciben avisos del servidor al cambiar su contenido, sin consultar datos cada 30 segundos. La reconexión sincroniza la vista y los avisos recibidos en segundo plano se aplican al recuperar visibilidad. Los formularios abiertos conservan sus borradores y detectan conflictos al guardar. Las notas se guardan explícitamente; no son un editor de texto colaborativo simultáneo. Las tarjetas de métricas filtran la bandeja. Los estados se cambian desde el detalle o Focus; el tablero funciona también con touch y teclado.
+
+En escritorio, las secciones del sidebar se abren de una en una. Cuando falta altura, las opciones se paginan para mantenerlas accesibles sin scrollbar vertical. Eliminar un pendiente borra sus comentarios y adjuntos; eliminar un proyecto borra además sus pendientes, carpetas y estados. Ambas acciones piden confirmación, conservan las notas y limpian los enlaces afectados en notas y Focus. Archivar sigue siendo la alternativa reversible.
 
 ## Arquitectura
 
@@ -160,7 +162,7 @@ Consulta [docs/VALIDATION.md](docs/VALIDATION.md) para los resultados efectivame
 
 El límite de acceso a datos es el **espacio**. El Personal solo es accesible por su propietario, incluso frente a otras cuentas Admin. En un workspace, sus miembros pueden leer y modificar su contenido; no hay notas privadas dentro de un espacio compartido. Para eso se usa Personal. El rol Admin gestiona cuentas y permisos, pero no evita la comprobación de membresía de espacios.
 
-Las páginas operativas configurables son Pendientes, Proyectos, Notas, Focus, Spaces y Ajustes. Los permisos se comprueban en cada llamada de API; la navegación se actualiza al recuperar visibilidad y cada 30 segundos. Revocar una página no equivale a ocultar referencias de catálogos necesarias para otras páginas autorizadas. La cuenta propia sigue accesible para cambiar contraseña. Usuarios y roles permanecen exclusivos de Admin.
+Las páginas operativas configurables son Pendientes, Proyectos, Notas, Focus, Spaces y Ajustes. Los permisos se comprueban en cada llamada de API; los cambios de acceso notifican a las sesiones conectadas. Revocar una página no equivale a ocultar referencias de catálogos necesarias para otras páginas autorizadas. La cuenta propia sigue accesible para cambiar contraseña. Usuarios y roles permanecen exclusivos de Admin.
 
 Solo el propietario del workspace genera/revoca invitaciones, retira a otros miembros o transfiere la propiedad; un miembro puede salir. Las invitaciones duran 7 días, se almacenan como hash y regenerarlas invalida el código anterior. Es necesario tener cuenta para unirse. Las sesiones Focus y su historial son privados y continúan al cambiar de espacio.
 

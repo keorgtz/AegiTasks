@@ -63,9 +63,17 @@ docker network inspect proxy
 
 No hay registro público. Las contraseñas usan PasswordHasher; nunca se devuelve su hash a la interfaz. Las operaciones que cambian datos requieren una cabecera propia y no se habilita CORS. Las cookies son HttpOnly y SameSite Strict. Los adjuntos requieren autenticación para descargarse; el nombre físico es un identificador generado y la descarga fuerza un nombre seguro. Se verifica la firma de imágenes/PDF, pero no se incluye antivirus ni análisis del contenido de PDFs: adjunta evidencias del equipo, no archivos de fuentes desconocidas.
 
-Los borradores nuevos se guardan en localStorage por usuario y espacio. Cerrar sesión los elimina; no se guardan contraseñas ni cookies de sesión en localStorage. La consulta de datos privados necesita servidor disponible. Las fechas límite son fechas sin hora; las métricas del servidor usan el día UTC. Los comentarios y evidencias se conservan como historial; esta versión no ofrece borrado de esos registros desde la interfaz.
+Los borradores nuevos se guardan en localStorage por usuario y espacio. Cerrar sesión los elimina; no se guardan contraseñas ni cookies de sesión en localStorage. La consulta de datos privados necesita servidor disponible. Las fechas límite son fechas sin hora; las métricas del servidor usan el día UTC. El borrado permanente de un pendiente o proyecto elimina sus comentarios y evidencias; archivar conserva el historial. Las notas sobreviven sin referencias al contenido eliminado.
 
-La instalación prevista usa una sola API. Antes de escalar a varias réplicas, usa almacenamiento compartido para adjuntos y claves, coordinación de migraciones y un límite distribuido de autenticación. Redis es una incorporación posible en ese escenario.
+La instalación prevista usa una sola API. Antes de escalar a varias réplicas, usa almacenamiento compartido para adjuntos y claves, coordinación de migraciones, un límite distribuido de autenticación y un bus compartido para avisos de cambios. Redis es una incorporación posible en ese escenario.
+
+### Avisos de cambios
+
+`/api/events?space=<id>` mantiene una conexión SSE autenticada por sesión y autorizada por membresía. Solo transmite temas a invalidar, sin títulos, notas ni datos de tareas. Los cambios personales de Focus se dirigen a su usuario; los cambios de contenido se limitan al espacio. La membresía y la sesión se revalidan antes de enviar eventos. Un cambio de permisos provoca una nueva lectura autorizada; una membresía revocada cierra el stream. Las reconexiones sincronizan el contenido visible para recuperar cambios ocurridos durante un corte.
+
+El Nginx incluido desactiva `proxy_buffering`; la API envía `X-Accel-Buffering: no` y comentarios de mantenimiento cada 20 segundos. Estos comentarios mantienen la conexión y no refrescan datos. Conserva streaming sin caché ni buffering en Nginx Proxy Manager y Cloudflare Tunnel. Referencia del protocolo: [MDN, Server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events).
+
+La migración `ProjectLabels` añade una columna vacía para las etiquetas de proyectos existentes; conserva sus estados y pendientes. En desarrollo SQLite, el arranque añade esa columna solo si falta; producción usa las migraciones PostgreSQL.
 
 ## Espacios, notas y enfoque
 

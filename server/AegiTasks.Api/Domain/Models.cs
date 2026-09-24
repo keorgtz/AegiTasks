@@ -16,6 +16,7 @@ public class Project
     public Guid SpaceId { get; set; }
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
+    public string Labels { get; set; } = "";
     public string Color { get; set; } = "purple";
     public bool Archived { get; set; }
 }

@@ -71,6 +71,7 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
         b.Entity<User>().Property(x => x.Name).HasMaxLength(80);
         b.Entity<Project>().Property(x => x.Name).HasMaxLength(80);
         b.Entity<Project>().Property(x => x.Description).HasMaxLength(1000);
+        b.Entity<Project>().Property(x => x.Labels).HasMaxLength(320);
         b.Entity<Folder>().HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
         b.Entity<Folder>().HasAlternateKey(x => new { x.Id, x.ProjectId });
         b.Entity<Folder>().Property(x => x.Name).HasMaxLength(80);

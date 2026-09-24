@@ -8,10 +8,21 @@ import {
   type HTMLAttributes,
 } from 'react';
 import { X } from 'lucide-react';
-export function Brand() {
+export function Brand({ onInstall }: { onInstall?: () => void }) {
   return (
     <div className="brand">
-      <img className="brand-mark" src="/aegitasks-icon-192.png" alt="" width={39} height={39} />
+      {onInstall ? (
+        <button
+          className="brand-install"
+          onClick={onInstall}
+          aria-label="Instalar AegiTasks"
+          title="Instalar AegiTasks"
+        >
+          <img className="brand-mark" src="/aegitasks-icon-192.png" alt="" width={39} height={39} />
+        </button>
+      ) : (
+        <img className="brand-mark" src="/aegitasks-icon-192.png" alt="" width={39} height={39} />
+      )}
       <div>
         <strong>AegiTasks</strong>
         <span>PASTEL PULSE</span>

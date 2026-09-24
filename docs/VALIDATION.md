@@ -1,6 +1,6 @@
 # Evidencia de validación
 
-Fecha: 23 de septiembre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright.
+Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML y shell documentadas abajo corresponden al 23 de septiembre.
 
 ## Ejecutado correctamente
 
@@ -12,8 +12,8 @@ Fecha: 23 de septiembre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **53 verificaciones aprobadas sobre SQLite**                                           |
-| `node client/scripts/postgres-tests.mjs`                                        | **53 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `npm --prefix client run test:e2e`                                              | **62 verificaciones aprobadas sobre SQLite**                                           |
+| `node client/scripts/postgres-tests.mjs`                                        | **62 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -23,7 +23,21 @@ La auditoría de dependencias corresponde a la fecha indicada; no garantiza ause
 
 ## Pruebas funcionales
 
-La suite de 53 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+### Cambios del 24 de septiembre
+
+- Sidebar con secciones exclusivas y catálogos extensos paginados: sin desbordamiento vertical a alturas 900, 768 y 600; el control de crear proyecto permanece dentro del sidebar. El logo abre el diálogo de instalación.
+- Etiquetas de proyecto persistentes, deduplicación y límite de diez etiquetas de 30 caracteres; estados de pendientes independientes y personalizables.
+- Selección real de pendientes en Focus, resolver/reabrir, estado revisado, persistencia después de recargar y actualización en la vista de otro miembro conectado.
+- Timestamps UTC explícitos al materializar desde SQLite: un timer de un minuto sigue mostrando un minuto después de recargar en `America/Mexico_City`.
+- Borrado desde la interfaz, cancelación de confirmaciones, versiones obsoletas rechazadas, limpieza de enlaces de Focus y conservación de notas al eliminar proyectos o pendientes. Los adjuntos eliminados dejan de estar disponibles.
+- Permisos de página aplicados también al borrado en cascada; una cuenta sin acceso a pendientes no puede eliminarlos a través del proyecto.
+- SSE con dos sesiones autenticadas, separación de Spaces, rechazo de suscripción al espacio Personal ajeno, cierre de una conexión al revocar membresía y conservación de borradores abiertos.
+- Ninguna consulta de datos durante 31,5 segundos de inactividad con el stream conectado. Los comentarios de mantenimiento SSE no disparan lecturas de vistas.
+- Migración PostgreSQL con datos anteriores: se conservan los estados personalizados. Además se verificó dos veces el arranque sobre una copia de una base SQLite anterior: conservó 5 proyectos, 60 pendientes, 2 notas, 16 estados y 65 actividades, añadiendo solo la columna de etiquetas.
+
+Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
+
+La suite de 62 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.

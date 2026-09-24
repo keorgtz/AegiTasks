@@ -11,8 +11,9 @@ import {
   Volume2,
 } from 'lucide-react';
 import { api, errorMessage } from './api';
+import { useChanges } from './changes';
 import { ErrorBox, Field } from './components';
-import type { Space, TaskItem, TaskPage } from './types';
+import type { Space, TaskItem, TaskPage, Workspace } from './types';
 interface Profile {
   focusMinutes: number;
   shortBreakMinutes: number;
@@ -56,10 +57,12 @@ const defaults: Profile = {
 };
 export function FocusPage({
   space,
+  workspace: w,
   canTasks,
   openTask,
 }: {
   space: Space;
+  workspace: Workspace;
   canTasks: boolean;
   openTask: (id: string) => void;
 }) {
@@ -70,6 +73,11 @@ export function FocusPage({
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [taskQuery, setTaskQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
+  const [sessionTasks, setSessionTasks] = useState<TaskItem[]>([]);
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskTotal, setTaskTotal] = useState(0);
+  const [taskRevision, setTaskRevision] = useState(0);
+  const [changingTask, setChangingTask] = useState('');
   const [now, setNow] = useState(Date.now());
   const [offset, setOffset] = useState(0);
   const [immersive, setImmersive] = useState(false);
@@ -79,28 +87,52 @@ export function FocusPage({
   const stage = useRef<HTMLDivElement>(null);
   const audio = useRef<AudioContext | null>(null);
   const alerted = useRef('');
-  async function load() {
+  const loadVersion = useRef(0);
+  async function load(includeProfile = false) {
+    const version = ++loadVersion.current;
     const d = await api<FocusData>('/focus');
+    if (version !== loadVersion.current) return;
     setSession(d.session);
-    setProfile(d.profile);
+    if (includeProfile) setProfile(d.profile);
     setHistory(d.history);
     setOffset(new Date(d.serverNow).getTime() - Date.now());
   }
   useEffect(() => {
-    void load().catch((e) => setError(errorMessage(e)));
+    void load(true).catch((e) => setError(errorMessage(e)));
   }, []);
+  useChanges(['focus', 'tasks'], () => {
+    setTaskRevision((r) => r + 1);
+    void load().catch((e) => setError(errorMessage(e)));
+  });
+  useEffect(() => {
+    if (!session || session.spaceId !== space.id || !canTasks) {
+      setSessionTasks([]);
+      return;
+    }
+    const controller = new AbortController();
+    void api<TaskItem[]>(`/focus/${session.id}/tasks`, 'GET', undefined, controller.signal)
+      .then(setSessionTasks)
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(errorMessage(e));
+      });
+    return () => controller.abort();
+  }, [session?.id, session?.version, space.id, canTasks, taskRevision]);
   useEffect(() => {
     if (!canTasks) return;
     const c = new AbortController();
     const timer = setTimeout(
       () =>
         void api<TaskPage>(
-          `/tasks?scope=open&q=${encodeURIComponent(taskQuery)}`,
+          `/tasks?scope=open&page=${taskPage}&q=${encodeURIComponent(taskQuery)}`,
           'GET',
           undefined,
           c.signal,
         )
-          .then((d) => setTasks(d.items))
+          .then((d) => {
+            setTasks(d.items);
+            setTaskTotal(d.total);
+            setTaskPage((p) => Math.min(p, Math.max(1, Math.ceil(d.total / 50))));
+          })
           .catch((e) => {
             if (!c.signal.aborted) setError(errorMessage(e));
           }),
@@ -110,7 +142,25 @@ export function FocusPage({
       c.abort();
       clearTimeout(timer);
     };
-  }, [space.id, taskQuery, canTasks]);
+  }, [space.id, taskQuery, taskPage, canTasks, taskRevision]);
+  async function changeTaskStatus(task: TaskItem, statusId: string) {
+    if (changingTask) return;
+    setChangingTask(task.id);
+    setError('');
+    try {
+      const updated = await api<TaskItem>(`/tasks/${task.id}/status`, 'PUT', {
+        statusId,
+        version: task.version,
+      });
+      setSessionTasks((items) => items.map((t) => (t.id === task.id ? updated : t)));
+      setTaskRevision((r) => r + 1);
+    } catch (e) {
+      setError(errorMessage(e));
+      setTaskRevision((r) => r + 1);
+    } finally {
+      setChangingTask('');
+    }
+  }
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 250);
     const refresh = () => {
@@ -189,6 +239,7 @@ export function FocusPage({
     try {
       await api('/focus/profile', 'PUT', profile);
       const s = await api<Session>('/focus/start', 'POST', { goal, taskIds: selected });
+      loadVersion.current++;
       setSession(s);
     } catch (e) {
       setError(errorMessage(e));
@@ -206,8 +257,10 @@ export function FocusPage({
         version: session.version,
         goal: updatedGoal,
       });
+      loadVersion.current++;
       if (action === 'finish') {
         setSession(null);
+        setSelected([]);
         await load();
       } else setSession(s);
     } catch (e) {
@@ -387,6 +440,18 @@ export function FocusPage({
               </>
             )}
           </div>
+          {!session && canTasks && (
+            <button
+              className="btn focus-secondary"
+              onClick={() =>
+                document
+                  .getElementById('focus-plan')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+            >
+              Elegir pendientes · {selected.length} seleccionados
+            </button>
+          )}
           <p className="focus-caption">
             {ready
               ? 'Cuando estés listo, inicia la siguiente etapa.'
@@ -412,6 +477,67 @@ export function FocusPage({
                 ),
             )}
           </div>
+        )}
+        {session && session.spaceId === space.id && canTasks && sessionTasks.length > 0 && (
+          <section className="focus-session-tasks" aria-label="Pendientes de esta sesión">
+            <h2>
+              Pendientes de esta sesión{' '}
+              <small>
+                {
+                  sessionTasks.filter((t) => w.statuses.find((s) => s.id === t.statusId)?.isDone)
+                    .length
+                }
+                /{sessionTasks.length}
+              </small>
+            </h2>
+            {sessionTasks.map((task) => {
+              const statuses = w.statuses.filter((s) => s.projectId === task.projectId);
+              const done = !!statuses.find((s) => s.id === task.statusId)?.isDone;
+              const target = statuses.find((s) => s.isDone !== done);
+              const disabled =
+                !!changingTask ||
+                task.archived ||
+                !!w.projects.find((p) => p.id === task.projectId)?.archived;
+              return (
+                <div className="focus-session-task" key={task.id}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Resolver ${task.title}`}
+                    checked={done}
+                    disabled={disabled || !target}
+                    onChange={() => target && void changeTaskStatus(task, target.id)}
+                  />
+                  <div>
+                    <button
+                      className="focus-task-title"
+                      onClick={() => {
+                        if (immersive) leave();
+                        openTask(task.id);
+                      }}
+                    >
+                      {task.title}
+                    </button>
+                    <small>
+                      {w.projects.find((p) => p.id === task.projectId)?.name}
+                      {task.archived ? ' · Archivado' : ''}
+                    </small>
+                  </div>
+                  <select
+                    aria-label={`Estado de ${task.title}`}
+                    value={task.statusId}
+                    disabled={disabled}
+                    onChange={(e) => void changeTaskStatus(task, e.target.value)}
+                  >
+                    {statuses.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </section>
         )}
         {immersive && (
           <button className="focus-exit" onClick={leave}>
@@ -490,7 +616,7 @@ export function FocusPage({
             Guardar preferencias
           </button>
         </section>
-        <section className="card">
+        <section className="card" id="focus-plan">
           <h2>{session ? 'Tu sesión actual' : '¿Qué quieres avanzar?'}</h2>
           {!session ? (
             <>
@@ -510,7 +636,10 @@ export function FocusPage({
                   <Field label="Buscar pendientes para enfocar">
                     <input
                       value={taskQuery}
-                      onChange={(e) => setTaskQuery(e.target.value)}
+                      onChange={(e) => {
+                        setTaskQuery(e.target.value);
+                        setTaskPage(1);
+                      }}
                       placeholder="Título del pendiente…"
                     />
                   </Field>
@@ -527,13 +656,43 @@ export function FocusPage({
                             )
                           }
                         />
-                        <span>{t.title}</span>
+                        <span>
+                          {t.title}
+                          <small className="muted">
+                            {' '}
+                            · {w.projects.find((p) => p.id === t.projectId)?.name}
+                          </small>
+                        </span>
                       </label>
                     ))}
                   </div>
+                  {!tasks.length && (
+                    <p className="muted small">No hay pendientes abiertos que coincidan.</p>
+                  )}
+                  {taskTotal > 50 && (
+                    <div className="pagination">
+                      <button
+                        className="btn btn-ghost"
+                        disabled={taskPage === 1}
+                        onClick={() => setTaskPage((p) => p - 1)}
+                      >
+                        Anterior
+                      </button>
+                      <span>
+                        {taskPage} / {Math.ceil(taskTotal / 50)}
+                      </span>
+                      <button
+                        className="btn btn-ghost"
+                        disabled={taskPage * 50 >= taskTotal}
+                        onClick={() => setTaskPage((p) => p + 1)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  )}
                   <p className="muted small">
-                    Hasta 10 pendientes. Completarlos en el timer no cambia su estado
-                    automáticamente.
+                    {selected.length} de 10 seleccionados. Durante la sesión puedes cambiar su
+                    estado o marcarlos como resueltos directamente en el timer.
                   </p>
                 </>
               )}
@@ -545,9 +704,13 @@ export function FocusPage({
               </p>
               {session.spaceId === space.id &&
                 canTasks &&
-                (JSON.parse(session.taskIdsJson) as string[]).map((id) => (
-                  <button key={id} className="focus-task-link" onClick={() => openTask(id)}>
-                    {tasks.find((t) => t.id === id)?.title || 'Abrir pendiente asociado'}
+                sessionTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    className="focus-task-link"
+                    onClick={() => openTask(task.id)}
+                  >
+                    {task.title} · {w.statuses.find((s) => s.id === task.statusId)?.name}
                   </button>
                 ))}
               {session.spaceId !== space.id && (

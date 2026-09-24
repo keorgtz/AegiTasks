@@ -102,6 +102,20 @@ try {
   `,
   );
   sql('legacy', await readFile(path.join(artifact, 'migration-spaces.sql'), 'utf8'));
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'SpacesNotesFocusRoles',
+    'ProjectLabels',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-labels.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-labels.sql'), 'utf8'));
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "Projects" WHERE "Labels" = \'\';').trim(), '1');
+  assert.equal(sql('legacy', 'SELECT "Name" FROM "Statuses";').trim(), 'Open');
   assert.equal(sql('legacy', 'SELECT count(*) FROM "Spaces" WHERE "IsPersonal";').trim(), '2');
   assert.equal(sql('legacy', 'SELECT count(*) FROM "SpaceMembers";').trim(), '2');
   assert.equal(

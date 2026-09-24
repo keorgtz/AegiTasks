@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { api, errorMessage } from './api';
+import { useChanges } from './changes';
 import { Badge, ErrorBox, Field } from './components';
 import { CatalogEditor } from './Settings';
 import { initials, type User } from './types';
@@ -25,6 +26,7 @@ export function AdminAccess() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  useChanges(['access'], () => void load().catch((e) => setError(errorMessage(e))));
   const load = async () => {
     const [u, r] = await Promise.all([api<User[]>('/users'), api<RoleData>('/roles')]);
     setUsers(u);

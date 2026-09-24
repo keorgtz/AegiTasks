@@ -25,6 +25,12 @@ public static class FocusEndpoints
             p.FocusMinutes = input.FocusMinutes; p.ShortBreakMinutes = input.ShortBreakMinutes; p.LongBreakMinutes = input.LongBreakMinutes; p.Cycles = input.Cycles; p.Theme = input.Theme; p.Animated = input.Animated; p.Sound = input.Sound;
             await db.SaveChangesAsync(); return Results.Ok(p);
         });
+        group.MapGet("/{id:guid}/tasks", async (Guid id, AppDb db, ClaimsPrincipal user) => {
+            var session = await db.FocusSessions.AsNoTracking().SingleOrDefaultAsync(s => s.Id == id && s.UserId == user.UserId() && s.SpaceId == db.CurrentSpaceId);
+            if (session == null) return Results.NotFound();
+            var ids = JsonSerializer.Deserialize<Guid[]>(session.TaskIdsJson) ?? [];
+            return Results.Ok(await db.Tasks.AsNoTracking().Include(t => t.Tags).Where(t => ids.Contains(t.Id)).ToListAsync());
+        }).RequireAuthorization("page:tasks");
         group.MapPost("/start", async (StartInput input, AppDb db, ClaimsPrincipal user) => {
             var id = user.UserId(); if (await db.FocusSessions.AnyAsync(s => s.UserId == id && s.FinishedAt == null)) return Results.Conflict(new { error = "Ya tienes una sesión activa. Retómala o finalízala primero." });
             var ids = (input.TaskIds ?? []).Distinct().ToArray();

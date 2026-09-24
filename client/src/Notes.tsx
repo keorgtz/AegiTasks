@@ -23,6 +23,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { api, errorMessage } from './api';
+import { useChanges } from './changes';
 import { Badge, Empty, ErrorBox, Field, Modal } from './components';
 import {
   colors,
@@ -99,6 +100,7 @@ export function NotesPage({
   const [error, setError] = useState('');
   const [imported, setImported] = useState<Partial<Note> | null>(null);
   const loadVersion = useRef(0);
+  useChanges(['notes'], () => void load().catch((e) => setError(errorMessage(e))));
   async function load(signal?: AbortSignal) {
     const version = ++loadVersion.current;
     const params = new URLSearchParams({ q: query, archived: String(archived) });

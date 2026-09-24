@@ -9,6 +9,7 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  labels: string;
   color: string;
   archived: boolean;
 }

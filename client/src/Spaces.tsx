@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Copy, Globe2, LockKeyhole, Plus, UserRound, Users } from 'lucide-react';
 import { api, errorMessage, setActiveSpace } from './api';
+import { emitChanges, useChanges } from './changes';
 import { Brand, ErrorBox, Field } from './components';
 import type { Space, SpaceSession, User } from './types';
 
@@ -42,14 +43,32 @@ export function SpaceGate({
         });
     };
     refresh();
-    const timer = setInterval(refresh, 30000);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       alive = false;
-      clearInterval(timer);
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [reload]);
+  useChanges(['access'], () => void reload().catch((e) => setError(errorMessage(e))));
+  useEffect(() => {
+    if (!activeId) return;
+    const events = new EventSource(`/api/events?space=${encodeURIComponent(activeId)}`);
+    events.addEventListener('ready', () => emitChanges(['all']));
+    events.addEventListener('change', (event) =>
+      emitChanges(JSON.parse((event as MessageEvent).data)),
+    );
+    events.onerror = () => {
+      // A revoked/expired session may reject the handshake before an event can be sent.
+      if (navigator.onLine) void reload().catch((e) => setError(errorMessage(e)));
+    };
+    events.addEventListener('revoked', (event) => {
+      events.close();
+      if ((event as MessageEvent).data === '401')
+        window.dispatchEvent(new Event('session-expired'));
+      else void reload().catch((e) => setError(errorMessage(e)));
+    });
+    return () => events.close();
+  }, [activeId, reload]);
   const switchSpace = (id: string) => {
     if (id === activeId) return;
     if (document.querySelector('dialog[open]')) {
@@ -130,6 +149,7 @@ export function SpacesPage({
   const [busy, setBusy] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
   const loadMembers = async () => setMembers(await api<User[]>(`/spaces/${active.id}/members`));
+  useChanges(['access'], () => void loadMembers().catch((e) => setError(errorMessage(e))));
   useEffect(() => {
     setInvite('');
     void loadMembers().catch((e) => setError(errorMessage(e)));

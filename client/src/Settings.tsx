@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   FolderPlus,
   Pencil,
@@ -45,6 +45,7 @@ export function CatalogEditor({
 }) {
   const [name, setName] = useState(value.name || '');
   const [description, setDescription] = useState(value.description || '');
+  const [labels, setLabels] = useState(value.labels || '');
   const [color, setColor] = useState(value.color || 'purple');
   const [isDone, setDone] = useState(value.isDone || false);
   const [position, setPosition] = useState(value.position || 0);
@@ -63,6 +64,7 @@ export function CatalogEditor({
       await api(`/${kind}${value.id ? `/${value.id}` : ''}`, value.id ? 'PUT' : 'POST', {
         name,
         description,
+        labels,
         color,
         isDone,
         position,
@@ -103,6 +105,17 @@ export function CatalogEditor({
           </Field>
           {kind === 'projects' && (
             <>
+              <Field
+                label="Etiquetas del proyecto (opcional)"
+                hint="Separadas por comas, hasta 10. Clasifican el producto; no indican su avance."
+              >
+                <input
+                  maxLength={320}
+                  value={labels}
+                  onChange={(e) => setLabels(e.target.value)}
+                  placeholder="PMS, CRM, POS"
+                />
+              </Field>
               <Field label="Descripción (opcional)">
                 <textarea
                   maxLength={1000}
@@ -211,6 +224,34 @@ export function CatalogEditor({
             </>
           )}
           <div className="form-actions">
+            {kind === 'projects' && value.id && (
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={busy}
+                onClick={async () => {
+                  if (
+                    !confirm(
+                      `¿Eliminar el proyecto «${value.name}» y TODOS sus pendientes, carpetas y adjuntos? Las notas se conservarán sin el enlace al proyecto. Esta acción no se puede deshacer.`,
+                    )
+                  )
+                    return;
+                  setBusy(true);
+                  setError('');
+                  try {
+                    await api(`/projects/${value.id}`, 'DELETE');
+                    await onSaved();
+                    onClose();
+                  } catch (e) {
+                    setError(errorMessage(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                <Trash2 size={16} /> Eliminar proyecto
+              </button>
+            )}
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Cancelar
             </button>
@@ -249,6 +290,9 @@ export function Settings({
   const [busy, setBusy] = useState(false);
   const [currentPassword, setCurrent] = useState('');
   const [newPassword, setNew] = useState('');
+  useEffect(() => {
+    if (project && !w.projects.some((p) => p.id === project)) setProject('');
+  }, [w.projects, project]);
   const saved = async () => {
     await reload();
     notify('Configuración guardada.');
@@ -381,7 +425,7 @@ export function Settings({
           </section>
           <section className="card">
             <div className="section-heading">
-              <h2>Estados del proyecto</h2>
+              <h2>Estados de los pendientes</h2>
               <button
                 className="btn-icon"
                 disabled={!project}

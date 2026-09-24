@@ -35,6 +35,8 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import { api, ApiError, errorMessage, setActiveSpace } from './api';
+import { useChanges } from './changes';
+import { SidebarSections } from './SidebarSections';
 import { Badge, Brand, Empty, ErrorBox, Field, Modal } from './components';
 import { CatalogEditor, Settings } from './Settings';
 import { TaskEditor } from './TaskEditor';
@@ -341,6 +343,10 @@ function WorkspaceApp({
   }, []);
   const projectId = route.startsWith('project/') ? route.split('/')[1] || '' : '';
   const project = w?.projects.find((p) => p.id === projectId);
+  useEffect(() => {
+    if (w && projectId && !w.projects.some((p) => p.id === projectId))
+      location.hash = permissions.includes('projects') ? 'projects' : 'inbox';
+  }, [w, projectId, permissions]);
   const notify = (message: string) => setToast(message);
   const reload = useCallback(async () => {
     const workspace = await api<Workspace>('/workspace');
@@ -395,12 +401,8 @@ function WorkspaceApp({
       window.removeEventListener('beforeinstallprompt', prompt);
     };
   }, []);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible' && navigator.onLine) setRevision((r) => r + 1);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
+  useChanges(['catalog'], () => void reload().catch((e) => setError(errorMessage(e))));
+  useChanges(['tasks'], () => setRevision((r) => r + 1));
   useEffect(() => {
     if (
       !w ||
@@ -536,26 +538,13 @@ function WorkspaceApp({
         Ir al contenido
       </a>
       <aside className="sidebar">
-        <Brand />
+        <Brand onInstall={() => setInstallHelp(true)} />
         <SpaceSelector spaces={spaceSession.spaces} active={space} onChange={switchSpace} />
-        <div className="workspace-label">
-          {space.isPersonal ? 'SOLO TÚ' : 'WORKSPACE COMPARTIDO'}
-        </div>
-        <nav aria-label="Navegación principal">{navigation()}</nav>
-        <div className="sidebar-section">
-          <span>PROYECTOS</span>
-          {permissions.includes('projects') && (
-            <button
-              className="btn-icon"
-              aria-label="Nuevo proyecto"
-              onClick={() => setProjectModal(true)}
-            >
-              <Plus size={17} />
-            </button>
-          )}
-        </div>
-        <div className="project-nav">
-          {w?.projects
+        <SidebarSections
+          label={space.isPersonal ? 'MI ESPACIO' : 'WORKSPACE COMPARTIDO'}
+          navigation={navigation()}
+          createProject={permissions.includes('projects') ? () => setProjectModal(true) : undefined}
+          projects={w?.projects
             .filter((p) => !p.archived && permissions.includes('tasks'))
             .map((p) => (
               <button
@@ -568,10 +557,7 @@ function WorkspaceApp({
                 <ChevronRight size={14} />
               </button>
             ))}
-          {w && !w.projects.some((p) => !p.archived) && (
-            <p className="small muted">Tus proyectos aparecerán aquí.</p>
-          )}
-        </div>
+        />
         <div className="sidebar-bottom">
           {permissions.includes('tasks') && (
             <button
@@ -581,9 +567,6 @@ function WorkspaceApp({
               <Archive size={19} /> Archivados
             </button>
           )}
-          <button className="sidebar-link" onClick={() => void installApp()}>
-            <ArrowDownToLine size={19} /> Instalar aplicación
-          </button>
           {needRefresh && (
             <button
               className="sidebar-link update-link"
@@ -617,7 +600,7 @@ function WorkspaceApp({
       </aside>
       <header className="app-header">
         <div className="mobile-brand">
-          <Brand />
+          <Brand onInstall={() => setInstallHelp(true)} />
         </div>
         <div className="breadcrumb">
           <span>{space.isPersonal ? 'Personal' : space.name}</span>
@@ -699,6 +682,7 @@ function WorkspaceApp({
             ) : route === 'focus' ? (
               <FocusPage
                 space={space}
+                workspace={w}
                 canTasks={permissions.includes('tasks')}
                 openTask={openTask}
               />
@@ -726,9 +710,6 @@ function WorkspaceApp({
                 />
                 <section className="card mobile-tools">
                   <h2>La app, siempre a mano</h2>
-                  <button className="btn btn-ghost" onClick={() => void installApp()}>
-                    <ArrowDownToLine size={17} /> Instalar aplicación
-                  </button>
                   {needRefresh && (
                     <button
                       className="btn btn-ghost"
@@ -772,13 +753,22 @@ function WorkspaceApp({
                           <FolderKanban size={26} />
                         </div>
                         <h2>{p.name}</h2>
+                        <div className="project-labels">
+                          {p.labels
+                            ?.split(',')
+                            .filter(Boolean)
+                            .map((label) => (
+                              <Badge key={label} color={p.color}>
+                                {label.trim()}
+                              </Badge>
+                            ))}
+                        </div>
                         <p>
                           {p.description || 'Todo lo que necesita este proyecto, en un solo lugar.'}
                         </p>
                         <div className="project-card-foot">
                           <span>
-                            {w.folders.filter((f) => f.projectId === p.id).length} carpetas ·{' '}
-                            {w.statuses.filter((s) => s.projectId === p.id).length} estados
+                            {w.folders.filter((f) => f.projectId === p.id).length} carpetas
                           </span>
                           <ArrowRight size={19} />
                         </div>
@@ -1173,7 +1163,7 @@ function WorkspaceApp({
                     <span>
                       <ShieldCheck size={14} /> Un espacio compartido, siempre en sintonía
                     </span>
-                    <span>Se actualiza cada 30 segundos</span>
+                    <span>Se actualiza cuando tu equipo hace cambios</span>
                   </div>
                 </section>
               </>
@@ -1187,6 +1177,10 @@ function WorkspaceApp({
                 workspace={w}
                 user={user}
                 onClose={closeTask}
+                onDeleted={() => {
+                  closeTask();
+                  setRevision((r) => r + 1);
+                }}
                 onSaved={(t) => {
                   setRevision((r) => r + 1);
                   if (editor === 'new') openTask(t.id);
@@ -1234,6 +1228,14 @@ function WorkspaceApp({
       {installHelp && (
         <Modal title="Instala AegiTasks" onClose={() => setInstallHelp(false)}>
           <div className="modal-body">
+            {install && (
+              <button
+                className="btn btn-primary"
+                onClick={() => void installApp().catch((e) => setError(errorMessage(e)))}
+              >
+                <ArrowDownToLine size={18} /> Instalar ahora
+              </button>
+            )}
             <p>
               En Chrome o Edge, abre el menú del navegador y elige{' '}
               <strong>Instalar aplicación</strong>.

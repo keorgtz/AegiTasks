@@ -1,4 +1,5 @@
 using AegiTasks.Api.Data;
+using System.Security.Claims;
 using AegiTasks.Api.Domain;
 using AegiTasks.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -22,15 +23,39 @@ public static class CatalogEndpoints
         group.MapPost("/projects", async (ProjectInput input, AppDb db) =>
         {
             var project = new Project { SpaceId = db.CurrentSpaceId, Name = Rules.Text(input.Name, 80, "Nombre"), Description = Rules.Text(input.Description, 1000, "Descripción", false), Color = Rules.Color(input.Color) };
+            project.Labels = Labels(input.Labels);
             db.Projects.Add(project);
-            db.Statuses.AddRange(new TaskStatus { ProjectId = project.Id, Name = "Por revisar", Color = "blue", Position = 0 }, new TaskStatus { ProjectId = project.Id, Name = "En progreso", Color = "purple", Position = 1 }, new TaskStatus { ProjectId = project.Id, Name = "Resuelto", Color = "green", Position = 2, IsDone = true });
+            db.Statuses.AddRange(
+                new TaskStatus { ProjectId = project.Id, Name = "Pendiente", Color = "blue", Position = 0 },
+                new TaskStatus { ProjectId = project.Id, Name = "Por iniciar", Color = "orange", Position = 1 },
+                new TaskStatus { ProjectId = project.Id, Name = "En progreso", Color = "purple", Position = 2 },
+                new TaskStatus { ProjectId = project.Id, Name = "Resuelto", Color = "green", Position = 3, IsDone = true },
+                new TaskStatus { ProjectId = project.Id, Name = "Resuelto y revisado", Color = "green", Position = 4, IsDone = true });
             await db.SaveChangesAsync(); return Results.Ok(project);
         });
         group.MapPut("/projects/{id:guid}", async (Guid id, ProjectInput input, AppDb db) =>
         {
             var p = await db.Projects.FindAsync(id); if (p == null) return Results.NotFound();
             p.Name = Rules.Text(input.Name, 80, "Nombre"); p.Description = Rules.Text(input.Description, 1000, "Descripción", false); p.Color = Rules.Color(input.Color); p.Archived = input.Archived;
+            p.Labels = Labels(input.Labels);
             await db.SaveChangesAsync(); return Results.Ok(p);
+        });
+        group.MapDelete("/projects/{id:guid}", async (Guid id, AppDb db, IConfiguration config, ClaimsPrincipal user, ChangeFeed feed) =>
+        {
+            var project = await db.Projects.SingleOrDefaultAsync(p => p.Id == id);
+            if (project == null) return Results.NotFound();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var tasks = await db.Tasks.Where(t => t.ProjectId == id).ToListAsync();
+            if (tasks.Count > 0 && !await Access.Can(db, user, "tasks")) return Results.Forbid();
+            var files = await Deletion.RemoveTasks(db, tasks, id);
+            db.Folders.RemoveRange(await db.Folders.Where(f => f.ProjectId == id).ToListAsync());
+            db.Statuses.RemoveRange(await db.Statuses.Where(s => s.ProjectId == id).ToListAsync());
+            await db.SaveChangesAsync();
+            db.Projects.Remove(project); await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            Deletion.RemoveFiles(files.Files, config, app.Logger);
+            foreach (var focusUser in files.FocusUsers) feed.Publish(null, focusUser, "focus");
+            return Results.NoContent();
         });
         group.MapPost("/folders", async (FolderInput input, AppDb db) =>
         {
@@ -84,7 +109,13 @@ public static class CatalogEndpoints
             db.Tags.Remove(tag); await db.SaveChangesAsync(); return Results.NoContent();
         });
     }
-    public record ProjectInput(string Name, string? Description, string Color, bool Archived);
+    private static string Labels(string? value)
+    {
+        var labels = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (labels.Length > 10) throw new InputError("Máximo 10 etiquetas por proyecto.");
+        return string.Join(", ", labels.Select(label => Rules.Text(label, 30, "Etiqueta de proyecto")));
+    }
+    public record ProjectInput(string Name, string? Description, string Color, bool Archived, string? Labels = null);
     public record FolderInput(Guid ProjectId, string Name);
     public record StatusInput(Guid ProjectId, string Name, string Color, int Position, bool IsDone);
     public record TagInput(string Name, string Color);
