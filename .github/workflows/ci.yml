@@ -1,7 +1,7 @@
 name: Validate AegiTasks
 on:
   push:
-    branches: [main]
+    branches: [Master]
   pull_request:
 permissions:
   contents: read

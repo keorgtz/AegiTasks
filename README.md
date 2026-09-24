@@ -170,11 +170,11 @@ La migración PostgreSQL conserva los proyectos y pendientes existentes dentro d
 
 ## Git
 
-El repositorio local se inicializa en `main`. Crea el repositorio remoto **AegiTasks** vacío y conéctalo con su URL real:
+El repositorio está disponible en https://github.com/keorgtz/AegiTasks y utiliza la rama `Master`:
 
 ```bash
-git remote add origin <URL-DEL-REPOSITORIO-AegiTasks>
-git push -u origin main
+git clone --branch Master https://github.com/keorgtz/AegiTasks.git
+cd AegiTasks
 ```
 
-No incluye remote, publicación automática ni credenciales del servidor. Revisa [docs/OPERATIONS.md](docs/OPERATIONS.md) para respaldo, recuperación y diagnóstico.
+GitHub Actions valida los cambios enviados a `Master` y los pull requests. El despliegue al servidor es manual y las credenciales se configuran mediante `.env`, excluido de Git. Revisa [docs/OPERATIONS.md](docs/OPERATIONS.md) para respaldo, recuperación y diagnóstico.
