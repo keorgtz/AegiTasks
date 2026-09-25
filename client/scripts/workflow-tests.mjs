@@ -145,11 +145,13 @@ export async function testWorkflow({
     .waitFor();
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('http://localhost:4174/#focus');
+  await page.locator('.focus-choose-tasks').click();
   await page.getByLabel('Buscar pendientes para enfocar').fill(task.title);
   await page
     .locator('.focus-task-picker')
-    .getByRole('checkbox', { name: new RegExp(`^${task.title}`) })
-    .check();
+    .getByRole('button', { name: `Agregar ${task.title}`, exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Confirmar selección', exact: true }).click();
   await page.getByRole('button', { name: 'Comenzar enfoque', exact: true }).click();
   await page.getByRole('button', { name: 'Pausar', exact: true }).waitFor();
   const session = (await json(admin, 'GET', '/focus')).session;
@@ -157,7 +159,7 @@ export async function testWorkflow({
   assert(new Date(session.endsAt).getTime() - Date.now() <= session.focusMinutes * 60000 + 1000);
   assert.deepEqual(JSON.parse(session.taskIdsJson), [task.id]);
   await json(personalAdmin, 'GET', `/focus/${session.id}/tasks`, undefined, 404);
-  await page.getByRole('checkbox', { name: `Resolver ${task.title}`, exact: true }).click();
+  await page.getByRole('button', { name: `Completar ${task.title}`, exact: true }).click();
   await until(
     async () => (await json(admin, 'GET', `/tasks/${task.id}`)).item.statusId === done.id,
     'Focus resolves persisted task',
@@ -165,26 +167,39 @@ export async function testWorkflow({
   await observer
     .getByRole('button', { name: `Abrir pendiente: ${task.title}`, exact: true })
     .waitFor({ state: 'hidden' });
-  await page.getByLabel(`Estado de ${task.title}`, { exact: true }).selectOption(reviewed.id);
+  task = (await json(admin, 'GET', `/tasks/${task.id}`)).item;
+  await json(admin, 'PUT', `/tasks/${task.id}/status`, {
+    statusId: reviewed.id,
+    version: task.version,
+  });
   await until(
     async () => (await json(admin, 'GET', `/tasks/${task.id}`)).item.statusId === reviewed.id,
     'reviewed status persists',
   );
   await page.reload();
-  await page.getByLabel(`Estado de ${task.title}`, { exact: true }).waitFor();
+  await page.locator('.focus-session-task').getByText('Completado', { exact: true }).waitFor();
   await page.waitForFunction(
     (max) =>
       Number(document.querySelector('.focus-digits strong')?.textContent?.split(':')[0]) <= max,
     session.focusMinutes,
   );
-  assert.equal(
-    await page.getByLabel(`Estado de ${task.title}`, { exact: true }).inputValue(),
-    reviewed.id,
-  );
   assert(
-    await page.getByRole('checkbox', { name: `Resolver ${task.title}`, exact: true }).isChecked(),
+    await page
+      .locator('.focus-session-task')
+      .getByText(/Resuelto y revisado/)
+      .isVisible(),
   );
-  await page.getByRole('checkbox', { name: `Resolver ${task.title}`, exact: true }).click();
+  assert.equal(
+    await page
+      .locator('.focus-session-task select, .focus-session-task input[type="checkbox"]')
+      .count(),
+    0,
+  );
+  task = (await json(admin, 'GET', `/tasks/${task.id}`)).item;
+  await json(admin, 'PUT', `/tasks/${task.id}/status`, {
+    statusId: statuses[0].id,
+    version: task.version,
+  });
   await observer
     .getByRole('button', { name: `Abrir pendiente: ${task.title}`, exact: true })
     .waitFor();
@@ -205,7 +220,7 @@ export async function testWorkflow({
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
   pass(
-    'Focus selection, resolve/reopen and reviewed states persist and update another connected member without polling',
+    'Focus dialog selection and completion persist; external reviewed/reopened states update the summary and other members',
   );
 
   // Keep an unsaved form open while another member changes the same task.

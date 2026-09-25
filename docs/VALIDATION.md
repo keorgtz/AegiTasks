@@ -12,9 +12,9 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **66 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **67 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**, más una comprobación opcional de migración del worker anterior |
-| `node client/scripts/postgres-tests.mjs`                                        | **66 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `node client/scripts/postgres-tests.mjs`                                        | **67 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -24,6 +24,16 @@ La auditoría de dependencias corresponde a la fecha indicada; no garantiza ause
 
 ## Pruebas funcionales
 
+### Diálogo de pendientes en Focus
+
+El selector integrado se reemplazó por un diálogo sin checkboxes ni límite de selección, con búsqueda, filtro por proyecto, páginas de 50 resultados, revisión de seleccionados, confirmación y cancelación. El resumen del timer muestra título, proyecto, descripción, estado y progreso; «Completar» aplica el estado resuelto del proyecto. Los cambios externos de estado continúan actualizando el resumen.
+
+La suite comprueba selección y persistencia de 52 pendientes entre páginas y recargas, inicio con 51 pendientes abiertos, conservación de tareas completadas y del vencimiento del timer al modificar la selección, deduplicación, cancelación y rechazo de cambios ajenos, inválidos o con una versión obsoleta. Un diálogo abierto conserva su versión original aunque llegue una actualización de otra pestaña, para no sobrescribirla.
+
+Se comprueba foco inicial en el buscador, acciones accesibles por scroll, ausencia de desbordamiento horizontal y Escape en dos pasos: cerrar el diálogo y después salir de la vista ampliada. Capturas en `artifacts/focus-dialog-1366.png`, `focus-dialog-390.png`, `focus-dialog-320.png`, sus variantes `focus-dialog-actions-*` y `focus-dialog-summary.png`. No requiere migración de base de datos.
+
+Las 67 verificaciones pasaron en SQLite y PostgreSQL 18.4. El primer intento de PostgreSQL se interrumpió por `ERR_NO_BUFFER_SPACE` de Chromium al consultar autenticación, antes de los casos nuevos. Se conservaron el registro y la captura en `artifacts/focus-dialog-postgres-failure.*`; una ejecución completa posterior con datos aislados pasó, sin añadir reintentos de escrituras. Evidencia final: `artifacts/sqlite-test-results.json` y `artifacts/postgres-test-results.json`.
+
 ### Responsables y vista ampliada de Focus
 
 Se añadieron cuatro verificaciones integradas a la suite:
@@ -31,7 +41,7 @@ Se añadieron cuatro verificaciones integradas a la suite:
 - Filtros de responsable aplicados antes de paginar, con 52 pendientes elegibles entre dos páginas, identidad distinta para Admin/User y métricas coherentes con el filtro.
 - Focus rechaza desde la API pendientes completados, archivados, de proyectos archivados o asignados a otra persona. Mantiene las comprobaciones existentes de espacio y permisos.
 - Bandejas reales de Admin y User muestran sus pendientes y los no asignados; permiten filtrar otra persona y recuperan el valor inicial al volver a entrar o recargar. Vista móvil sin desbordamiento.
-- Selección de Focus conservada entre búsquedas, botones separados al menos 16 px, vista ampliada limitada al viewport en 1366, 390 y 320 px. `document.fullscreenElement` permanece vacío. Elegir pendientes sale de la vista ampliada y enfoca el buscador; cambiar de pestaña o salir con Esc mantiene el timer activo.
+- Selección de Focus conservada entre búsquedas, botones separados al menos 16 px, vista ampliada limitada al viewport en 1366, 390 y 320 px. `document.fullscreenElement` permanece vacío. Elegir pendientes abre ahora el diálogo sobre la vista ampliada y enfoca el buscador; cambiar de pestaña o salir con Esc mantiene el timer activo.
 
 Se revisaron las capturas `artifacts/assignment-focus-expanded-1366.png`, `assignment-focus-expanded-390.png`, `assignment-focus-expanded-320.png` y `assignment-inbox-mobile.png`. La validación corrigió un conflicto de capas que permitía al encabezado interceptar el botón de salida. No hay cambios de esquema ni nuevas migraciones.
 
@@ -59,7 +69,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite de 66 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite de 67 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.
@@ -111,7 +121,7 @@ Este equipo no tiene Docker disponible, tampoco en su distribución Ubuntu de WS
 - Instalación manual desde Safari/iOS o Android físico.
 - Restauración de un respaldo Docker en otro servidor.
 
-El workflow de GitHub queda preparado, pero no se ha ejecutado en GitHub: el usuario creará y subirá el repositorio posteriormente. Los pasos para comprobar el despliegue y la restauración están en README y OPERATIONS.
+El repositorio está publicado en GitHub. La ejecución remota del workflow no se verificó en esta validación local. Los pasos para comprobar el despliegue y la restauración están en README y OPERATIONS.
 
 ## Criterios y alcance UX
 

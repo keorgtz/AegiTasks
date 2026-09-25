@@ -29,17 +29,28 @@ public static class FocusEndpoints
             var session = await db.FocusSessions.AsNoTracking().SingleOrDefaultAsync(s => s.Id == id && s.UserId == user.UserId() && s.SpaceId == db.CurrentSpaceId);
             if (session == null) return Results.NotFound();
             var ids = JsonSerializer.Deserialize<Guid[]>(session.TaskIdsJson) ?? [];
-            return Results.Ok(await db.Tasks.AsNoTracking().Include(t => t.Tags).Where(t => ids.Contains(t.Id)).ToListAsync());
+            var tasks = new Dictionary<Guid, WorkItem>();
+            foreach (var batch in ids.Chunk(500))
+                foreach (var task in await db.Tasks.AsNoTracking().Include(t => t.Tags).Where(t => batch.Contains(t.Id)).ToListAsync())
+                    tasks[task.Id] = task;
+            return Results.Ok(ids.Where(tasks.ContainsKey).Select(id => tasks[id]));
+        }).RequireAuthorization("page:tasks");
+        group.MapPut("/{id:guid}/tasks", async (Guid id, TasksInput input, AppDb db, ClaimsPrincipal user) => {
+            var session = await db.FocusSessions.SingleOrDefaultAsync(s => s.Id == id && s.UserId == user.UserId() && s.SpaceId == db.CurrentSpaceId && s.FinishedAt == null);
+            if (session == null) return Results.NotFound();
+            if (session.Version != input.Version) return Results.Conflict(new { error = "La sesión cambió. Revisa la selección y vuelve a guardar." });
+            var ids = (input.TaskIds ?? []).Distinct().ToArray();
+            var previous = (JsonSerializer.Deserialize<Guid[]>(session.TaskIdsJson) ?? []).ToHashSet();
+            await ValidateTasks(db, user.UserId(), ids.Where(id => !previous.Contains(id)).ToArray());
+            session.TaskIdsJson = JsonSerializer.Serialize(ids);
+            session.Version = Guid.NewGuid();
+            await db.SaveChangesAsync(); return Results.Ok(session);
         }).RequireAuthorization("page:tasks");
         group.MapPost("/start", async (StartInput input, AppDb db, ClaimsPrincipal user) => {
             var id = user.UserId(); if (await db.FocusSessions.AnyAsync(s => s.UserId == id && s.FinishedAt == null)) return Results.Conflict(new { error = "Ya tienes una sesión activa. Retómala o finalízala primero." });
             var ids = (input.TaskIds ?? []).Distinct().ToArray();
             if (ids.Length > 0 && !await Access.Can(db, user, "tasks")) return Results.Forbid();
-            var available = db.Tasks.ForAssignee("mine-or-unassigned", id).Where(t => !t.Archived
-                && db.Projects.Any(p => p.Id == t.ProjectId && !p.Archived)
-                && db.Statuses.Any(s => s.Id == t.StatusId && !s.IsDone));
-            if (ids.Length > 10 || await available.CountAsync(t => ids.Contains(t.Id)) != ids.Length)
-                throw new InputError("Selecciona hasta 10 pendientes sin completar, asignados a ti o sin responsable, de este espacio. Alguno pudo cambiar; revisa la lista.");
+            await ValidateTasks(db, id, ids);
             var p = await db.FocusProfiles.FindAsync(id) ?? new FocusProfile();
             var s = new FocusSession { UserId = id, SpaceId = db.CurrentSpaceId, Goal = Rules.Text(input.Goal, 2000, "Objetivos", false), TaskIdsJson = JsonSerializer.Serialize(ids), FocusMinutes = p.FocusMinutes, ShortBreakMinutes = p.ShortBreakMinutes, LongBreakMinutes = p.LongBreakMinutes, Cycles = p.Cycles, RemainingSeconds = p.FocusMinutes * 60, EndsAt = DateTime.UtcNow.AddMinutes(p.FocusMinutes) };
             db.FocusSessions.Add(s); await db.SaveChangesAsync(); return Results.Ok(s);
@@ -65,7 +76,18 @@ public static class FocusEndpoints
             s.Version = Guid.NewGuid(); await db.SaveChangesAsync(); return Results.Ok(s);
         });
     }
+    private static async Task ValidateTasks(AppDb db, Guid userId, Guid[] ids)
+    {
+        var available = db.Tasks.ForAssignee("mine-or-unassigned", userId).Where(t => !t.Archived
+            && db.Projects.Any(p => p.Id == t.ProjectId && !p.Archived)
+            && db.Statuses.Any(s => s.Id == t.StatusId && !s.IsDone));
+        // Batch validation avoids database parameter limits without imposing a selection cap.
+        foreach (var batch in ids.Chunk(500))
+            if (await available.CountAsync(t => batch.Contains(t.Id)) != batch.Length)
+                throw new InputError("Selecciona pendientes sin completar, asignados a ti o sin responsable, de este espacio. Alguno pudo cambiar; revisa la selección.");
+    }
     public record ProfileInput(int FocusMinutes, int ShortBreakMinutes, int LongBreakMinutes, int Cycles, string Theme, bool Animated, bool Sound);
     public record StartInput(string? Goal, Guid[]? TaskIds);
+    public record TasksInput(Guid[]? TaskIds, Guid Version);
     public record ActionInput(string Action, Guid Version, string? Goal);
 }

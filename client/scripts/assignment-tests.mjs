@@ -30,6 +30,7 @@ export async function testAssignments({
   const create = (title, assigneeId = null, statusId = open.id) =>
     json(admin, 'POST', '/tasks', {
       title,
+      description: `Resumen de ${title}`,
       projectId: project.id,
       statusId,
       assigneeId,
@@ -158,18 +159,23 @@ export async function testAssignments({
   );
 
   await page.goto('http://localhost:4174/#focus');
+  await page.locator('.focus-choose-tasks').click();
+  const dialog = page.getByRole('dialog', { name: 'Elegir pendientes para Focus' });
   const search = page.getByLabel('Buscar pendientes para enfocar');
   await search.fill('Owner selection');
   const picker = page.locator('.focus-task-picker');
-  const checkbox = (task) => picker.getByRole('checkbox', { name: new RegExp(`^${task.title}`) });
-  await checkbox(own).waitFor();
-  await checkbox(unassigned).waitFor();
-  assert.equal(await checkbox(other).count(), 0);
-  assert.equal(await checkbox(completed).count(), 0);
-  assert.equal(await checkbox(archived).count(), 0);
-  await checkbox(unassigned).check();
+  const add = (task) => picker.getByRole('button', { name: `Agregar ${task.title}`, exact: true });
+  await add(own).waitFor();
+  await add(unassigned).waitFor();
+  assert.equal(await add(other).count(), 0);
+  assert.equal(await add(completed).count(), 0);
+  assert.equal(await add(archived).count(), 0);
+  assert.equal(await dialog.getByRole('checkbox').count(), 0);
+  await add(unassigned).click();
   await search.fill(own.title);
-  await checkbox(own).check();
+  await add(own).click();
+  await dialog.getByRole('button', { name: 'Confirmar selección', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
   for (const [width, height, theme] of [
     [1366, 768, 'light'],
     [390, 600, 'dark'],
@@ -182,7 +188,7 @@ export async function testAssignments({
     const start = await page
       .getByRole('button', { name: 'Comenzar enfoque', exact: true })
       .boundingBox();
-    const choose = await page.getByRole('button', { name: /Elegir pendientes/ }).boundingBox();
+    const choose = await page.locator('.focus-choose-tasks').boundingBox();
     assert(
       choose.y - (start.y + start.height) >= 15.5,
       'Focus actions need at least 16px separation',
@@ -200,18 +206,111 @@ export async function testAssignments({
     );
     assert(await expanded.evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
     await page.screenshot({ path: path.join(artifacts, `assignment-focus-expanded-${width}.png`) });
-    await page.getByRole('button', { name: /Elegir pendientes/ }).click();
-    await expanded.waitFor({ state: 'hidden' });
+    await page.locator('.focus-choose-tasks').click();
+    await dialog.waitFor();
     await search.waitFor();
-    await page.waitForFunction(
-      () => document.activeElement === document.querySelector('#focus-plan input'),
-    );
+    assert(await search.evaluate((el) => el === document.activeElement));
+    await dialog.locator('.focus-picker-item').first().waitFor();
+    assert(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
+    await page.screenshot({ path: path.join(artifacts, `focus-dialog-${width}.png`) });
+    const confirm = dialog.getByRole('button', { name: 'Confirmar selección', exact: true });
+    await confirm.scrollIntoViewIfNeeded();
+    const confirmBox = await confirm.boundingBox();
+    assert(confirmBox.y >= 0 && confirmBox.y + confirmBox.height <= height);
+    await page.screenshot({ path: path.join(artifacts, `focus-dialog-actions-${width}.png`) });
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await expanded.waitFor();
+    await page.keyboard.press('Escape');
+    await expanded.waitFor({ state: 'hidden' });
   }
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.getByRole('button', { name: 'Comenzar enfoque', exact: true }).click();
   await page.getByRole('button', { name: 'Pausar', exact: true }).waitFor();
   let session = (await json(admin, 'GET', '/focus')).session;
   assert.deepEqual(new Set(JSON.parse(session.taskIdsJson)), new Set([own.id, unassigned.id]));
+  const originalEndsAt = session.endsAt;
+  await page
+    .locator('.focus-session-tasks')
+    .getByText(`Resumen de ${own.title}`, { exact: true })
+    .waitFor();
+  // Add more than one page of tasks without resetting the timer or losing completed entries.
+  await page.getByRole('button', { name: `Completar ${own.title}`, exact: true }).click();
+  await page
+    .locator('.focus-session-task')
+    .filter({ hasText: own.title })
+    .getByText('Completado', { exact: true })
+    .waitFor();
+  await page.screenshot({ path: path.join(artifacts, 'focus-dialog-summary.png') });
+  await page.locator('.focus-choose-tasks').click();
+  await dialog.getByLabel('Proyecto de los pendientes').selectOption(project.id);
+  await dialog.getByRole('button', { name: 'Agregar esta página', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Agregar esta página', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Confirmar selección', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  session = (await json(admin, 'GET', '/focus')).session;
+  assert.equal(JSON.parse(session.taskIdsJson).length, 52);
+  assert.equal((await json(admin, 'GET', `/focus/${session.id}/tasks`)).length, 52);
+  assert.equal(session.endsAt, originalEndsAt);
+  await page.reload();
+  await page.locator('.focus-choose-tasks').filter({ hasText: '52 seleccionados' }).waitFor();
+  await page
+    .locator('.focus-session-task')
+    .filter({ hasText: own.title })
+    .getByText('Completado', { exact: true })
+    .waitFor();
+  const staleVersion = session.version;
+  const taskIds = JSON.parse(session.taskIdsJson);
+  session = await json(admin, 'PUT', `/focus/${session.id}/tasks`, {
+    taskIds: [...taskIds, taskIds[0]],
+    version: session.version,
+  });
+  assert.equal(JSON.parse(session.taskIdsJson).length, 52);
+  await json(
+    admin,
+    'PUT',
+    `/focus/${session.id}/tasks`,
+    { taskIds: [], version: staleVersion },
+    409,
+  );
+  await json(
+    support,
+    'PUT',
+    `/focus/${session.id}/tasks`,
+    { taskIds: [], version: session.version },
+    404,
+  );
+  await json(
+    admin,
+    'PUT',
+    `/focus/${session.id}/tasks`,
+    { taskIds: [...taskIds, other.id], version: session.version },
+    400,
+  );
+  await page.locator('.focus-choose-tasks').click();
+  await dialog.getByRole('button', { name: 'Limpiar selección', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  assert.equal(JSON.parse((await json(admin, 'GET', '/focus')).session.taskIdsJson).length, 52);
+  // Keep the dialog's original version even if another device changes the session through SSE.
+  await page.locator('.focus-choose-tasks').click();
+  session = await json(admin, 'PUT', `/focus/${session.id}/tasks`, {
+    taskIds: taskIds.slice(0, -1),
+    version: session.version,
+  });
+  await page.locator('.focus-choose-tasks').filter({ hasText: '51 seleccionados' }).waitFor();
+  await dialog.getByRole('button', { name: 'Confirmar selección', exact: true }).click();
+  await dialog.getByRole('alert').filter({ hasText: 'La sesión cambió' }).waitFor();
+  assert.equal(JSON.parse((await json(admin, 'GET', '/focus')).session.taskIdsJson).length, 51);
+  await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  session = await json(admin, 'PUT', `/focus/${session.id}/tasks`, {
+    taskIds,
+    version: session.version,
+  });
+  await page.locator('.focus-choose-tasks').filter({ hasText: '52 seleccionados' }).waitFor();
+  pass(
+    'Focus dialog persists 52 tasks across pages/reloads, preserves completed work and timer deadlines, and rejects stale/foreign/invalid edits',
+  );
   await page.getByRole('button', { name: 'Ampliar en esta pestaña', exact: true }).click();
   const temporaryTab = await context.newPage();
   await temporaryTab.goto('about:blank');
@@ -227,8 +326,15 @@ export async function testAssignments({
     action: 'finish',
     version: session.version,
   });
+  const openIds = taskIds.filter((id) => id !== own.id);
+  const largeStart = await json(admin, 'POST', '/focus/start', { taskIds: openIds });
+  assert.equal(JSON.parse(largeStart.taskIdsJson).length, 51);
+  await json(admin, 'POST', `/focus/${largeStart.id}/action`, {
+    action: 'finish',
+    version: largeStart.version,
+  });
   await json(admin, 'DELETE', `/projects/${project.id}`, undefined, 204);
   pass(
-    'Focus selects own/unassigned tasks across searches, spaces actions by 16px and expands only within the browser viewport while keeping its timer running',
+    'Focus starts with more than 50 eligible tasks; dialog selection, cancellation, mobile layouts and expanded timer preserve their behavior',
   );
 }
