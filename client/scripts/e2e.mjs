@@ -439,7 +439,11 @@ try {
   await context.setOffline(true);
   await page.getByLabel('Descripción (opcional)').fill('La app conserva este texto.');
   await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'No hay conexión' }).waitFor();
+  await page
+    .getByRole('dialog', { name: '¿Qué encontraste?' })
+    .getByRole('alert')
+    .filter({ hasText: 'No hay conexión' })
+    .waitFor();
   assert.equal(
     await page.getByLabel('Título', { exact: true }).inputValue(),
     'Borrador sin conexión',

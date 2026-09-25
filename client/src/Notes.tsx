@@ -8,6 +8,9 @@ import { zipSync, strToU8 } from 'fflate';
 import {
   Archive,
   ArrowLeft,
+  PanelTopClose,
+  PanelTopOpen,
+  SlidersHorizontal,
   Link2,
   ListOrdered,
   Strikethrough,
@@ -30,7 +33,7 @@ import { api, errorMessage } from './api';
 import { useChanges } from './changes';
 import { MermaidDiagram, waitForDiagrams } from './MermaidDiagram';
 import { noteFonts, exportFontCss } from './noteFonts';
-import { noteDiagrams } from './noteDiagrams';
+import { noteDiagrams, noteDiagramCategories } from './noteDiagrams';
 import '@fontsource/lora/latin-400.css';
 import '@fontsource/source-serif-4/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
@@ -502,6 +505,7 @@ function NoteEditor({
     matchMedia('(min-width: 1024px)').matches ? 'split' : 'edit',
   );
   const [exporting, setExporting] = useState(false);
+  const [toolsCollapsed, setToolsCollapsed] = useState(false);
   const text = useRef<HTMLTextAreaElement>(null);
   const preview = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -627,6 +631,13 @@ function NoteEditor({
       className="note-editor-page note-editor"
       data-unsaved-note={dirty || busy}
       data-update-blocked={dirty || busy || exporting}
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          if (!busy && !exporting)
+            document.querySelector<HTMLFormElement>('#note-form')?.requestSubmit();
+        }
+      }}
     >
       <header className="note-editor-header">
         <button
@@ -638,6 +649,17 @@ function NoteEditor({
         >
           <ArrowLeft size={20} />
         </button>
+        <input
+          className="note-title-input"
+          aria-label="Título de nota"
+          form="note-form"
+          required
+          maxLength={200}
+          value={note.title}
+          disabled={!loaded || busy || exporting}
+          onChange={(e) => update('title', e.target.value)}
+          placeholder="Título de la nota"
+        />
         <div className="note-editor-context">
           <h1>{note.id || id ? 'Editar nota' : 'Nueva nota'}</h1>
           <span role="status">
@@ -659,6 +681,29 @@ function NoteEditor({
           <Save size={16} />
           Guardar nota
         </button>
+        <div className="tabs note-view-tabs" aria-label="Vista de la nota">
+          {['edit', 'split', 'preview'].map((v) => (
+            <button
+              type="button"
+              key={v}
+              className={mode === v ? 'active' : ''}
+              aria-pressed={mode === v}
+              onClick={() => setMode(v)}
+            >
+              {v === 'edit' ? 'Editar' : v === 'split' ? 'Dividida' : 'Vista previa'}
+            </button>
+          ))}
+        </div>
+        <button
+          className="btn-icon note-tools-toggle"
+          aria-label={toolsCollapsed ? 'Mostrar herramientas' : 'Ocultar herramientas'}
+          title={toolsCollapsed ? 'Mostrar herramientas' : 'Ocultar herramientas'}
+          aria-expanded={!toolsCollapsed}
+          aria-controls="note-tools"
+          onClick={() => setToolsCollapsed((value) => !value)}
+        >
+          {toolsCollapsed ? <PanelTopOpen size={18} /> : <PanelTopClose size={18} />}
+        </button>
       </header>
       <ErrorBox message={error} />
       {!loaded ? (
@@ -668,159 +713,161 @@ function NoteEditor({
           <form
             id="note-form"
             inert={busy || exporting}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-                e.preventDefault();
-                if (!busy && !exporting) e.currentTarget.requestSubmit();
-              }
-            }}
             onSubmit={(e) => {
               e.preventDefault();
               void save();
             }}
           >
-            <Field label="Título de nota">
-              <input
-                required
-                maxLength={200}
-                value={note.title}
-                onChange={(e) => update('title', e.target.value)}
-                placeholder="Una idea, una guía o algo que recordar"
-              />
-            </Field>
-            <details className="note-details">
-              <summary>Propiedades, plantillas y exportación</summary>
-              <div className="note-properties">
-                <Field label="Carpeta de nota">
-                  <select
-                    value={note.folderId || ''}
-                    onChange={(e) => update('folderId', e.target.value || null)}
-                  >
-                    <option value="">Sin carpeta</option>
-                    {folders.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Proyecto relacionado">
-                  <select
-                    value={note.projectId || ''}
-                    onChange={(e) => update('projectId', e.target.value || null)}
-                  >
-                    <option value="">Ninguno · nota independiente</option>
-                    {w.projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Tipografía">
-                  <select value={note.font} onChange={(e) => update('font', e.target.value)}>
-                    {noteFonts.map((font) => (
-                      <option value={font.id} key={font.id}>
-                        {font.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Color de nota">
-                  <select value={note.color} onChange={(e) => update('color', e.target.value)}>
-                    {colors.map((c) => (
-                      <option key={c} value={c}>
-                        {colorNames[c]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-              <div className="note-options">
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={note.pinned}
-                    onChange={(e) => update('pinned', e.target.checked)}
-                  />
-                  Fijar nota
-                </label>
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={note.archived}
-                    onChange={(e) => update('archived', e.target.checked)}
-                  />
-                  <Archive size={15} />
-                  Archivada
-                </label>
-                <select
-                  aria-label="Insertar plantilla"
-                  value=""
-                  onChange={(e) => {
-                    if (!note.markdown || confirm('¿Reemplazar el contenido con esta plantilla?'))
-                      update('markdown', templates[e.target.value] || '');
-                  }}
-                >
-                  <option value="">Usar plantilla…</option>
-                  <option value="technical">Referencia técnica</option>
-                  <option value="meeting">Reunión</option>
-                  <option value="idea">Idea / pendiente</option>
-                </select>
-              </div>
-              <div className="note-export-actions">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={exporting || busy}
-                  onClick={() => void exportNote()}
-                >
-                  <Download size={15} />
-                  Markdown
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={exporting || busy}
-                  onClick={() => void exportNote(true)}
-                >
-                  HTML
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={exporting || busy}
-                  onClick={async () => {
-                    setExporting(true);
-                    setError('');
-                    try {
-                      await waitForDiagrams(preview.current);
-                      await document.fonts.ready;
-                      window.print();
-                    } catch (e) {
-                      setError(errorMessage(e));
-                    } finally {
-                      setExporting(false);
-                    }
-                  }}
-                >
-                  Imprimir / PDF
-                </button>
-                {canTasks && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={busy || !id}
-                    onClick={() =>
-                      note.linkedTaskId ? openTask(note.linkedTaskId) : void convert()
-                    }
-                  >
-                    {note.linkedTaskId ? 'Abrir pendiente' : 'Crear pendiente desde nota'}
-                  </button>
-                )}
-              </div>
-            </details>
-            <div className="note-tools">
+            <div className="note-tools" id="note-tools" hidden={toolsCollapsed}>
+              <details
+                className="note-details"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.currentTarget.open = false;
+                    e.currentTarget.querySelector('summary')?.focus();
+                  }
+                }}
+              >
+                <summary title="Propiedades, plantillas y exportación">
+                  <SlidersHorizontal size={15} />
+                  <span>Opciones</span>
+                </summary>
+                <div className="note-properties-panel">
+                  <div className="note-properties">
+                    <Field label="Carpeta de nota">
+                      <select
+                        value={note.folderId || ''}
+                        onChange={(e) => update('folderId', e.target.value || null)}
+                      >
+                        <option value="">Sin carpeta</option>
+                        {folders.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Proyecto relacionado">
+                      <select
+                        value={note.projectId || ''}
+                        onChange={(e) => update('projectId', e.target.value || null)}
+                      >
+                        <option value="">Ninguno · nota independiente</option>
+                        {w.projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Tipografía">
+                      <select value={note.font} onChange={(e) => update('font', e.target.value)}>
+                        {noteFonts.map((font) => (
+                          <option value={font.id} key={font.id}>
+                            {font.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Color de nota">
+                      <select value={note.color} onChange={(e) => update('color', e.target.value)}>
+                        {colors.map((c) => (
+                          <option key={c} value={c}>
+                            {colorNames[c]}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="note-options">
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={note.pinned}
+                        onChange={(e) => update('pinned', e.target.checked)}
+                      />
+                      Fijar nota
+                    </label>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={note.archived}
+                        onChange={(e) => update('archived', e.target.checked)}
+                      />
+                      <Archive size={15} />
+                      Archivada
+                    </label>
+                    <select
+                      aria-label="Insertar plantilla"
+                      value=""
+                      onChange={(e) => {
+                        if (
+                          !note.markdown ||
+                          confirm('¿Reemplazar el contenido con esta plantilla?')
+                        )
+                          update('markdown', templates[e.target.value] || '');
+                      }}
+                    >
+                      <option value="">Usar plantilla…</option>
+                      <option value="technical">Referencia técnica</option>
+                      <option value="meeting">Reunión</option>
+                      <option value="idea">Idea / pendiente</option>
+                    </select>
+                  </div>
+                  <div className="note-export-actions">
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={exporting || busy}
+                      onClick={() => void exportNote()}
+                    >
+                      <Download size={15} />
+                      Markdown
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={exporting || busy}
+                      onClick={() => void exportNote(true)}
+                    >
+                      HTML
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={exporting || busy}
+                      onClick={async () => {
+                        setExporting(true);
+                        setError('');
+                        try {
+                          await waitForDiagrams(preview.current);
+                          await document.fonts.ready;
+                          window.print();
+                        } catch (e) {
+                          setError(errorMessage(e));
+                        } finally {
+                          setExporting(false);
+                        }
+                      }}
+                    >
+                      Imprimir / PDF
+                    </button>
+                    {canTasks && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={busy || !id}
+                        onClick={() =>
+                          note.linkedTaskId ? openTask(note.linkedTaskId) : void convert()
+                        }
+                      >
+                        {note.linkedTaskId ? 'Abrir pendiente' : 'Crear pendiente desde nota'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </details>
+
               <div className="markdown-toolbar" aria-label="Formato Markdown">
                 <select
                   aria-label="Insertar diagrama Mermaid"
@@ -830,11 +877,17 @@ function NoteEditor({
                     if (diagram) insert(`\n\n\`\`\`mermaid\n${diagram.source}\n\`\`\`\n`);
                   }}
                 >
-                  <option value="">Diagramas y gráficos…</option>
-                  {noteDiagrams.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
+                  <option value="">Diagrama Mermaid…</option>
+                  {noteDiagramCategories.map((category) => (
+                    <optgroup label={category} key={category}>
+                      {noteDiagrams
+                        .filter((d) => d.category === category)
+                        .map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                    </optgroup>
                   ))}
                 </select>
                 {[
@@ -907,19 +960,6 @@ function NoteEditor({
                   Callout
                 </button>
               </div>
-              <div className="tabs note-view-tabs" aria-label="Vista de la nota">
-                {['edit', 'split', 'preview'].map((v) => (
-                  <button
-                    type="button"
-                    key={v}
-                    className={mode === v ? 'active' : ''}
-                    aria-pressed={mode === v}
-                    onClick={() => setMode(v)}
-                  >
-                    {v === 'edit' ? 'Editar' : v === 'split' ? 'Dividida' : 'Vista previa'}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className={`markdown-panels mode-${mode}`}>
               <textarea
@@ -932,7 +972,12 @@ function NoteEditor({
                 onChange={(e) => update('markdown', e.target.value)}
                 placeholder="# Escribe algo que valga la pena recordar…"
               />
-              <article ref={preview} className={`markdown-preview font-${note.font} note-print`}>
+              <article
+                tabIndex={0}
+                aria-label="Vista previa Markdown"
+                ref={preview}
+                className={`markdown-preview font-${note.font} note-print`}
+              >
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[
@@ -950,10 +995,6 @@ function NoteEditor({
               {note.markdown?.length || 0} / 200 000 caracteres · Ctrl / ⌘ + S para guardar
             </p>
           </form>
-          <p className="small muted">
-            Markdown, tablas, estilos y diagramas Mermaid. Fuentes y diagramas se procesan
-            localmente.
-          </p>
         </>
       )}
     </section>

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { noteDiagrams } from '../src/noteDiagrams.ts';
 
 export async function testNoteEditor({ page, context, admin, json, pass, artifacts }) {
   await json(admin, 'POST', '/spaces', { name: 'Note navigation QA' });
@@ -127,17 +128,84 @@ export async function testNoteEditor({ page, context, admin, json, pass, artifac
   await page.getByRole('button', { name: 'Volver a notas', exact: true }).click();
   await page.waitForFunction((url) => location.href === url, url);
   assert.equal(await source.inputValue(), original);
-  const otherSpace = (await json(admin, 'GET', '/spaces')).spaces.find(
-    (space) => space.id !== stored.spaceId,
-  );
-  page.once('dialog', (dialog) => dialog.dismiss());
-  await page.getByLabel('Espacio activo').first().selectOption(otherSpace.id);
-  assert.equal(await source.inputValue(), original);
-  assert.equal(page.url(), url);
   await page.getByRole('button', { name: 'Guardar nota', exact: true }).click();
   await page.locator('.note-editor-context').getByText('Guardado', { exact: true }).waitFor();
   pass(
-    'Malformed Mermaid and embedded configuration show recoverable errors; cancelled navigation and space changes preserve the draft',
+    'Malformed Mermaid and embedded configuration show recoverable errors; cancelled navigation preserves the draft',
+  );
+
+  await page.getByRole('button', { name: 'Dividida', exact: true }).click();
+  const expanded = await source.boundingBox();
+  assert.equal(expanded.x, 0, 'The editor starts at the viewport edge, without sidebar');
+  assert(expanded.height > 800, 'The canvas gets most of the desktop height');
+  for (const selector of ['.sidebar', '.app-header', '.bottom-nav']) {
+    assert(!(await page.locator(selector).isVisible()));
+  }
+  await page.getByRole('button', { name: 'Ocultar herramientas' }).click();
+  assert(!(await diagrams.isVisible()));
+  assert((await source.boundingBox()).height > expanded.height + 30);
+  assert.equal(await source.inputValue(), original);
+  assert(await page.getByRole('button', { name: 'Guardar nota', exact: true }).isVisible());
+  await page.getByRole('button', { name: 'Vista previa', exact: true }).click();
+  assert(await page.locator('.markdown-preview').isVisible());
+  await page.screenshot({ path: path.join(artifacts, 'notes-workbench-collapsed.png') });
+  await page.getByRole('button', { name: 'Dividida', exact: true }).click();
+  await page.getByRole('button', { name: 'Mostrar herramientas' }).click();
+  assert.equal(await diagrams.locator('optgroup').count(), 7);
+  pass(
+    'Note workbench occupies the whole viewport; collapsing tools expands the canvas and retains content, save and view controls',
+  );
+
+  // Exercise the actual insertion control, renderer and SVG sanitizer for every catalog entry.
+  await source.fill('');
+  for (const diagram of noteDiagrams) {
+    await source.press('Control+End');
+    await diagrams.selectOption(diagram.id);
+  }
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((theme) => (document.documentElement.dataset.theme = theme), theme);
+    await page.waitForFunction(
+      (count) => {
+        const figures = [...document.querySelectorAll('[data-diagram-state]')];
+        return (
+          figures.length === count && figures.every((el) => el.dataset.diagramState !== 'pending')
+        );
+      },
+      noteDiagrams.length,
+      { timeout: 90000 },
+    );
+    const results = await page.locator('.mermaid-diagram').evaluateAll((figures) =>
+      figures.map((figure) => {
+        const svg = figure.querySelector('svg');
+        return {
+          error: figure.querySelector('.mermaid-error')?.textContent,
+          width: svg?.getBBox().width,
+          labels: [...(svg?.querySelectorAll('text') || [])].filter(
+            (text) => text.textContent.trim() && text.getBBox().width > 0,
+          ).length,
+        };
+      }),
+    );
+    const failures = results.flatMap((result, index) =>
+      result.error || !result.width || !result.labels
+        ? [{ id: noteDiagrams[index].id, ...result }]
+        : [],
+    );
+    assert.deepEqual(failures, [], `Every template needs visible geometry and text in ${theme}`);
+    assert.equal(
+      await page
+        .locator('.mermaid-svg foreignObject,.mermaid-svg script,.mermaid-svg image')
+        .count(),
+      0,
+    );
+  }
+  await page.locator('.markdown-preview').evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await page.screenshot({ path: path.join(artifacts, 'notes-mermaid-catalog.png') });
+  await source.fill(original);
+  await page.getByRole('button', { name: 'Guardar nota', exact: true }).click();
+  await page.locator('.note-editor-context').getByText('Guardado', { exact: true }).waitFor();
+  pass(
+    `${noteDiagrams.length} Mermaid templates insert and render with visible labels and geometry in light and dark themes`,
   );
 
   for (const [width, height, theme] of [
@@ -155,14 +223,85 @@ export async function testNoteEditor({ page, context, admin, json, pass, artifac
     assert(!(await page.locator('.markdown-preview').isVisible()));
     await page.evaluate((theme) => (document.documentElement.dataset.theme = theme), theme);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    assert(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1));
     await page.screenshot({ path: path.join(artifacts, `notes-page-${width}-${theme}.png`) });
     await page.getByRole('button', { name: 'Vista previa', exact: true }).click();
     await page.waitForFunction(
       () => document.querySelectorAll('[data-diagram-state="ready"]').length === 7,
     );
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    assert(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1));
     await page.screenshot({ path: path.join(artifacts, `notes-preview-${width}-${theme}.png`) });
   }
+  const touch = await context.browser().newContext({
+    storageState: await context.storageState(),
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    const phone = await touch.newPage();
+    await phone.goto(url);
+    await phone.getByLabel('Contenido Markdown').waitFor();
+    for (const [width, height] of [
+      [390, 844],
+      [320, 600],
+      [844, 390],
+      [390, 360],
+    ]) {
+      await phone.setViewportSize({ width, height });
+      const controls = await phone.locator('.note-editor-header button').evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const { x, y, width, height } = button.getBoundingClientRect();
+          return { x, y, width, height };
+        }),
+      );
+      for (const rect of controls) {
+        assert(rect.height >= 44 && rect.width >= 44, 'Touch targets stay at least 44px');
+        assert(rect.x >= 0 && rect.x + rect.width <= width + 1);
+      }
+      for (let i = 0; i < controls.length; i++)
+        for (let j = i + 1; j < controls.length; j++) {
+          const a = controls[i],
+            b = controls[j];
+          assert(
+            a.x + a.width <= b.x + 1 ||
+              b.x + b.width <= a.x + 1 ||
+              a.y + a.height <= b.y + 1 ||
+              b.y + b.height <= a.y + 1,
+            'Header buttons do not overlap',
+          );
+        }
+      assert(
+        await phone.evaluate(
+          () =>
+            document.documentElement.scrollWidth <= innerWidth + 1 &&
+            document.documentElement.scrollHeight <= innerHeight + 1,
+        ),
+      );
+      await phone.screenshot({ path: path.join(artifacts, `notes-touch-${width}-${height}.png`) });
+    }
+    await phone.locator('.note-details summary').click();
+    const panel = await phone.locator('.note-properties-panel').boundingBox();
+    assert(panel.y + panel.height < 360);
+    await phone.getByLabel('Tipografía', { exact: true }).focus();
+    await phone.keyboard.press('Escape');
+    assert(!(await phone.getByLabel('Tipografía', { exact: true }).isVisible()));
+    await phone.getByRole('button', { name: 'Ocultar herramientas' }).click();
+    assert(!(await phone.locator('.note-tools').isVisible()));
+    await phone.getByLabel('Título de nota').fill('Arquitectura y métricas revisadas');
+    await phone.getByLabel('Título de nota').press('Control+s');
+    await phone.locator('.note-editor-context').getByText('Guardado', { exact: true }).waitFor();
+    assert.equal(
+      (await json(admin, 'GET', `/notes/${id}`)).title,
+      'Arquitectura y métricas revisadas',
+    );
+  } finally {
+    await touch.close();
+  }
+  pass(
+    'Touch controls fit without overlap at 320px and keyboard-height viewports; properties close with Escape and Ctrl+S saves from the title',
+  );
   await page.getByRole('button', { name: 'Volver a notas', exact: true }).click();
   await page.getByRole('button', { name: 'Nueva nota', exact: true }).waitFor();
   await page.setViewportSize({ width: 1366, height: 900 });

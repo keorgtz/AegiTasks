@@ -12,9 +12,9 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **76 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **79 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**; migración opcional del worker anterior documentada en la validación previa |
-| `node client/scripts/postgres-tests.mjs`                                        | **76 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `node client/scripts/postgres-tests.mjs`                                        | **79 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -26,9 +26,13 @@ La auditoría de dependencias corresponde a la fecha indicada; no garantiza ause
 
 ### Editor de notas como página y Mermaid (25 de septiembre)
 
-Cuatro verificaciones adicionales cubren la página sin modal, la vista dividida inicial en escritorio y solo edición en móvil, guardar sin perder la vista, recarga mediante enlace directo, las ocho opciones tipográficas y las siete plantillas Mermaid. Se comprueban geometría SVG y dimensiones reales, además de ausencia de elementos ejecutables y peticiones externas durante la representación. Las rutas `#notes/new` respetan el permiso de Notas. Cancelar la navegación o el cambio de Space conserva el borrador.
+Siete grupos verifican el editor de ventana completa sin sidebar, cabecera global ni modal. En escritorio, el canvas comienza en el borde izquierdo y ocupa más de 800 px de alto en una ventana de 1440×1000. Colapsar las herramientas recupera altura sin cambiar el texto; guardar y el selector de vista permanecen accesibles. La vista inicial sigue siendo dividida desde 1024 px y solo edición por debajo. Se comprueban guardado, enlace directo, recarga, ocho tipografías, exportación y conservación del borrador al cancelar la navegación.
 
-La exportación desde modo solo edición contiene siete SVG, estilos y fuentes embebidas; el HTML se vuelve a abrir en el navegador. La impresión muestra el contenido sin navegación ni controles. Los errores de sintaxis y las directivas de configuración producen avisos recuperables. Se revisaron las capturas `artifacts/notes-page-desktop.png`, `notes-page-320-dark.png`, `notes-preview-390-light.png` y `notes-export-mermaid.png`. La suite genera también `notes-mermaid.pdf`; la comprobación de impresión usa Chromium, no una impresora física.
+Las 39 plantillas se insertan mediante el selector real, agrupado en siete categorías. Todas se representan en claro y oscuro con geometría SVG y etiquetas de texto medibles, sin scripts, imágenes ni `foreignObject`. Se mantienen las comprobaciones de recursos locales, sintaxis incorrecta y configuración embebida. El HTML exportado de la nota de referencia contiene siete SVG y fuentes embebidas; se vuelve a abrir para comprobarlo. La impresión genera tres páginas en `notes-mermaid.pdf`, sin navegación ni controles.
+
+Se verifican 320, 390 y 844 px, además de un contexto Chromium con entrada táctil y ventanas de 390×844, 320×600, 844×390 y 390×360. Los botones de cabecera conservan áreas de al menos 44×44 px y no se superponen. La página no desborda; el panel de opciones cabe en la ventana corta, Escape lo cierra y Ctrl+S guarda desde el título aun con herramientas ocultas. La altura de 360 px simula poco espacio disponible; no constituye una prueba con un teclado virtual físico.
+
+Se revisaron `artifacts/notes-page-desktop.png`, `notes-page-320-dark.png`, `notes-touch-320-600.png`, `notes-touch-390-360.png`, `notes-mermaid-catalog.png` y la captura de herramientas colapsadas. Son pruebas de Chromium local, no validación en teléfonos físicos. Se corrigió también un selector ambiguo de la prueba de envío sin conexión: ahora busca el error dentro del diálogo de alta, ya que el aviso global puede aparecer simultáneamente.
 
 ### Focus sin desplazamiento y controles en diálogos (25 de septiembre)
 
@@ -95,7 +99,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite de 76 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite de 79 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.
@@ -133,7 +137,7 @@ El script genera `artifacts/test-results.json` y capturas locales. También se c
 
 La prueba de migración crea una base con el esquema anterior, usuarios Admin/Member, proyecto, etiqueta personalizada, pendiente, comentario y relación de etiqueta. Aplica la migración de Spaces y comprueba que conserva esos datos, crea el workspace compartido y dos espacios Personal, migra Member a User e inicializa permisos. Una segunda base vacía se levanta mediante la API y sus migraciones automáticas para ejecutar la suite completa.
 
-El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 562 KB sin comprimir (179 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal permanece en ~336 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
+El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal permanece en ~336 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
 
 En ejecuciones intermedias aparecieron cortes `ECONNRESET` en peticiones del cliente de pruebas a Vite, antes de llegar a la API. Las pruebas HTTP se dirigen directamente a la API (5213); las pruebas de navegador siguen pasando por el proxy Vite (4174). No se añadieron reintentos automáticos de mutaciones. No se atribuye este fallo al servidor de producción, cuyo proxy es Nginx.
 
