@@ -12,9 +12,9 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **71 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **72 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**, más una comprobación opcional de migración del worker anterior |
-| `node client/scripts/postgres-tests.mjs`                                        | **71 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `node client/scripts/postgres-tests.mjs`                                        | **72 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -23,6 +23,12 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Focus sin desplazamiento y controles en diálogos (25 de septiembre)
+
+El timer ocupa el espacio disponible en vista normal y ampliada. Se verifican diez tamaños entre 320×480 y 1440×900, incluidos 568×320, 667×375 y 844×390 en horizontal: ni la página ni el escenario desbordan, los controles permanecen dentro del escenario sin superponerse y el reloj conserva su forma circular. Las capturas `artifacts/focus-fit-*.png` registran ambas vistas; se revisaron visualmente los tamaños más pequeños y el escritorio.
+
+Pendientes, objetivos/historial, audio y preferencias se abren desde la barra superior. La suite existente comprueba selección de 52 tareas, completar desde el resumen, actualización remota y persistencia al recargar. La nueva comprobación cubre quince objetivos, apertura/cierre de diálogos sin modificar el vencimiento del timer y persistencia de un objetivo completado. Las pruebas de audio verifican que un archivo local continúa reproduciéndose al cerrar y volver a abrir su diálogo. Los diálogos permiten desplazamiento interno para contenido largo; la pantalla principal no lo necesita. No hay cambios en el esquema de datos.
 
 ### Ambientes visuales y espectro circular (25 de septiembre)
 
@@ -83,7 +89,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite de 71 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite de 72 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.
@@ -121,7 +127,7 @@ El script genera `artifacts/test-results.json` y capturas locales. También se c
 
 La prueba de migración crea una base con el esquema anterior, usuarios Admin/Member, proyecto, etiqueta personalizada, pendiente, comentario y relación de etiqueta. Aplica la migración de Spaces y comprueba que conserva esos datos, crea el workspace compartido y dos espacios Personal, migra Member a User e inicializa permisos. Una segunda base vacía se levanta mediante la API y sus migraciones automáticas para ejecutar la suite completa.
 
-El build Vite conserva una advertencia de tamaño en el módulo de notas (~524 KB sin comprimir, ~164 KB gzip), cargado bajo demanda; el módulo principal es ~316 KB sin comprimir. El resaltado de código y el procesamiento Markdown explican la mayor parte del módulo. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
+El build Vite conserva una advertencia de tamaño en el módulo de notas (~524 KB sin comprimir, ~164 KB gzip), cargado bajo demanda; el módulo principal es ~336 KB sin comprimir. El resaltado de código y el procesamiento Markdown explican la mayor parte del módulo. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
 
 En ejecuciones intermedias aparecieron cortes `ECONNRESET` en peticiones del cliente de pruebas a Vite, antes de llegar a la API. Las pruebas HTTP se dirigen directamente a la API (5213); las pruebas de navegador siguen pasando por el proxy Vite (4174). No se añadieron reintentos automáticos de mutaciones. No se atribuye este fallo al servidor de producción, cuyo proxy es Nginx.
 

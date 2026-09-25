@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { openFocusPicker, openFocusTasks } from './focus-ui-helpers.mjs';
 
 export async function testAssignments({
   page,
@@ -159,7 +160,7 @@ export async function testAssignments({
   );
 
   await page.goto('http://localhost:4174/#focus');
-  await page.locator('.focus-choose-tasks').click();
+  await openFocusPicker(page);
   const dialog = page.getByRole('dialog', { name: 'Elegir pendientes para Focus' });
   const search = page.getByLabel('Buscar pendientes para enfocar');
   await search.fill('Owner selection');
@@ -185,13 +186,9 @@ export async function testAssignments({
     await page.evaluate((theme) => {
       document.documentElement.dataset.theme = theme;
     }, theme);
-    const start = await page
-      .getByRole('button', { name: 'Comenzar enfoque', exact: true })
-      .boundingBox();
-    const choose = await page.locator('.focus-choose-tasks').boundingBox();
+    assert(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1));
     assert(
-      choose.y - (start.y + start.height) >= 15.5,
-      'Focus actions need at least 16px separation',
+      await page.locator('.focus-stage').evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
     );
     await page.getByRole('button', { name: 'Ampliar en esta pestaña', exact: true }).click();
     const expanded = page.locator('.focus-stage.is-immersive');
@@ -206,7 +203,7 @@ export async function testAssignments({
     );
     assert(await expanded.evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
     await page.screenshot({ path: path.join(artifacts, `assignment-focus-expanded-${width}.png`) });
-    await page.locator('.focus-choose-tasks').click();
+    await openFocusPicker(page);
     await dialog.waitFor();
     await search.waitFor();
     assert(await search.evaluate((el) => el === document.activeElement));
@@ -230,6 +227,7 @@ export async function testAssignments({
   let session = (await json(admin, 'GET', '/focus')).session;
   assert.deepEqual(new Set(JSON.parse(session.taskIdsJson)), new Set([own.id, unassigned.id]));
   const originalEndsAt = session.endsAt;
+  await openFocusTasks(page);
   await page
     .locator('.focus-session-tasks')
     .getByText(`Resumen de ${own.title}`, { exact: true })
@@ -242,7 +240,7 @@ export async function testAssignments({
     .getByText('Completado', { exact: true })
     .waitFor();
   await page.screenshot({ path: path.join(artifacts, 'focus-dialog-summary.png') });
-  await page.locator('.focus-choose-tasks').click();
+  await openFocusPicker(page);
   await dialog.getByLabel('Proyecto de los pendientes').selectOption(project.id);
   await dialog.getByRole('button', { name: 'Agregar esta página', exact: true }).click();
   await dialog.getByRole('button', { name: 'Siguiente', exact: true }).click();
@@ -254,7 +252,8 @@ export async function testAssignments({
   assert.equal((await json(admin, 'GET', `/focus/${session.id}/tasks`)).length, 52);
   assert.equal(session.endsAt, originalEndsAt);
   await page.reload();
-  await page.locator('.focus-choose-tasks').filter({ hasText: '52 seleccionados' }).waitFor();
+  await openFocusTasks(page);
+  await page.locator('.focus-choose-tasks').filter({ hasText: /\/52$/ }).waitFor();
   await page
     .locator('.focus-session-task')
     .filter({ hasText: own.title })
@@ -262,10 +261,16 @@ export async function testAssignments({
     .waitFor();
   const staleVersion = session.version;
   const taskIds = JSON.parse(session.taskIdsJson);
+  const refreshedTasks = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/focus/${session.id}/tasks`) &&
+      response.request().method() === 'GET',
+  );
   session = await json(admin, 'PUT', `/focus/${session.id}/tasks`, {
     taskIds: [...taskIds, taskIds[0]],
     version: session.version,
   });
+  await (await refreshedTasks).finished();
   assert.equal(JSON.parse(session.taskIdsJson).length, 52);
   await json(
     admin,
@@ -288,17 +293,17 @@ export async function testAssignments({
     { taskIds: [...taskIds, other.id], version: session.version },
     400,
   );
-  await page.locator('.focus-choose-tasks').click();
+  await openFocusPicker(page);
   await dialog.getByRole('button', { name: 'Limpiar selección', exact: true }).click();
   await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
   assert.equal(JSON.parse((await json(admin, 'GET', '/focus')).session.taskIdsJson).length, 52);
   // Keep the dialog's original version even if another device changes the session through SSE.
-  await page.locator('.focus-choose-tasks').click();
+  await openFocusPicker(page);
   session = await json(admin, 'PUT', `/focus/${session.id}/tasks`, {
     taskIds: taskIds.slice(0, -1),
     version: session.version,
   });
-  await page.locator('.focus-choose-tasks').filter({ hasText: '51 seleccionados' }).waitFor();
+  await page.locator('.focus-choose-tasks').filter({ hasText: /\/51$/ }).waitFor();
   await dialog.getByRole('button', { name: 'Confirmar selección', exact: true }).click();
   await dialog.getByRole('alert').filter({ hasText: 'La sesión cambió' }).waitFor();
   assert.equal(JSON.parse((await json(admin, 'GET', '/focus')).session.taskIdsJson).length, 51);
@@ -307,7 +312,7 @@ export async function testAssignments({
     taskIds,
     version: session.version,
   });
-  await page.locator('.focus-choose-tasks').filter({ hasText: '52 seleccionados' }).waitFor();
+  await page.locator('.focus-choose-tasks').filter({ hasText: /\/52$/ }).waitFor();
   pass(
     'Focus dialog persists 52 tasks across pages/reloads, preserves completed work and timer deadlines, and rejects stale/foreign/invalid edits',
   );

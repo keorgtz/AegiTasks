@@ -1,0 +1,295 @@
+/* Keep the timer in the available viewport; long content belongs to dialogs. */
+body:has(.focus-page) {
+  overflow: hidden;
+}
+.app-content:has(.focus-page) {
+  height: 100dvh;
+  min-height: 0;
+  padding-top: 88px;
+  padding-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-content:has(.focus-page) > :not(.focus-page) {
+  flex-shrink: 0;
+}
+.focus-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.focus-page .focus-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 20px 24px;
+  overflow: clip;
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  gap: 12px;
+  container: focus / size;
+}
+.focus-page .focus-stage.is-immersive {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+}
+.focus-page .focus-stage .focus-topline {
+  position: static;
+  min-width: 0;
+  gap: 12px;
+  letter-spacing: normal;
+}
+.focus-page-title {
+  color: #f4f0ff;
+  font:
+    700 18px/1.2 Inter,
+    sans-serif;
+  white-space: nowrap;
+}
+.focus-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.focus-toolbar .btn-icon {
+  flex-shrink: 0;
+  position: relative;
+}
+.focus-toolbar .focus-choose-tasks {
+  margin: 0;
+  padding: 6px;
+  gap: 6px;
+  width: auto;
+  min-width: 64px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.focus-audio-toggle.is-connected {
+  box-shadow: inset 0 0 0 1px #b1eed4;
+}
+.focus-audio-indicator {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 5px;
+  height: 5px;
+  background: #b1eed4;
+  border-radius: 50%;
+}
+.focus-page .focus-stage .focus-center {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  justify-items: center;
+  gap: 12px;
+}
+.focus-page .focus-stage .focus-phase {
+  margin: 0;
+  max-width: 100%;
+}
+.focus-page .focus-stage .focus-dial {
+  width: auto;
+  height: calc(100% - 24px);
+  max-height: min(430px, 82cqw);
+  max-width: 100%;
+  min-height: 0;
+  aspect-ratio: 1;
+  margin: 12px 0;
+  container-type: inline-size;
+}
+.focus-page .focus-stage .focus-digits strong {
+  font-size: clamp(22px, 25cqi, 108px);
+  letter-spacing: -0.04em;
+}
+.focus-page .focus-stage .focus-digits small {
+  font-size: clamp(7px, 2.5cqi, 10px);
+  margin-top: 6px;
+  max-width: 70%;
+  letter-spacing: 0.06em;
+}
+.focus-page .focus-stage .focus-intention {
+  margin: 0;
+  width: 100%;
+  max-width: 560px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.focus-page .focus-stage .focus-controls {
+  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  gap: 12px;
+}
+.focus-page .focus-stage .focus-controls .btn {
+  min-width: 0;
+  padding: 10px 18px;
+  white-space: normal;
+}
+.focus-page .focus-stage .focus-caption {
+  margin: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.focus-notice {
+  color: #ffd6b0;
+  font-size: 12px;
+  text-decoration: underline;
+}
+.modal .focus-session-tasks {
+  padding: 0;
+  margin: 24px 0 0;
+  width: 100%;
+  background: none;
+  color: var(--text);
+}
+.modal .focus-session-task {
+  border-color: var(--hairline);
+}
+.modal .focus-task-summary-list {
+  max-height: none;
+  overflow: visible;
+}
+.modal .focus-task-completed {
+  color: var(--readable-green);
+}
+.modal .focus-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--hairline-strong);
+}
+.modal .focus-goals {
+  display: grid;
+  margin: 20px 0;
+}
+.modal .focus-goals label {
+  background: var(--surface-2);
+  border-color: var(--hairline);
+}
+.modal .focus-audio-panel {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+}
+.modal .focus-audio-help {
+  color: var(--text-muted);
+}
+.modal .focus-audio-panel .focus-audio-state {
+  color: var(--readable-primary);
+}
+.modal .focus-audio-panel .focus-audio-error {
+  color: var(--readable-red);
+}
+@container focus (height < 480px) {
+  .focus-page .focus-stage .focus-center {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    gap: 8px;
+  }
+  .focus-page .focus-stage .focus-caption {
+    display: none;
+  }
+  .focus-page .focus-stage .focus-intention {
+    font-size: 14px;
+  }
+  .focus-page .focus-stage .focus-digits small {
+    display: none;
+  }
+}
+@container focus (height < 330px) and (width > 440px) {
+  .focus-page .focus-stage .focus-center {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    column-gap: 24px;
+    container-type: size;
+  }
+  .focus-page .focus-stage .focus-dial {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    width: min(80cqh, 40cqw, 260px);
+    height: min(80cqh, 40cqw, 260px);
+    max-height: none;
+    margin: 0;
+    align-self: center;
+  }
+  .focus-page .focus-stage .focus-phase {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .focus-page .focus-stage .focus-intention {
+    grid-column: 2;
+    grid-row: 2;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .focus-page .focus-stage .focus-controls {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .focus-page .focus-stage .focus-notice {
+    position: absolute;
+    bottom: 0;
+  }
+}
+@media (max-width: 1023px) {
+  .app-content:has(.focus-page) {
+    padding: 84px 16px calc(92px + env(safe-area-inset-bottom));
+  }
+  .app-content:has(.focus-page) .mobile-space .space-selector {
+    margin-bottom: 12px;
+  }
+}
+@media (max-width: 700px) {
+  .focus-page .focus-stage {
+    padding: 12px;
+    gap: 8px;
+  }
+  .focus-page-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .focus-toolbar {
+    gap: 4px;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .focus-page .focus-stage .focus-phase {
+    font-size: 9px;
+    letter-spacing: 0.05em;
+  }
+}
+@media (max-height: 600px) {
+  .app-content:has(.focus-page) > .mobile-space {
+    display: none;
+  }
+}
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 1023px) {
+  .app-shell:has(.focus-page) > .app-header {
+    display: none;
+  }
+  .app-content:has(.focus-page) {
+    padding-top: 12px;
+  }
+}

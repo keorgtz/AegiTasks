@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { openFocusPicker, openFocusTasks, closeFocusDialog } from './focus-ui-helpers.mjs';
 import { readFile } from 'node:fs/promises';
 
 async function until(check, label) {
@@ -145,7 +146,7 @@ export async function testWorkflow({
     .waitFor();
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('http://localhost:4174/#focus');
-  await page.locator('.focus-choose-tasks').click();
+  await openFocusPicker(page);
   await page.getByLabel('Buscar pendientes para enfocar').fill(task.title);
   await page
     .locator('.focus-task-picker')
@@ -159,6 +160,7 @@ export async function testWorkflow({
   assert(new Date(session.endsAt).getTime() - Date.now() <= session.focusMinutes * 60000 + 1000);
   assert.deepEqual(JSON.parse(session.taskIdsJson), [task.id]);
   await json(personalAdmin, 'GET', `/focus/${session.id}/tasks`, undefined, 404);
+  await openFocusTasks(page);
   await page.getByRole('button', { name: `Completar ${task.title}`, exact: true }).click();
   await until(
     async () => (await json(admin, 'GET', `/tasks/${task.id}`)).item.statusId === done.id,
@@ -177,6 +179,7 @@ export async function testWorkflow({
     'reviewed status persists',
   );
   await page.reload();
+  await openFocusTasks(page);
   await page.locator('.focus-session-task').getByText('Completado', { exact: true }).waitFor();
   await page.waitForFunction(
     (max) =>
@@ -203,6 +206,7 @@ export async function testWorkflow({
   await observer
     .getByRole('button', { name: `Abrir pendiente: ${task.title}`, exact: true })
     .waitFor();
+  await closeFocusDialog(page);
   for (const [width, height, theme] of [
     [1366, 768, 'light'],
     [390, 844, 'dark'],

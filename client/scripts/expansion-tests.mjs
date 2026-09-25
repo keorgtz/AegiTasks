@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { openFocusPanel, closeFocusDialog } from './focus-ui-helpers.mjs';
 import { readFile } from 'node:fs/promises';
 import { unzipSync, strFromU8 } from 'fflate';
 
@@ -380,10 +381,13 @@ export async function testExpansionUi({
   assert.equal(await page.locator('.note-card').count(), 0);
   await page.getByLabel('Espacio activo').first().selectOption(shared.id);
   await page.goto('http://localhost:4174/#focus');
+  await openFocusPanel(page, 'Objetivos e historial');
   await page
     .getByLabel('Objetivos de la sesión')
     .fill('Revisar el despliegue\nActualizar documentación');
+  await openFocusPanel(page, 'Ajustes de Focus');
   await page.getByLabel('Enfoque (min)').fill('1');
+  await closeFocusDialog(page);
   await page.getByRole('button', { name: 'Comenzar enfoque', exact: true }).click();
   await page.getByRole('button', { name: 'Pausar', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).waitFor();
@@ -391,20 +395,25 @@ export async function testExpansionUi({
   await page.reload();
   await page.getByRole('button', { name: 'Continuar', exact: true }).waitFor();
   assert.equal(await page.getByRole('timer').getAttribute('aria-label'), paused);
+  await openFocusPanel(page, 'Objetivos e historial');
   await page.locator('.focus-goals').getByLabel('Revisar el despliegue').click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).waitFor({ state: 'visible' });
   await page.waitForFunction(() => !document.querySelector('.focus-goals input').disabled);
   assert.ok((await json(admin, 'GET', '/focus')).session.goal.startsWith('[x]'));
   pass('Space switch clears content; Focus pause and checked goals survive reload');
   for (const theme of ['aurora', 'waves', 'terminal']) {
+    await openFocusPanel(page, 'Ajustes de Focus');
     await page.getByLabel('Ambiente visual').selectOption(theme);
+    await closeFocusDialog(page);
     const stage = page.locator('.focus-stage');
     assert.equal(await stage.evaluate((el) => getComputedStyle(el).position), 'relative');
     assert.equal(await stage.evaluate((el) => getComputedStyle(el).opacity), '1');
     await stage.screenshot({ path: path.join(artifacts, `focus-${theme}.png`) });
   }
+  await openFocusPanel(page, 'Ajustes de Focus');
   await page.getByRole('button', { name: 'Guardar preferencias', exact: true }).click();
   await page.getByText('Preferencias de enfoque guardadas.').waitFor();
+  await closeFocusDialog(page);
   await page.getByRole('button', { name: 'Ampliar en esta pestaña', exact: true }).click();
   await page.locator('.focus-stage.is-immersive').waitFor();
   await page.screenshot({ path: path.join(artifacts, 'focus-immersive.png') });

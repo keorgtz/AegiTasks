@@ -35,19 +35,22 @@ export function Modal({
   onClose,
   children,
   wide = false,
+  open = true,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  open?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   useEffect(() => {
     const d = ref.current!;
-    d.showModal();
+    if (open) d.showModal();
+    else d.close();
     return () => d.close();
-  }, []);
+  }, [open]);
   return (
     <dialog
       ref={ref}

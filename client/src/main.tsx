@@ -9,6 +9,7 @@ import './styles/tokens.css';
 import './styles/app.css';
 import './styles/features.css';
 import './styles/focus-visuals.css';
+import './styles/focus-layout.css';
 import App from './App';
 import { startAppUpdates } from './pwaUpdates';
 

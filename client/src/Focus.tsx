@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   Coffee,
+  AudioLines,
+  ListChecks,
+  NotebookPen,
+  Settings2,
   Maximize2,
   Minimize2,
   Pause,
@@ -12,7 +16,7 @@ import {
 } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { useChanges } from './changes';
-import { ErrorBox, Field } from './components';
+import { ErrorBox, Field, Modal } from './components';
 import { FocusTaskDialog } from './FocusTaskDialog';
 import { FocusTaskSummary } from './FocusTaskSummary';
 import { FocusBackdrop, SpectrumRing } from './FocusVisuals';
@@ -84,6 +88,9 @@ export function FocusPage({
   const [goal, setGoal] = useState('');
   const [selected, setSelected] = useState<TaskItem[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [panel, setPanel] = useState<'tasks' | 'goals' | 'settings' | 'audio' | 'message' | null>(
+    null,
+  );
   const [pickerSession, setPickerSession] = useState<{ id: string; version: string } | null>(null);
   const [sessionTasks, setSessionTasks] = useState<TaskItem[]>([]);
   const [loadedSessionVersion, setLoadedSessionVersion] = useState('');
@@ -275,8 +282,8 @@ export function FocusPage({
     lines[index] = `${done ? '[ ]' : '[x]'} ${line.replace(/^(?:- )?\[[ x]\] /i, '')}`;
     void action('goals', lines.join('\n'));
   };
-  const leave = () => setImmersive(false);
   const chooseTasks = () => {
+    setPanel(null);
     setPickerSession(session ? { id: session.id, version: session.version } : null);
     setPickerOpen(true);
   };
@@ -295,23 +302,11 @@ export function FocusPage({
   const canChooseTasks = canTasks && (!session || session.spaceId === space.id);
   const selectionLoading = !!session && loadedSessionVersion !== session.version;
   const plannedTasks = session ? sessionTasks : selected;
+  const completedTasks = plannedTasks.filter(
+    (task) => w.statuses.find((status) => status.id === task.statusId)?.isDone,
+  ).length;
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">UNA COSA A LA VEZ</div>
-          <h1>
-            Focus Mode<span className="heading-dot">.</span>
-          </h1>
-          <p>Tu tiempo, con intención. Un timer personal que continúa al cambiar de pantalla.</p>
-        </div>
-      </div>
-      <ErrorBox message={!immersive ? error : ''} />
-      {message && (
-        <p className="success-message" role="status">
-          {message}
-        </p>
-      )}
+    <div className="focus-page">
       <div
         data-update-blocked={
           busy ||
@@ -357,20 +352,65 @@ export function FocusPage({
           )}
         </div>
         <div className="focus-topline">
-          <span>
-            <span className="focus-live-dot" />
-            AEGIPULSE / FOCUS
-          </span>
-          <button
-            className="btn-icon"
-            aria-label={immersive ? 'Salir de vista ampliada' : 'Ampliar en esta pestaña'}
-            title="La vista ampliada conserva las pestañas del navegador"
-            onClick={() => setImmersive((value) => !value)}
-          >
-            {immersive ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
-          </button>
+          <h1 className="focus-page-title">
+            Focus Mode<span className="heading-dot">.</span>
+          </h1>
+          <div className="focus-toolbar" aria-label="Controles de Focus">
+            {canChooseTasks && (
+              <button
+                className="btn-icon focus-choose-tasks"
+                disabled={busy || selectionLoading}
+                aria-label={`Pendientes de la sesión: ${completedTasks} de ${plannedTasks.length} completados`}
+                title="Ver y completar pendientes"
+                onClick={() => setPanel('tasks')}
+              >
+                <ListChecks size={18} />
+                <span>
+                  {completedTasks}/{plannedTasks.length}
+                </span>
+              </button>
+            )}
+            <button
+              className="btn-icon"
+              aria-label="Objetivos e historial"
+              title="Objetivos e historial"
+              onClick={() => setPanel('goals')}
+            >
+              <NotebookPen size={18} />
+            </button>
+            {profile.theme === 'geometry' && (
+              <button
+                className={`btn-icon focus-audio-toggle ${focusAudio.source ? 'is-connected' : ''}`}
+                aria-label="Configurar audio del espectro"
+                title={
+                  focusAudio.source
+                    ? 'Audio conectado · configurar espectro'
+                    : 'Configurar audio del espectro'
+                }
+                onClick={() => setPanel('audio')}
+              >
+                <AudioLines size={18} />
+                {focusAudio.source && <span className="focus-audio-indicator" aria-hidden="true" />}
+              </button>
+            )}
+            <button
+              className="btn-icon"
+              aria-label="Ajustes de Focus"
+              title="Ambiente y ritmo"
+              onClick={() => setPanel('settings')}
+            >
+              <Settings2 size={18} />
+            </button>
+            <button
+              className="btn-icon"
+              aria-label={immersive ? 'Salir de vista ampliada' : 'Ampliar en esta pestaña'}
+              title="La vista ampliada conserva las pestañas del navegador"
+              onClick={() => setImmersive((value) => !value)}
+            >
+              {immersive ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
+            </button>
+          </div>
         </div>
-        {immersive && <ErrorBox message={error} />}
         <div className="focus-center">
           <div className="focus-phase">
             {phase === 'focus' ? <Target size={17} /> : <Coffee size={17} />}{' '}
@@ -467,233 +507,273 @@ export function FocusPage({
               </>
             )}
           </div>
-          {canChooseTasks && (
-            <button
-              className="btn focus-secondary focus-choose-tasks"
-              disabled={busy || selectionLoading}
-              onClick={chooseTasks}
-            >
-              Elegir pendientes · {plannedTasks.length} seleccionados
+          {error ? (
+            <button className="focus-notice" onClick={() => setPanel('message')}>
+              Revisar aviso de Focus
             </button>
-          )}
-          <p className="focus-caption">
-            {ready
-              ? 'Cuando estés listo, inicia la siguiente etapa.'
-              : session
-                ? `${session.completedCycles} ciclos completados · No necesitas mantener esta pestaña activa.`
-                : 'El ruido puede esperar. Este momento es tuyo.'}
-          </p>
-        </div>
-        {profile.theme === 'geometry' && (
-          <FocusAudioControls audio={focusAudio} animated={profile.animated} />
-        )}
-        {session?.goal && (
-          <div className="focus-goals">
-            {session.goal.split('\n').map(
-              (g, i) =>
-                g.trim() && (
-                  <label key={i}>
-                    <input
-                      type="checkbox"
-                      checked={/^(?:- )?\[x\] /i.test(g)}
-                      disabled={busy}
-                      onChange={() => toggleGoal(i)}
-                    />
-                    <span>{g.replace(/^(?:- )?\[[ x]\] /i, '')}</span>
-                  </label>
-                ),
-            )}
-          </div>
-        )}
-        {canChooseTasks && plannedTasks.length > 0 && (
-          <FocusTaskSummary
-            tasks={plannedTasks}
-            workspace={w}
-            active={!!session}
-            changingTask={changingTask}
-            onComplete={(task, statusId) => void changeTaskStatus(task, statusId)}
-            onOpen={(id) => {
-              if (immersive) leave();
-              openTask(id);
-            }}
-          />
-        )}
-        {immersive && (
-          <button className="focus-exit" onClick={leave}>
-            Volver a mi espacio · Esc
-          </button>
-        )}
-      </div>
-      <div className="settings-grid subsection">
-        <section className="card">
-          <h2>Elige tu ritmo</h2>
-          <p className="muted small">Las duraciones se aplican al comenzar una nueva sesión.</p>
-          <div className="form-grid subsection">
-            {[
-              { key: 'focusMinutes', label: 'Enfoque (min)', max: 240 },
-              { key: 'shortBreakMinutes', label: 'Pausa corta (min)', max: 60 },
-              { key: 'longBreakMinutes', label: 'Pausa larga (min)', max: 120 },
-              { key: 'cycles', label: 'Ciclos hasta pausa larga', max: 12 },
-            ].map((f) => (
-              <Field key={f.key} label={f.label}>
-                <input
-                  type="number"
-                  min={1}
-                  max={f.max}
-                  value={profile[f.key as keyof Profile] as number}
-                  onChange={(e) => setProfile((p) => ({ ...p, [f.key]: Number(e.target.value) }))}
-                />
-              </Field>
-            ))}
-          </div>
-          <Field label="Ambiente visual">
-            <select
-              value={profile.theme}
-              onChange={(e) => setProfile((p) => ({ ...p, theme: e.target.value }))}
-            >
-              {focusThemes.map((theme) => (
-                <option value={theme.id} key={theme.id}>
-                  {theme.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {hasCustomVisual(profile.theme) && (
-            <div className="form-grid focus-visual-options">
-              <Field
-                label="Color del ambiente"
-                hint="Se aplica a las partículas, luces y al espectro."
-              >
-                <input
-                  type="color"
-                  value={profile.accentColor}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, accentColor: e.target.value.toUpperCase() }))
-                  }
-                />
-              </Field>
-              {profile.theme === 'geometry' && (
-                <Field label="Forma de las partículas">
-                  <select
-                    value={profile.particleShape}
-                    onChange={(e) => setProfile((p) => ({ ...p, particleShape: e.target.value }))}
-                  >
-                    {particleShapes.map((shape) => (
-                      <option value={shape.id} key={shape.id}>
-                        {shape.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
-            </div>
-          )}
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={profile.animated}
-              onChange={(e) => setProfile((p) => ({ ...p, animated: e.target.checked }))}
-            />
-            Animaciones de fondo
-          </label>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={profile.sound}
-              onChange={(e) => {
-                if (e.target.checked) unlockSound();
-                setProfile((p) => ({ ...p, sound: e.target.checked }));
-              }}
-            />
-            <Volume2 size={17} />
-            Sonido al completar el intervalo
-          </label>
-          <button
-            className="btn btn-ghost"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              setError('');
-              try {
-                await api('/focus/profile', 'PUT', profile);
-                setSavedProfile(profile);
-                setMessage('Preferencias de enfoque guardadas.');
-              } catch (e) {
-                setError(errorMessage(e));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Guardar preferencias
-          </button>
-        </section>
-        <section className="card" id="focus-plan">
-          <h2>{session ? 'Tu sesión actual' : '¿Qué quieres avanzar?'}</h2>
-          {!session && canTasks && (
-            <p className="muted small">
-              Pendientes sin completar asignados a ti o sin responsable, de todos los proyectos de
-              este espacio.
+          ) : (
+            <p className="focus-caption">
+              {ready
+                ? 'Cuando estés listo, inicia la siguiente etapa.'
+                : session
+                  ? `${session.completedCycles} ciclos completados · No necesitas mantener esta pestaña activa.`
+                  : 'El ruido puede esperar. Este momento es tuyo.'}
             </p>
           )}
-          {!session ? (
-            <>
-              <Field label="Objetivos de la sesión">
-                <textarea
-                  rows={4}
-                  maxLength={2000}
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  placeholder={
-                    'Un objetivo por línea\nResolver el bug de reservas\nRevisar los cambios'
-                  }
-                />
-              </Field>
-              {canTasks && (
-                <button className="btn btn-ghost" onClick={chooseTasks}>
-                  Elegir pendientes para la sesión
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="muted">
-                Tus objetivos aparecen en el timer. Puedes marcarlos sin perder la concentración.
-              </p>
-              {canChooseTasks && (
+        </div>
+      </div>
+      {profile.theme === 'geometry' && (
+        <Modal title="Audio del espectro" open={panel === 'audio'} onClose={() => setPanel(null)}>
+          <div className="modal-body">
+            <FocusAudioControls audio={focusAudio} animated={profile.animated} />
+          </div>
+        </Modal>
+      )}
+      {panel === 'tasks' && (
+        <Modal title="Pendientes de Focus" wide onClose={() => setPanel(null)}>
+          <div className="modal-body focus-tasks-dialog">
+            <ErrorBox message={error} />
+            {canChooseTasks ? (
+              <>
                 <button
-                  className="btn btn-ghost"
+                  className="btn btn-primary"
                   disabled={busy || selectionLoading}
                   onClick={chooseTasks}
                 >
-                  Ajustar pendientes de la sesión
+                  Elegir pendientes
                 </button>
-              )}
-              {session.spaceId !== space.id && (
-                <p className="small muted">
-                  Los pendientes asociados pertenecen al espacio donde comenzaste la sesión.
-                </p>
-              )}
-            </>
-          )}
-          <div className="focus-history">
-            <h3>Tu avance reciente</h3>
-            <strong>
-              {history.reduce((sum, s) => sum + s.completedCycles * s.focusMinutes, 0)}
-              <small> min de enfoque completados</small>
-            </strong>
-            <p className="muted small">Últimas 30 sesiones. Solo incluye intervalos completos.</p>
-            {history.slice(0, 5).map((s) => (
-              <div className="history-row" key={s.id}>
-                <span>{s.goal.split('\n')[0] || 'Sesión de enfoque'}</span>
-                <small>
-                  {s.completedCycles} ciclos · {new Date(s.startedAt).toLocaleDateString('es-MX')}
-                </small>
-              </div>
-            ))}
+                {plannedTasks.length > 0 ? (
+                  <FocusTaskSummary
+                    tasks={plannedTasks}
+                    workspace={w}
+                    active={!!session}
+                    changingTask={changingTask}
+                    onComplete={(task, statusId) => void changeTaskStatus(task, statusId)}
+                    onOpen={(id) => {
+                      setPanel(null);
+                      openTask(id);
+                    }}
+                  />
+                ) : (
+                  <p className="muted subsection">
+                    Elige los pendientes que quieres avanzar en esta sesión.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="muted">
+                Los pendientes pertenecen al espacio donde comenzaste la sesión.
+              </p>
+            )}
           </div>
-        </section>
-      </div>
+        </Modal>
+      )}
+      {panel === 'message' && (
+        <Modal title="Aviso de Focus" onClose={() => setPanel(null)}>
+          <div className="modal-body">
+            <ErrorBox message={error} />
+          </div>
+        </Modal>
+      )}
+      {panel === 'settings' && (
+        <Modal title="Ajustes de Focus" onClose={() => setPanel(null)}>
+          <section className="modal-body">
+            <ErrorBox message={error} />
+            {message && (
+              <p className="success-message" role="status">
+                {message}
+              </p>
+            )}
+            <h2>Elige tu ritmo</h2>
+            <p className="muted small">Las duraciones se aplican al comenzar una nueva sesión.</p>
+            <div className="form-grid subsection">
+              {[
+                { key: 'focusMinutes', label: 'Enfoque (min)', max: 240 },
+                { key: 'shortBreakMinutes', label: 'Pausa corta (min)', max: 60 },
+                { key: 'longBreakMinutes', label: 'Pausa larga (min)', max: 120 },
+                { key: 'cycles', label: 'Ciclos hasta pausa larga', max: 12 },
+              ].map((f) => (
+                <Field key={f.key} label={f.label}>
+                  <input
+                    type="number"
+                    min={1}
+                    max={f.max}
+                    value={profile[f.key as keyof Profile] as number}
+                    onChange={(e) => setProfile((p) => ({ ...p, [f.key]: Number(e.target.value) }))}
+                  />
+                </Field>
+              ))}
+            </div>
+            <Field label="Ambiente visual">
+              <select
+                value={profile.theme}
+                onChange={(e) => setProfile((p) => ({ ...p, theme: e.target.value }))}
+              >
+                {focusThemes.map((theme) => (
+                  <option value={theme.id} key={theme.id}>
+                    {theme.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {hasCustomVisual(profile.theme) && (
+              <div className="form-grid focus-visual-options">
+                <Field
+                  label="Color del ambiente"
+                  hint="Se aplica a las partículas, luces y al espectro."
+                >
+                  <input
+                    type="color"
+                    value={profile.accentColor}
+                    onChange={(e) =>
+                      setProfile((p) => ({ ...p, accentColor: e.target.value.toUpperCase() }))
+                    }
+                  />
+                </Field>
+                {profile.theme === 'geometry' && (
+                  <Field label="Forma de las partículas">
+                    <select
+                      value={profile.particleShape}
+                      onChange={(e) => setProfile((p) => ({ ...p, particleShape: e.target.value }))}
+                    >
+                      {particleShapes.map((shape) => (
+                        <option value={shape.id} key={shape.id}>
+                          {shape.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </div>
+            )}
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={profile.animated}
+                onChange={(e) => setProfile((p) => ({ ...p, animated: e.target.checked }))}
+              />
+              Animaciones de fondo
+            </label>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={profile.sound}
+                onChange={(e) => {
+                  if (e.target.checked) unlockSound();
+                  setProfile((p) => ({ ...p, sound: e.target.checked }));
+                }}
+              />
+              <Volume2 size={17} />
+              Sonido al completar el intervalo
+            </label>
+            <button
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError('');
+                try {
+                  await api('/focus/profile', 'PUT', profile);
+                  setSavedProfile(profile);
+                  setMessage('Preferencias de enfoque guardadas.');
+                } catch (e) {
+                  setError(errorMessage(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Guardar preferencias
+            </button>
+          </section>
+        </Modal>
+      )}
+      {panel === 'goals' && (
+        <Modal title="Objetivos e historial" onClose={() => setPanel(null)}>
+          <section className="modal-body" id="focus-plan">
+            <ErrorBox message={error} />
+            <h2>{session ? 'Tu sesión actual' : '¿Qué quieres avanzar?'}</h2>
+            {!session && canTasks && (
+              <p className="muted small">
+                Pendientes sin completar asignados a ti o sin responsable, de todos los proyectos de
+                este espacio.
+              </p>
+            )}
+            {!session ? (
+              <>
+                <Field label="Objetivos de la sesión">
+                  <textarea
+                    rows={4}
+                    maxLength={2000}
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    placeholder={
+                      'Un objetivo por línea\nResolver el bug de reservas\nRevisar los cambios'
+                    }
+                  />
+                </Field>
+                {canTasks && (
+                  <button className="btn btn-ghost" onClick={chooseTasks}>
+                    Elegir pendientes para la sesión
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="muted">Marca tus objetivos y consulta el avance de esta sesión.</p>
+                {canChooseTasks && (
+                  <button
+                    className="btn btn-ghost"
+                    disabled={busy || selectionLoading}
+                    onClick={chooseTasks}
+                  >
+                    Ajustar pendientes de la sesión
+                  </button>
+                )}
+                {session.spaceId !== space.id && (
+                  <p className="small muted">
+                    Los pendientes asociados pertenecen al espacio donde comenzaste la sesión.
+                  </p>
+                )}
+              </>
+            )}
+            {session?.goal && (
+              <div className="focus-goals">
+                {session.goal.split('\n').map(
+                  (g, i) =>
+                    g.trim() && (
+                      <label key={i}>
+                        <input
+                          type="checkbox"
+                          checked={/^(?:- )?\[x\] /i.test(g)}
+                          disabled={busy}
+                          onChange={() => toggleGoal(i)}
+                        />
+                        <span>{g.replace(/^(?:- )?\[[ x]\] /i, '')}</span>
+                      </label>
+                    ),
+                )}
+              </div>
+            )}
+            <div className="focus-history">
+              <h3>Tu avance reciente</h3>
+              <strong>
+                {history.reduce((sum, s) => sum + s.completedCycles * s.focusMinutes, 0)}
+                <small> min de enfoque completados</small>
+              </strong>
+              <p className="muted small">Últimas 30 sesiones. Solo incluye intervalos completos.</p>
+              {history.slice(0, 5).map((s) => (
+                <div className="history-row" key={s.id}>
+                  <span>{s.goal.split('\n')[0] || 'Sesión de enfoque'}</span>
+                  <small>
+                    {s.completedCycles} ciclos · {new Date(s.startedAt).toLocaleDateString('es-MX')}
+                  </small>
+                </div>
+              ))}
+            </div>
+          </section>
+        </Modal>
+      )}
       {pickerOpen && canChooseTasks && (
         <FocusTaskDialog
           initial={plannedTasks}
@@ -702,6 +782,6 @@ export function FocusPage({
           onClose={() => setPickerOpen(false)}
         />
       )}
-    </>
+    </div>
   );
 }

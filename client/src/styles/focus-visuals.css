@@ -91,8 +91,4 @@
   .focus-audio-actions .btn {
     flex: 1 1 100%;
   }
-  .focus-stage.focus-geometry.is-immersive .focus-dial {
-    width: min(260px, 72vw);
-    height: min(260px, 72vw);
-  }
 }

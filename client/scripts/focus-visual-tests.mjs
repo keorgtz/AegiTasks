@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { openFocusPanel, closeFocusDialog } from './focus-ui-helpers.mjs';
 
 function waveFile() {
   const rate = 22050,
@@ -118,17 +119,22 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
   await page.goto('http://localhost:4174/#focus');
   await page.reload();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await openFocusPanel(page, 'Ajustes de Focus');
   await page.getByLabel('Animaciones de fondo').check();
   const select = page.getByLabel('Ambiente visual');
   assert.equal(await select.locator('option').count(), 8);
+  await closeFocusDialog(page);
   for (const theme of ['fireflies', 'breeze', 'constellation', 'codeRain', 'geometry']) {
+    await openFocusPanel(page, 'Ajustes de Focus');
     await select.selectOption(theme);
+    await closeFocusDialog(page);
     await page.locator('.focus-backdrop-canvas[data-animating="true"]').waitFor();
     await page
       .locator('.focus-stage')
       .screenshot({ path: path.join(artifacts, `focus-new-${theme}.png`) });
   }
   assert.equal(await page.evaluate(() => window.focusAudioQA.calls.length), 0);
+  await openFocusPanel(page, 'Ajustes de Focus');
   await page.getByLabel('Color del ambiente').fill('#22c55e');
   await page.getByLabel('Forma de las partículas').selectOption('triangles');
   const savedResponse = page.waitForResponse(
@@ -138,8 +144,10 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
   assert.equal((await savedResponse).status(), 200);
   await page.reload();
   await page.locator('.focus-geometry').waitFor();
+  await openFocusPanel(page, 'Ajustes de Focus');
   assert.equal(await page.getByLabel('Color del ambiente').inputValue(), '#22c55e');
   assert.equal(await page.getByLabel('Forma de las partículas').inputValue(), 'triangles');
+  await closeFocusDialog(page);
   for (const width of [320, 390, 1366]) {
     await page.setViewportSize({ width, height: width === 1366 ? 900 : 844 });
     await page.evaluate(
@@ -154,7 +162,9 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
     await page.keyboard.press('Escape');
   }
   await page.setViewportSize({ width: 1366, height: 900 });
+  await openFocusPanel(page, 'Ajustes de Focus');
   await page.getByLabel('Animaciones de fondo').uncheck();
+  await closeFocusDialog(page);
   await page.locator('.focus-backdrop-canvas[data-animating="false"]').waitFor();
   const still = await page.locator('.focus-backdrop-canvas').evaluate((el) => el.toDataURL());
   await page.waitForTimeout(150);
@@ -162,10 +172,14 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
     await page.locator('.focus-backdrop-canvas').evaluate((el) => el.toDataURL()),
     still,
   );
+  await openFocusPanel(page, 'Ajustes de Focus');
   await page.getByLabel('Animaciones de fondo').check();
+  await closeFocusDialog(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('.focus-spectrum[data-animating="false"]').waitFor();
+  await openFocusPanel(page, 'Configurar audio del espectro');
   await page.locator('.focus-audio-reduced').waitFor();
+  await closeFocusDialog(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
@@ -183,6 +197,7 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
 
   const share = page.getByRole('button', { name: 'Compartir audio', exact: true });
   const stop = page.getByRole('button', { name: 'Desconectar audio', exact: true });
+  await openFocusPanel(page, 'Configurar audio del espectro');
   await page.evaluate(() => (window.focusAudioQA.mode = 'denied'));
   await share.click();
   await page.getByRole('alert').filter({ hasText: 'No se concedió' }).waitFor();
@@ -203,21 +218,25 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
   const capture = await page.evaluate(() => window.focusAudioQA.calls.at(-1));
   assert.equal(capture.options.systemAudio, 'include');
   assert.equal(capture.options.video, true);
+  await closeFocusDialog(page);
   await page.getByRole('button', { name: 'Ampliar en esta pestaña', exact: true }).click();
   await page.screenshot({ path: path.join(artifacts, 'focus-spectrum-active.png') });
   await page.keyboard.press('Escape');
+  await openFocusPanel(page, 'Configurar audio del espectro');
   await stop.click();
   assert(
     await page.evaluate(() => window.focusAudioQA.tracks.every((t) => t.readyState === 'ended')),
   );
   await page.getByRole('button', { name: 'Usar micrófono', exact: true }).click();
   await page.getByText('Micrófono conectado', { exact: true }).waitFor();
+  await openFocusPanel(page, 'Ajustes de Focus');
   await select.selectOption('breeze');
   await page.waitForFunction(() => window.focusAudioQA.contexts.every((c) => c.state === 'closed'));
   assert(
     await page.evaluate(() => window.focusAudioQA.tracks.every((t) => t.readyState === 'ended')),
   );
   await select.selectOption('geometry');
+  await openFocusPanel(page, 'Configurar audio del espectro');
   await share.click();
   await stop.waitFor();
   await page.evaluate(() =>
@@ -252,6 +271,14 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
     assert(await page.locator('audio').evaluate((el) => !el.paused && el.currentTime > 0));
   }
   assert.deepEqual(uploads, []);
+  const playingTime = await page.locator('audio').evaluate((el) => el.currentTime);
+  await closeFocusDialog(page);
+  await page.waitForFunction(
+    (time) => document.querySelector('audio').currentTime > time,
+    playingTime,
+  );
+  await openFocusPanel(page, 'Configurar audio del espectro');
+  assert(await page.locator('audio').evaluate((el) => !el.paused));
   await page.locator('audio').evaluate((el) => el.pause());
   await page.waitForFunction(() => window.focusAudioQA.peak === 0);
   const silent = await page.locator('.focus-spectrum').evaluate((el) => el.toDataURL());
@@ -277,6 +304,7 @@ export async function testFocusVisuals({ page, admin, support, json, pass, artif
     location.hash = '#focus';
   });
   await page.locator('.focus-geometry').waitFor();
+  await openFocusPanel(page, 'Configurar audio del espectro');
   assert(await share.isDisabled());
   assert(await page.getByRole('button', { name: 'Usar micrófono', exact: true }).isDisabled());
   assert(await page.getByRole('button', { name: 'Reproducir archivo', exact: true }).isEnabled());
