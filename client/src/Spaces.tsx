@@ -71,6 +71,11 @@ export function SpaceGate({
   }, [activeId, reload]);
   const switchSpace = (id: string) => {
     if (id === activeId) return;
+    if (
+      document.querySelector('[data-unsaved-note="true"]') &&
+      !confirm('Hay una nota con cambios sin guardar. ¿Cambiar de espacio y descartar el borrador?')
+    )
+      return;
     if (document.querySelector('dialog[open]')) {
       alert('Cierra el formulario antes de cambiar de espacio.');
       return;

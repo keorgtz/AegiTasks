@@ -63,7 +63,7 @@ public static class NoteEndpoints
         if ((input.Markdown?.Length ?? 0) > 200000) throw new InputError("La nota admite hasta 200000 caracteres.");
         if (input.FolderId != null && !await db.NoteFolders.AnyAsync(f => f.Id == input.FolderId)) throw new InputError("Carpeta no válida para este espacio.");
         if (input.ProjectId != null && !await db.Projects.AnyAsync(p => p.Id == input.ProjectId)) throw new InputError("Proyecto no válido para este espacio.");
-        if (input.Font is not ("sans" or "serif" or "mono")) throw new InputError("Tipografía no válida.");
+        if (input.Font is not ("sans" or "serif" or "mono" or "lora" or "source-serif" or "jetbrains" or "nunito" or "plex")) throw new InputError("Tipografía no válida.");
         n.Markdown = input.Markdown ?? ""; n.Color = Rules.Color(input.Color); n.Font = input.Font; n.FolderId = input.FolderId; n.ProjectId = input.ProjectId; n.Pinned = input.Pinned; n.Archived = input.Archived;
     }
     private static async Task ValidateParent(AppDb db, Guid? parent, Guid? self)

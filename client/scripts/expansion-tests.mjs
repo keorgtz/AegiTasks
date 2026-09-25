@@ -314,10 +314,11 @@ export async function testExpansionUi({
   await page.getByLabel('Contenido Markdown').waitFor();
   await page.getByRole('button', { name: 'Vista previa', exact: true }).click();
   await page.pdf({ path: path.join(artifacts, 'note-print.pdf'), format: 'A4' });
-  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Volver a notas', exact: true }).click();
   pass('Nested folder creation, Markdown import and PDF print rendering work through the UI');
   await page.getByRole('button', { name: 'Nueva nota', exact: true }).click();
   await page.getByLabel('Título de nota', { exact: true }).fill('Guía de despliegue');
+  await page.locator('.note-details summary').click();
   await page.getByLabel('Proyecto relacionado').selectOption(pms.id);
   await page.getByLabel('Carpeta de nota', { exact: true }).selectOption(spaceTests.nested.id);
   const markdown =
@@ -325,7 +326,7 @@ export async function testExpansionUi({
   await page.getByLabel('Contenido Markdown').fill(markdown);
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.evaluate(() => (location.hash = '#focus'));
-  await page.waitForFunction(() => location.hash === '#notes');
+  await page.waitForFunction(() => location.hash === '#notes/new');
   assert.equal(await page.getByLabel('Contenido Markdown').inputValue(), markdown);
   pass('Cancelling navigation preserves an unsaved Markdown draft');
   const preview = page.locator('.markdown-preview');
@@ -355,10 +356,12 @@ export async function testExpansionUi({
   pass('Markdown and sanitized HTML exports contain actual edited content');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  assert.ok(await page.locator('dialog').evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
+  assert.ok(
+    await page.locator('.note-editor-page').evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+  );
   await page.getByRole('button', { name: 'Vista previa', exact: true }).click();
   await page.screenshot({ path: path.join(artifacts, 'notes-mobile-preview.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Volver a notas', exact: true }).click();
   await page.getByRole('button', { name: 'Cambiar a modo oscuro' }).click();
   await page.locator('.toast').waitFor({ state: 'hidden' });
   await page.screenshot({ path: path.join(artifacts, 'notes-mobile-dark.png'), fullPage: true });
@@ -443,6 +446,8 @@ export async function testExpansionUi({
   });
   const restricted = await limited.newPage();
   await restricted.goto('http://localhost:4174/#notes');
+  await restricted.getByRole('heading', { name: 'Página sin acceso' }).waitFor();
+  await restricted.goto('http://localhost:4174/#notes/new');
   await restricted.getByRole('heading', { name: 'Página sin acceso' }).waitFor();
   assert.equal(
     await restricted

@@ -290,13 +290,15 @@ function WorkspaceApp({
   const permissions = spaceSession.permissions;
   const [moreMenu, setMoreMenu] = useState(false);
   const routePage = (r: string) =>
-    r.startsWith('project/')
-      ? 'tasks'
-      : ['inbox', 'mine', 'archived'].includes(r)
+    r.startsWith('notes/')
+      ? 'notes'
+      : r.startsWith('project/')
         ? 'tasks'
-        : r === 'admin'
-          ? 'users'
-          : r;
+        : ['inbox', 'mine', 'archived'].includes(r)
+          ? 'tasks'
+          : r === 'admin'
+            ? 'users'
+            : r;
   const [w, setWorkspace] = useState<Workspace | null>(null);
   const [route, setRoute] = useState(location.hash.slice(1) || 'inbox');
   const [folder, setFolder] = useState('');
@@ -518,7 +520,7 @@ function WorkspaceApp({
       .map((n) => (
         <button
           key={n.id}
-          className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'projects' && !!projectId) ? 'active' : ''}`}
+          className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) || (n.id === 'projects' && !!projectId) ? 'active' : ''}`}
           onClick={() => navigate(n.id)}
         >
           <n.icon size={21} />
@@ -592,7 +594,8 @@ function WorkspaceApp({
           <span>{space.isPersonal ? 'Personal' : space.name}</span>
           <ChevronRight size={15} />
           <strong>
-            {nav.find((n) => n.id === route)?.name || (route === 'account' ? 'Mi cuenta' : title)}
+            {nav.find((n) => n.id === (route.startsWith('notes/') ? 'notes' : route))?.name ||
+              (route === 'account' ? 'Mi cuenta' : title)}
           </strong>
         </div>
         <div className="header-actions">
@@ -656,9 +659,14 @@ function WorkspaceApp({
                   Mi cuenta
                 </button>
               </section>
-            ) : route === 'notes' ? (
+            ) : route === 'notes' || route.startsWith('notes/') ? (
               <Suspense fallback={<p>Cargando notas…</p>}>
                 <NotesPage
+                  editorId={route.startsWith('notes/') ? route.slice(6) : null}
+                  onSavedRoute={(id) => {
+                    history.replaceState(null, '', `#notes/${id}`);
+                    setRoute(`notes/${id}`);
+                  }}
                   space={space}
                   workspace={w}
                   canTasks={permissions.includes('tasks')}

@@ -1,0 +1,249 @@
+.note-editor-page {
+  min-width: 0;
+  width: 100%;
+}
+.note-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0 20px;
+  position: sticky;
+  top: 72px;
+  z-index: 5;
+  background: var(--bg);
+}
+.note-editor-context {
+  flex: 1;
+  min-width: 0;
+}
+.note-editor-context h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+.note-editor-context span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.note-editor-header .btn-icon {
+  flex-shrink: 0;
+}
+.note-editor-page #note-form > .field input {
+  font-size: 22px;
+  font-weight: 700;
+  background: var(--surface-1);
+}
+.note-details {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  padding: 0 18px;
+  margin-bottom: 16px;
+}
+.note-details summary {
+  min-height: 48px;
+  padding: 14px 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.note-details[open] summary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+.note-details .note-export-actions {
+  margin-bottom: 18px;
+}
+.note-editor-page .markdown-toolbar {
+  gap: 4px;
+}
+.note-tools {
+  position: sticky;
+  top: 150px;
+  z-index: 4;
+  background: var(--bg);
+  padding-top: 4px;
+}
+.mermaid-svg .label,
+.mermaid-staging .label {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.note-editor-page .markdown-toolbar select {
+  width: auto;
+  max-width: 100%;
+  min-height: 44px;
+}
+.note-editor-page .markdown-toolbar button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.note-editor-page .note-view-tabs {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+}
+.note-editor-page .note-view-tabs button {
+  min-height: 44px;
+}
+.note-editor-page .markdown-panels {
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.note-editor-page .markdown-panels.mode-edit,
+.note-editor-page .markdown-panels.mode-preview {
+  grid-template-columns: minmax(0, 1fr);
+}
+.note-editor-page .markdown-source {
+  width: 100%;
+  min-width: 0;
+  min-height: max(400px, calc(100dvh - 360px));
+  padding: 24px;
+  font-size: 15px;
+  line-height: 1.85;
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
+}
+.note-editor-page .markdown-preview {
+  min-height: max(400px, calc(100dvh - 360px));
+  background: var(--surface-1);
+}
+.note-editor-page .mode-edit .markdown-preview {
+  display: block;
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 900px;
+  visibility: hidden;
+  pointer-events: none;
+}
+.note-word-count {
+  margin: 14px 0;
+}
+.font-lora {
+  font-family: Lora, Georgia, serif;
+}
+.font-source-serif {
+  font-family: 'Source Serif 4', Georgia, serif;
+}
+.font-jetbrains {
+  font-family: 'JetBrains Mono', monospace;
+}
+.font-nunito {
+  font-family: 'Nunito Sans', sans-serif;
+}
+.font-plex {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.font-sans {
+  font-family: Inter, sans-serif;
+}
+.mermaid-staging {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1000px;
+  visibility: hidden;
+  pointer-events: none;
+}
+.mermaid-diagram {
+  margin: 24px 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+}
+.mermaid-svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: auto;
+}
+.mermaid-error {
+  color: var(--readable-red);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+@media (max-width: 1023px) {
+  .app-shell:has(.note-editor-page) > .app-header,
+  .app-shell:has(.note-editor-page) > .bottom-nav,
+  .app-content:has(.note-editor-page) > .mobile-space {
+    display: none;
+  }
+  .app-content:has(.note-editor-page) {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+  .note-editor-page .markdown-panels.mode-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .note-editor-header {
+    top: 0;
+  }
+  .note-tools {
+    top: 78px;
+  }
+}
+@media (max-width: 640px) {
+  .note-tools {
+    top: 70px;
+  }
+  .note-editor-header {
+    gap: 10px;
+    padding: 10px 0 16px;
+  }
+  .note-editor-context h1 {
+    font-size: 17px;
+  }
+  .note-editor-context span {
+    font-size: 10px;
+  }
+  .note-editor-header .btn-primary {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .note-editor-header .btn-primary svg {
+    display: none;
+  }
+  .note-editor-page .markdown-source,
+  .note-editor-page .markdown-preview {
+    padding: 18px;
+    min-height: 55dvh;
+  }
+  .note-editor-page .markdown-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    border-radius: 12px;
+  }
+  .note-editor-page .markdown-toolbar > * {
+    flex-shrink: 0;
+  }
+  .note-editor-page .note-properties {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .note-details {
+    padding: 0 14px;
+  }
+}
+@media print {
+  main.app-content > .note-editor-page {
+    display: block !important;
+  }
+  .note-editor-page {
+    padding: 0 !important;
+  }
+  .note-editor-page > :not(form) {
+    display: none !important;
+  }
+  .note-editor-page .markdown-preview {
+    display: block !important;
+    position: static !important;
+    visibility: visible !important;
+    width: 100% !important;
+    min-height: 0 !important;
+  }
+  .mermaid-diagram {
+    overflow: visible;
+    break-inside: avoid;
+  }
+}

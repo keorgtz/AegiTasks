@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { isValidElement, useEffect, useRef, useState } from 'react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
@@ -7,6 +7,10 @@ import rehypeHighlight from 'rehype-highlight';
 import { zipSync, strToU8 } from 'fflate';
 import {
   Archive,
+  ArrowLeft,
+  Link2,
+  ListOrdered,
+  Strikethrough,
   Bold,
   CheckSquare,
   Code2,
@@ -24,6 +28,15 @@ import {
 } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { useChanges } from './changes';
+import { MermaidDiagram, waitForDiagrams } from './MermaidDiagram';
+import { noteFonts, exportFontCss } from './noteFonts';
+import { noteDiagrams } from './noteDiagrams';
+import '@fontsource/lora/latin-400.css';
+import '@fontsource/source-serif-4/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/nunito-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import './styles/notes-editor.css';
 import { Badge, Empty, ErrorBox, Field, Modal } from './components';
 import {
   colors,
@@ -33,6 +46,25 @@ import {
   type Space,
   type Workspace,
 } from './types';
+const markdownComponents: Components = {
+  pre: ({ children }) => {
+    const child = Array.isArray(children) ? children[0] : children;
+    if (
+      isValidElement<{ className?: string; children?: unknown }>(child) &&
+      child.props.className?.split(' ').includes('language-mermaid')
+    )
+      return <MermaidDiagram source={String(child.props.children || '').replace(/\n$/, '')} />;
+    return <pre>{children}</pre>;
+  },
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  ),
+  img: ({ alt }) => (
+    <span className="image-placeholder">Imagen: {alt || 'referencia externa'}</span>
+  ),
+};
 const schema = {
   ...defaultSchema,
   attributes: {
@@ -47,6 +79,7 @@ const schema = {
         'ink-orange',
         'font-serif',
         'font-mono',
+        ...noteFonts.map((font) => `font-${font.id}`),
         'mark-highlight',
       ],
     ],
@@ -80,11 +113,15 @@ const templates: Record<string, string> = {
   idea: '# Una idea para después\n\n## El problema\n\n## La propuesta\n\n## Siguiente paso\n\n- [ ] Validar la idea\n',
 };
 export function NotesPage({
+  editorId,
+  onSavedRoute,
   space,
   workspace: w,
   canTasks,
   openTask,
 }: {
+  editorId: string | null;
+  onSavedRoute: (id: string) => void;
   space: Space;
   workspace: Workspace;
   canTasks: boolean;
@@ -95,7 +132,10 @@ export function NotesPage({
   const [folder, setFolder] = useState('');
   const [query, setQuery] = useState('');
   const [archived, setArchived] = useState(false);
-  const [editor, setEditor] = useState<string | null>(null);
+  const editor = editorId;
+  const setEditor = (id: string | null) => {
+    location.hash = id ? `notes/${id}` : 'notes';
+  };
   const [folderEdit, setFolderEdit] = useState<Partial<NoteFolder> | null>(null);
   const [error, setError] = useState('');
   const [imported, setImported] = useState<Partial<Note> | null>(null);
@@ -173,7 +213,7 @@ export function NotesPage({
           if (typeof parsed !== 'string') continue;
           if (key === 'title') title = parsed;
           if (key === 'color' && colors.includes(parsed)) color = parsed;
-          if (key === 'font' && ['sans', 'serif', 'mono'].includes(parsed)) font = parsed;
+          if (key === 'font' && noteFonts.some((font) => font.id === parsed)) font = parsed;
         } catch {}
       }
       body = body.slice(match[0].length).replace(/^\n/, '');
@@ -201,6 +241,23 @@ export function NotesPage({
           {tree(f.id, depth + 1)}
         </div>
       ));
+  if (editor)
+    return (
+      <NoteEditor
+        id={editor === 'new' ? undefined : editor}
+        initial={editor === 'new' ? imported || undefined : undefined}
+        folderId={folder}
+        folders={folders}
+        workspace={w}
+        canTasks={canTasks}
+        openTask={openTask}
+        onClose={() => setEditor(null)}
+        onSaved={async (n) => {
+          onSavedRoute(n.id);
+          await load();
+        }}
+      />
+    );
   return (
     <>
       <div className="page-heading">
@@ -309,23 +366,6 @@ export function NotesPage({
           )}
         </section>
       </div>
-      {editor && (
-        <NoteEditor
-          key={editor}
-          id={editor === 'new' ? undefined : editor}
-          initial={editor === 'new' ? imported || undefined : undefined}
-          folderId={folder}
-          folders={folders}
-          workspace={w}
-          canTasks={canTasks}
-          openTask={openTask}
-          onClose={() => setEditor(null)}
-          onSaved={async (n) => {
-            await load();
-            setEditor(n.id);
-          }}
-        />
-      )}
       {folderEdit && (
         <FolderEditor
           folder={folderEdit}
@@ -458,11 +498,16 @@ function NoteEditor({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(!id);
-  const [mode, setMode] = useState('split');
+  const [mode, setMode] = useState(() =>
+    matchMedia('(min-width: 1024px)').matches ? 'split' : 'edit',
+  );
+  const [exporting, setExporting] = useState(false);
   const text = useRef<HTMLTextAreaElement>(null);
   const preview = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!id) return;
+    if (!id || note.id === id) return;
+    setLoaded(false);
+    setError('');
     const c = new AbortController();
     void api<Note>(`/notes/${id}`, 'GET', undefined, c.signal)
       .then((n) => {
@@ -477,32 +522,30 @@ function NoteEditor({
   }, [id]);
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (dirty) {
+      if (dirty || busy) {
         e.preventDefault();
       }
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [dirty, busy]);
   const update = <K extends keyof Note>(key: K, value: Note[K]) => {
     setNote((n) => ({ ...n, [key]: value }));
     setDirty(true);
   };
   const close = () => {
-    if (
-      !busy &&
-      (!dirty ||
-        confirm(
-          'Hay cambios sin guardar. Puedes exportar un borrador antes de cerrar. ¿Cerrar la nota?',
-        ))
-    )
-      onClose();
+    if (!busy && !exporting) onClose();
   };
   async function save() {
     setBusy(true);
     setError('');
     try {
-      const n = await api<Note>(id ? `/notes/${id}` : '/notes', id ? 'PUT' : 'POST', note);
+      const noteId = note.id || id;
+      const n = await api<Note>(
+        noteId ? `/notes/${noteId}` : '/notes',
+        noteId ? 'PUT' : 'POST',
+        note,
+      );
       setNote(n);
       setDirty(false);
       await onSaved(n);
@@ -515,6 +558,7 @@ function NoteEditor({
   function insert(before: string, after = '') {
     const el = text.current;
     if (!el) return;
+    if (mode === 'preview') setMode('edit');
     const start = el.selectionStart,
       end = el.selectionEnd;
     const value = note.markdown || '';
@@ -527,23 +571,33 @@ function NoteEditor({
       el.setSelectionRange(start + before.length, end + before.length);
     });
   }
-  function exportNote(html = false) {
-    if (html) {
-      const safeTitle = (note.title || 'Nota').replace(
-        /[&<>"']/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
-      );
-      download(
-        `${safeName(note.title || 'Nota')}.html`,
-        `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${safeTitle}</title><style>${exportCss}</style><body class="font-${note.font}"><h1>${safeTitle}</h1>${preview.current?.innerHTML || ''}</body></html>`,
-        'text/html',
-      );
-    } else
-      download(
-        `${safeName(note.title || 'Nota')}.md`,
-        markdownFile(note as Note),
-        'text/markdown;charset=utf-8',
-      );
+  async function exportNote(html = false) {
+    setExporting(true);
+    setError('');
+    try {
+      if (html) {
+        await waitForDiagrams(preview.current);
+        const fonts = await exportFontCss();
+        const safeTitle = (note.title || 'Nota').replace(
+          /[&<>"']/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+        );
+        download(
+          `${safeName(note.title || 'Nota')}.html`,
+          `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${safeTitle}</title><style>${exportCss}${fonts}.mermaid-diagram{margin:24px 0;overflow:auto}.mermaid-svg svg{max-width:100%;height:auto}.mermaid-error{color:#b74532}</style><body class="font-${note.font}"><h1>${safeTitle}</h1>${preview.current?.innerHTML || ''}</body></html>`,
+          'text/html',
+        );
+      } else
+        download(
+          `${safeName(note.title || 'Nota')}.md`,
+          markdownFile(note as Note),
+          'text/markdown;charset=utf-8',
+        );
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setExporting(false);
+    }
   }
   async function convert() {
     if (!id || !note.projectId) {
@@ -560,7 +614,7 @@ function NoteEditor({
         projectId: note.projectId,
         version: note.version,
       });
-      onClose();
+      setNote(await api<Note>(`/notes/${id}`));
       openTask(r.id);
     } catch (e) {
       setError(errorMessage(e));
@@ -569,28 +623,73 @@ function NoteEditor({
     }
   }
   return (
-    <Modal title={id ? 'Editar nota' : 'Nueva nota'} onClose={close} wide>
-      <div className="modal-body note-editor" data-unsaved-note={dirty || busy}>
-        <ErrorBox message={error} />
-        {!loaded ? (
-          <p>Cargando nota…</p>
-        ) : (
-          <>
-            <form
-              onSubmit={(e) => {
+    <section
+      className="note-editor-page note-editor"
+      data-unsaved-note={dirty || busy}
+      data-update-blocked={dirty || busy || exporting}
+    >
+      <header className="note-editor-header">
+        <button
+          className="btn-icon"
+          aria-label="Volver a notas"
+          title="Volver a notas"
+          onClick={close}
+          disabled={busy || exporting}
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div className="note-editor-context">
+          <h1>{note.id || id ? 'Editar nota' : 'Nueva nota'}</h1>
+          <span role="status">
+            {busy
+              ? 'Guardando…'
+              : dirty
+                ? 'Cambios sin guardar'
+                : note.id
+                  ? 'Guardado'
+                  : 'Borrador nuevo'}
+          </span>
+        </div>
+        <button
+          type="submit"
+          form="note-form"
+          className="btn btn-primary"
+          disabled={!loaded || busy || exporting}
+        >
+          <Save size={16} />
+          Guardar nota
+        </button>
+      </header>
+      <ErrorBox message={error} />
+      {!loaded ? (
+        <p>Cargando nota…</p>
+      ) : (
+        <>
+          <form
+            id="note-form"
+            inert={busy || exporting}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
                 e.preventDefault();
-                void save();
-              }}
-            >
-              <Field label="Título de nota">
-                <input
-                  required
-                  maxLength={200}
-                  value={note.title}
-                  onChange={(e) => update('title', e.target.value)}
-                  placeholder="Una idea, una guía o algo que recordar"
-                />
-              </Field>
+                if (!busy && !exporting) e.currentTarget.requestSubmit();
+              }
+            }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <Field label="Título de nota">
+              <input
+                required
+                maxLength={200}
+                value={note.title}
+                onChange={(e) => update('title', e.target.value)}
+                placeholder="Una idea, una guía o algo que recordar"
+              />
+            </Field>
+            <details className="note-details">
+              <summary>Propiedades, plantillas y exportación</summary>
               <div className="note-properties">
                 <Field label="Carpeta de nota">
                   <select
@@ -620,9 +719,11 @@ function NoteEditor({
                 </Field>
                 <Field label="Tipografía">
                   <select value={note.font} onChange={(e) => update('font', e.target.value)}>
-                    <option value="sans">Inter · moderna</option>
-                    <option value="serif">Serif · lectura</option>
-                    <option value="mono">Mono · código</option>
+                    {noteFonts.map((font) => (
+                      <option value={font.id} key={font.id}>
+                        {font.name}
+                      </option>
+                    ))}
                   </select>
                 </Field>
                 <Field label="Color de nota">
@@ -667,10 +768,81 @@ function NoteEditor({
                   <option value="idea">Idea / pendiente</option>
                 </select>
               </div>
+              <div className="note-export-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={exporting || busy}
+                  onClick={() => void exportNote()}
+                >
+                  <Download size={15} />
+                  Markdown
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={exporting || busy}
+                  onClick={() => void exportNote(true)}
+                >
+                  HTML
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={exporting || busy}
+                  onClick={async () => {
+                    setExporting(true);
+                    setError('');
+                    try {
+                      await waitForDiagrams(preview.current);
+                      await document.fonts.ready;
+                      window.print();
+                    } catch (e) {
+                      setError(errorMessage(e));
+                    } finally {
+                      setExporting(false);
+                    }
+                  }}
+                >
+                  Imprimir / PDF
+                </button>
+                {canTasks && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={busy || !id}
+                    onClick={() =>
+                      note.linkedTaskId ? openTask(note.linkedTaskId) : void convert()
+                    }
+                  >
+                    {note.linkedTaskId ? 'Abrir pendiente' : 'Crear pendiente desde nota'}
+                  </button>
+                )}
+              </div>
+            </details>
+            <div className="note-tools">
               <div className="markdown-toolbar" aria-label="Formato Markdown">
+                <select
+                  aria-label="Insertar diagrama Mermaid"
+                  value=""
+                  onChange={(e) => {
+                    const diagram = noteDiagrams.find((d) => d.id === e.target.value);
+                    if (diagram) insert(`\n\n\`\`\`mermaid\n${diagram.source}\n\`\`\`\n`);
+                  }}
+                >
+                  <option value="">Diagramas y gráficos…</option>
+                  {noteDiagrams.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
                 {[
                   { name: 'Negrita', icon: Bold, a: '**', b: '**' },
                   { name: 'Cursiva', icon: Italic, a: '_', b: '_' },
+                  { name: 'Tachado', icon: Strikethrough, a: '~~', b: '~~' },
+                  { name: 'Enlace', icon: Link2, a: '[', b: '](https://)' },
+                  { name: 'Lista numerada', icon: ListOrdered, a: '\n1. ', b: '' },
                   { name: 'Título', icon: FileText, a: '\n## ', b: '' },
                   { name: 'Código inline', icon: Code2, a: '`', b: '`' },
                   { name: 'Bloque de código', icon: Code2, a: '\n```javascript\n', b: '\n```\n' },
@@ -710,24 +882,21 @@ function NoteEditor({
                     'ink-red',
                     'ink-orange',
                     'mark-highlight',
-                    'font-serif',
-                    'font-mono',
+                    ...noteFonts.map((font) => `font-${font.id}`),
                   ].map((x) => (
                     <option key={x} value={x}>
-                      {
-                        (
-                          {
-                            'ink-purple': 'Violeta',
-                            'ink-blue': 'Azul',
-                            'ink-green': 'Verde',
-                            'ink-red': 'Coral',
-                            'ink-orange': 'Ámbar',
-                            'mark-highlight': 'Resaltado',
-                            'font-serif': 'Serif',
-                            'font-mono': 'Monoespaciado',
-                          } as Record<string, string>
-                        )[x]
-                      }
+                      {(
+                        {
+                          'ink-purple': 'Violeta',
+                          'ink-blue': 'Azul',
+                          'ink-green': 'Verde',
+                          'ink-red': 'Coral',
+                          'ink-orange': 'Ámbar',
+                          'mark-highlight': 'Resaltado',
+                          'font-serif': 'Serif',
+                          'font-mono': 'Monoespaciado',
+                        } as Record<string, string>
+                      )[x] || noteFonts.find((font) => `font-${font.id}` === x)?.name}
                     </option>
                   ))}
                 </select>
@@ -738,97 +907,55 @@ function NoteEditor({
                   Callout
                 </button>
               </div>
-              <div className="tabs note-view-tabs">
+              <div className="tabs note-view-tabs" aria-label="Vista de la nota">
                 {['edit', 'split', 'preview'].map((v) => (
                   <button
                     type="button"
                     key={v}
                     className={mode === v ? 'active' : ''}
+                    aria-pressed={mode === v}
                     onClick={() => setMode(v)}
                   >
                     {v === 'edit' ? 'Editar' : v === 'split' ? 'Dividida' : 'Vista previa'}
                   </button>
                 ))}
               </div>
-              <div className={`markdown-panels mode-${mode}`}>
-                <textarea
-                  ref={text}
-                  aria-label="Contenido Markdown"
-                  className="markdown-source"
-                  spellCheck={false}
-                  maxLength={200000}
-                  value={note.markdown}
-                  onChange={(e) => update('markdown', e.target.value)}
-                  placeholder="# Escribe algo que valga la pena recordar…"
-                />
-                <article ref={preview} className={`markdown-preview font-${note.font} note-print`}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw, [rehypeSanitize, schema], rehypeHighlight]}
-                    components={{
-                      a: ({ children, href }) => (
-                        <a href={href} target="_blank" rel="noopener noreferrer">
-                          {children}
-                        </a>
-                      ),
-                      img: ({ alt }) => (
-                        <span className="image-placeholder">
-                          Imagen: {alt || 'referencia externa'}
-                        </span>
-                      ),
-                    }}
-                  >
-                    {note.markdown || '*Tu vista previa aparecerá aquí.*'}
-                  </ReactMarkdown>
-                </article>
-              </div>
-              <div className="form-actions">
-                <span className="muted small">
-                  {dirty ? 'Cambios sin guardar' : 'Guardado'} · {note.markdown?.length || 0}{' '}
-                  caracteres
-                </span>
-                <button className="btn btn-primary" disabled={busy}>
-                  <Save size={16} />
-                  {busy ? 'Guardando…' : 'Guardar nota'}
-                </button>
-              </div>
-            </form>
-            <div className="note-export-actions">
-              <button className="btn btn-ghost" onClick={() => exportNote()}>
-                <Download size={15} />
-                Markdown
-              </button>
-              <button className="btn btn-ghost" onClick={() => exportNote(true)}>
-                HTML
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => {
-                  setMode('preview');
-                  requestAnimationFrame(() => window.print());
-                }}
-              >
-                Imprimir / PDF
-              </button>
-              {canTasks && (
-                <button
-                  className="btn btn-ghost"
-                  disabled={busy || !id}
-                  onClick={() =>
-                    note.linkedTaskId ? (onClose(), openTask(note.linkedTaskId)) : void convert()
-                  }
-                >
-                  {note.linkedTaskId ? 'Abrir pendiente' : 'Crear pendiente desde nota'}
-                </button>
-              )}
             </div>
-            <p className="small muted">
-              Markdown estándar, tablas GFM y estilos portables. La vista previa filtra HTML activo
-              y no carga imágenes externas.
+            <div className={`markdown-panels mode-${mode}`}>
+              <textarea
+                ref={text}
+                aria-label="Contenido Markdown"
+                className={`markdown-source font-${note.font}`}
+                spellCheck={false}
+                maxLength={200000}
+                value={note.markdown}
+                onChange={(e) => update('markdown', e.target.value)}
+                placeholder="# Escribe algo que valga la pena recordar…"
+              />
+              <article ref={preview} className={`markdown-preview font-${note.font} note-print`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[
+                    rehypeRaw,
+                    [rehypeSanitize, schema],
+                    [rehypeHighlight, { plainText: ['mermaid'] }],
+                  ]}
+                  components={markdownComponents}
+                >
+                  {note.markdown || '*Tu vista previa aparecerá aquí.*'}
+                </ReactMarkdown>
+              </article>
+            </div>
+            <p className="note-word-count muted small">
+              {note.markdown?.length || 0} / 200 000 caracteres · Ctrl / ⌘ + S para guardar
             </p>
-          </>
-        )}
-      </div>
-    </Modal>
+          </form>
+          <p className="small muted">
+            Markdown, tablas, estilos y diagramas Mermaid. Fuentes y diagramas se procesan
+            localmente.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
