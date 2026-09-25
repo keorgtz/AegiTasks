@@ -100,6 +100,8 @@ public class FocusProfile
     public int LongBreakMinutes { get; set; } = 15;
     public int Cycles { get; set; } = 4;
     public string Theme { get; set; } = "aurora";
+    public string AccentColor { get; set; } = "#A78BFA";
+    public string ParticleShape { get; set; } = "mixed";
     public bool Animated { get; set; } = true;
     public bool Sound { get; set; }
 }

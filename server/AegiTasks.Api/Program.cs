@@ -130,6 +130,12 @@ if (!app.Environment.IsEnvironment("Testing"))
             await using (var columns = await command.ExecuteReaderAsync())
                 while (await columns.ReadAsync()) hasLabels |= columns.GetString(1) == "Labels";
             if (!hasLabels) await db.Database.ExecuteSqlRawAsync("ALTER TABLE Projects ADD COLUMN Labels TEXT NOT NULL DEFAULT ''");
+            command.CommandText = "PRAGMA table_info('FocusProfiles')";
+            var focusColumns = new HashSet<string>();
+            await using (var columns = await command.ExecuteReaderAsync())
+                while (await columns.ReadAsync()) focusColumns.Add(columns.GetString(1));
+            if (!focusColumns.Contains("AccentColor")) await db.Database.ExecuteSqlRawAsync("ALTER TABLE FocusProfiles ADD COLUMN AccentColor TEXT NOT NULL DEFAULT '#A78BFA'");
+            if (!focusColumns.Contains("ParticleShape")) await db.Database.ExecuteSqlRawAsync("ALTER TABLE FocusProfiles ADD COLUMN ParticleShape TEXT NOT NULL DEFAULT 'mixed'");
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }

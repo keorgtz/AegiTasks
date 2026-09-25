@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   Coffee,
   Maximize2,
@@ -15,6 +15,10 @@ import { useChanges } from './changes';
 import { ErrorBox, Field } from './components';
 import { FocusTaskDialog } from './FocusTaskDialog';
 import { FocusTaskSummary } from './FocusTaskSummary';
+import { FocusBackdrop, SpectrumRing } from './FocusVisuals';
+import { FocusAudioControls } from './FocusAudioControls';
+import { useFocusAudio } from './useFocusAudio';
+import { focusThemes, particleShapes, hasCustomVisual } from './focusThemes';
 import type { Space, TaskItem, Workspace } from './types';
 interface Profile {
   focusMinutes: number;
@@ -22,6 +26,8 @@ interface Profile {
   longBreakMinutes: number;
   cycles: number;
   theme: string;
+  accentColor: string;
+  particleShape: string;
   animated: boolean;
   sound: boolean;
 }
@@ -54,6 +60,8 @@ const defaults: Profile = {
   longBreakMinutes: 15,
   cycles: 4,
   theme: 'aurora',
+  accentColor: '#A78BFA',
+  particleShape: 'mixed',
   animated: true,
   sound: false,
 };
@@ -70,6 +78,7 @@ export function FocusPage({
 }) {
   const [profile, setProfile] = useState<Profile>(defaults);
   const [savedProfile, setSavedProfile] = useState<Profile>(defaults);
+  const focusAudio = useFocusAudio(profile.theme === 'geometry');
   const [session, setSession] = useState<Session | null>(null);
   const [history, setHistory] = useState<Session[]>([]);
   const [goal, setGoal] = useState('');
@@ -306,32 +315,46 @@ export function FocusPage({
       <div
         data-update-blocked={
           busy ||
+          !!focusAudio.source ||
+          focusAudio.pending ||
           !!changingTask ||
           immersive ||
           JSON.stringify(profile) !== JSON.stringify(savedProfile) ||
           (!session && (!!goal || selected.length > 0))
         }
         className={`focus-stage focus-${profile.theme} ${profile.animated ? 'is-animated' : ''} ${immersive ? 'is-immersive' : ''}`}
+        style={{ '--focus-accent': profile.accentColor } as CSSProperties}
       >
         <div className="focus-art" aria-hidden="true">
-          <div className="orb orb-one" />
-          <div className="orb orb-two" />
-          <div className="orb orb-three" />
-          <svg className="focus-waves" viewBox="0 0 1200 300" preserveAspectRatio="none">
-            <path d="M0 120 Q200 10 400 120 T800 120 T1200 120 V300 H0Z" />
-            <path d="M0 180 Q200 70 400 180 T800 180 T1200 180 V300 H0Z" />
-          </svg>
-          <div className="terminal-art">
-            const focus = true;
-            <br />
-            while (focus) {'{'}
-            <br />
-            &nbsp; await oneSmallStep();
-            <br />
-            {'}'}
-            <br />
-            // progress, not perfection
-          </div>
+          {hasCustomVisual(profile.theme) ? (
+            <FocusBackdrop
+              theme={profile.theme}
+              color={profile.accentColor}
+              shape={profile.particleShape}
+              animated={profile.animated}
+            />
+          ) : (
+            <>
+              <div className="orb orb-one" />
+              <div className="orb orb-two" />
+              <div className="orb orb-three" />
+              <svg className="focus-waves" viewBox="0 0 1200 300" preserveAspectRatio="none">
+                <path d="M0 120 Q200 10 400 120 T800 120 T1200 120 V300 H0Z" />
+                <path d="M0 180 Q200 70 400 180 T800 180 T1200 180 V300 H0Z" />
+              </svg>
+              <div className="terminal-art">
+                const focus = true;
+                <br />
+                while (focus) {'{'}
+                <br />
+                &nbsp; await oneSmallStep();
+                <br />
+                {'}'}
+                <br />
+                // progress, not perfection
+              </div>
+            </>
+          )}
         </div>
         <div className="focus-topline">
           <span>
@@ -360,6 +383,13 @@ export function FocusPage({
                   : 'Un descanso merecido.'}
           </div>
           <div className="focus-dial">
+            {profile.theme === 'geometry' && (
+              <SpectrumRing
+                analyser={focusAudio.analyser}
+                color={profile.accentColor}
+                animated={profile.animated}
+              />
+            )}
             <svg viewBox="0 0 300 300" aria-hidden="true">
               <circle cx="150" cy="150" r="137" />
               <circle
@@ -454,6 +484,9 @@ export function FocusPage({
                 : 'El ruido puede esperar. Este momento es tuyo.'}
           </p>
         </div>
+        {profile.theme === 'geometry' && (
+          <FocusAudioControls audio={focusAudio} animated={profile.animated} />
+        )}
         {session?.goal && (
           <div className="focus-goals">
             {session.goal.split('\n').map(
@@ -518,11 +551,43 @@ export function FocusPage({
               value={profile.theme}
               onChange={(e) => setProfile((p) => ({ ...p, theme: e.target.value }))}
             >
-              <option value="aurora">Aurora · formas suaves</option>
-              <option value="waves">Waves · ondas de calma</option>
-              <option value="terminal">Terminal · coding flow</option>
+              {focusThemes.map((theme) => (
+                <option value={theme.id} key={theme.id}>
+                  {theme.name}
+                </option>
+              ))}
             </select>
           </Field>
+          {hasCustomVisual(profile.theme) && (
+            <div className="form-grid focus-visual-options">
+              <Field
+                label="Color del ambiente"
+                hint="Se aplica a las partículas, luces y al espectro."
+              >
+                <input
+                  type="color"
+                  value={profile.accentColor}
+                  onChange={(e) =>
+                    setProfile((p) => ({ ...p, accentColor: e.target.value.toUpperCase() }))
+                  }
+                />
+              </Field>
+              {profile.theme === 'geometry' && (
+                <Field label="Forma de las partículas">
+                  <select
+                    value={profile.particleShape}
+                    onChange={(e) => setProfile((p) => ({ ...p, particleShape: e.target.value }))}
+                  >
+                    {particleShapes.map((shape) => (
+                      <option value={shape.id} key={shape.id}>
+                        {shape.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+            </div>
+          )}
           <label className="checkbox-field">
             <input
               type="checkbox"

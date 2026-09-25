@@ -114,6 +114,29 @@ try {
     path.join(artifact, 'migration-labels.sql'),
   ]);
   sql('legacy', await readFile(path.join(artifact, 'migration-labels.sql'), 'utf8'));
+  sql(
+    'legacy',
+    `INSERT INTO "FocusProfiles" ("UserId", "FocusMinutes", "ShortBreakMinutes", "LongBreakMinutes", "Cycles", "Theme", "Animated", "Sound") VALUES ('20000000-0000-4000-8000-000000000001', 45, 7, 20, 3, 'waves', false, true);`,
+  );
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'ProjectLabels',
+    'FocusVisuals',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-focus-visuals.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-focus-visuals.sql'), 'utf8'));
+  assert.equal(
+    sql(
+      'legacy',
+      `SELECT "Theme" || ':' || "FocusMinutes" || ':' || "AccentColor" || ':' || "ParticleShape" FROM "FocusProfiles";`,
+    ).trim(),
+    'waves:45:#A78BFA:mixed',
+  );
   assert.equal(sql('legacy', 'SELECT count(*) FROM "Projects" WHERE "Labels" = \'\';').trim(), '1');
   assert.equal(sql('legacy', 'SELECT "Name" FROM "Statuses";').trim(), 'Open');
   assert.equal(sql('legacy', 'SELECT count(*) FROM "Spaces" WHERE "IsPersonal";').trim(), '2');
@@ -152,6 +175,7 @@ try {
         personalSpaces: 2,
         retainedMemberships: 2,
         retainedCustomTags: true,
+        retainedFocusPreferences: true,
         testedAt: new Date().toISOString(),
       },
       null,

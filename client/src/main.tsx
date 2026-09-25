@@ -8,6 +8,7 @@ import '@fontsource/inter/latin-800.css';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/features.css';
+import './styles/focus-visuals.css';
 import App from './App';
 import { startAppUpdates } from './pwaUpdates';
 

@@ -1,0 +1,98 @@
+.focus-backdrop-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.focus-spectrum {
+  position: absolute;
+  inset: -9%;
+  width: 118%;
+  height: 118%;
+  pointer-events: none;
+}
+.focus-geometry .focus-dial {
+  margin-top: 20px;
+  margin-bottom: 32px;
+}
+.focus-stage:has(.focus-backdrop-canvas) .focus-digits {
+  border-radius: 50%;
+  background: radial-gradient(circle, #0d1020b8, #0d102000 72%);
+}
+.focus-visual-options input[type='color'] {
+  width: 100%;
+  height: 48px;
+  padding: 6px;
+  cursor: pointer;
+}
+.focus-audio-panel {
+  position: relative;
+  margin: 0 auto 24px;
+  max-width: 740px;
+  width: 100%;
+  background: #0d1020c9;
+  border: 1px solid #ffffff26;
+  border-radius: var(--radius-md);
+  padding: 20px;
+  color: #eeeafa;
+}
+.focus-audio-heading,
+.focus-audio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.focus-audio-heading {
+  font-size: 14px;
+}
+.focus-audio-panel > p {
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.focus-audio-panel .focus-audio-state {
+  color: #cbbdff;
+  overflow-wrap: anywhere;
+}
+.focus-audio-actions {
+  margin-top: 16px;
+}
+.focus-audio-actions .btn {
+  white-space: normal;
+}
+.focus-audio-help {
+  font-size: 12px;
+  color: #bab7ca;
+}
+.focus-audio-panel .focus-audio-error {
+  font-size: 13px;
+  color: #ffc2b8;
+}
+.focus-audio-panel audio {
+  width: 100%;
+  margin: 4px 0 12px;
+  color-scheme: dark;
+}
+.focus-audio-reduced {
+  display: none;
+}
+.focus-audio-panel > p:last-child {
+  margin-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-audio-reduced {
+    display: block;
+  }
+}
+@media (max-width: 600px) {
+  .focus-audio-panel {
+    padding: 16px;
+  }
+  .focus-audio-actions .btn {
+    flex: 1 1 100%;
+  }
+  .focus-stage.focus-geometry.is-immersive .focus-dial {
+    width: min(260px, 72vw);
+    height: min(260px, 72vw);
+  }
+}

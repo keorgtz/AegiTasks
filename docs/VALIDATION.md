@@ -1,6 +1,6 @@
 # Evidencia de validación
 
-Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML y shell documentadas abajo corresponden al 23 de septiembre.
+Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML y shell documentadas abajo corresponden al 23 de septiembre.
 
 ## Ejecutado correctamente
 
@@ -12,9 +12,9 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **67 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **71 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**, más una comprobación opcional de migración del worker anterior |
-| `node client/scripts/postgres-tests.mjs`                                        | **67 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `node client/scripts/postgres-tests.mjs`                                        | **71 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -23,6 +23,20 @@ Actualización funcional: 24 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Ambientes visuales y espectro circular (25 de septiembre)
+
+Se agregaron Luciérnagas, Brisa auroral, Constelaciones, Lluvia de código y Geometría sonora, además de los tres ambientes existentes. Color y formas se guardan por usuario. La API valida los valores y conserva los nuevos campos cuando un cliente anterior no los envía.
+
+Cuatro verificaciones integradas cubren los nuevos perfiles, persistencia, los ocho ambientes, tamaños 320/390/1366 px, temas claro/oscuro, vista ampliada, preferencia de movimiento reducido, desactivación de animaciones y suspensión del dibujo en pestañas ocultas. Se revisaron las capturas `artifacts/focus-new-*.png`, `focus-geometry-*.png` y `focus-spectrum-active.png`.
+
+Las pruebas de audio usan un grafo Web Audio real con análisis FFT: tonos generados se suministran como MediaStream para simular la adquisición desde el selector o micrófono; también se reproducen archivos WAV locales reales. Se comprueban permisos rechazados, fuente sin pista de audio, desconexión, cancelación con permiso todavía pendiente, liberación al cambiar de ambiente o salir de Focus, reemplazo de archivos sin reutilizar incorrectamente el nodo de audio, espectro estático en silencio, ausencia de subidas y alternativas cuando no existe captura. El selector del sistema y los dispositivos físicos están simulados: no se afirma validación manual de audio interno en Windows, Android ni iOS.
+
+La actualización SQLite se ejecutó dos veces sobre una copia con el esquema anterior: conservó 3 usuarios, 60 pendientes, 2 notas, 2 sesiones y 2 perfiles de Focus, incluidas sus duraciones, tema, animaciones y sonido. Evidencia: `artifacts/focus-sqlite-upgrade-results.json`. La prueba PostgreSQL aplica `FocusVisuals` sobre un perfil anterior y verifica que conserva su tema y duración, incorporando el color y la forma iniciales.
+
+Una ejecución intermedia se interrumpió porque el preview local dejó de aceptar conexiones antes de las pruebas nuevas (`ERR_CONNECTION_RESET` / `ERR_CONNECTION_REFUSED`); se conservaron `artifacts/visuals-preview-failure.log` y su captura. No se añadieron reintentos de escrituras ni se cambió la configuración de producción para ocultarlo.
+
+Resultado final: 71 verificaciones aprobadas en SQLite y PostgreSQL 18.4, build de cliente/API y lint correctos. Modelo y migraciones coinciden. La captura real de audio del sistema y los permisos en equipos físicos siguen pendientes de aceptación en esos dispositivos; el análisis de audio y la liberación de recursos sí se probaron en Chromium.
 
 ### Diálogo de pendientes en Focus
 
@@ -69,7 +83,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite de 67 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite de 71 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.

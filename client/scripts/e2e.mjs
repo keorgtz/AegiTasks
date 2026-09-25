@@ -2,6 +2,7 @@ import { chromium, request } from 'playwright';
 import { testSpaces, testExpansionUi } from './expansion-tests.mjs';
 import { testWorkflow } from './workflow-tests.mjs';
 import { testAssignments } from './assignment-tests.mjs';
+import { testFocusVisuals } from './focus-visual-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -513,6 +514,7 @@ try {
     pass,
     artifacts,
   });
+  await testFocusVisuals({ page, context, admin, support, json, pass, artifacts });
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));
   let clockSession = await json(support, 'POST', `/focus/${spaceTests.clockSession.id}/action`, {
