@@ -12,9 +12,9 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **79 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **82 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**; migración opcional del worker anterior documentada en la validación previa |
-| `node client/scripts/postgres-tests.mjs`                                        | **79 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 |
+| `node client/scripts/postgres-tests.mjs`                                        | **79 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 (validación previa del editor de notas) |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -23,6 +23,14 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Detalle del pendiente en pestañas (25 de septiembre)
+
+Esta iteración modifica solo el cliente. Se repitieron typecheck, lint, build de producción y la suite SQLite completa, ahora con 82 verificaciones. Los resultados de PostgreSQL y PWA de la tabla corresponden a la validación previa del editor de notas; no se repitieron para este cambio de presentación.
+
+Tres grupos nuevos comprueban las pestañas Detalle general, Evidencias y Conversación y actividad. El diálogo abre en Detalle general, solo un panel queda visible/accesible y las flechas/Home/End cambian de pestaña. Las ediciones y comentarios sin publicar se conservan entre secciones; cancelar el cierre protege ambos borradores. La carga de una imagen real y la publicación de comentarios se prueban desde sus pestañas, sin perder los campos generales.
+
+Las tres vistas se comprueban a 1440×1080, 390×844, 320×600 y 844×390, en claro y oscuro. El diálogo cabe en la ventana sin desbordamiento horizontal y las pestañas tienen al menos 44 px de alto, permanecen visibles al desplazar el contenido y reinician el desplazamiento al cambiar de sección. Se revisaron las capturas `artifacts/task-tabs-1440-Evidencias-light.png`, `task-tabs-320-Conversación-light.png` y `task-tabs-390-Detalle-dark.png`. Validación en Chromium, sin dispositivos físicos.
 
 ### Editor de notas como página y Mermaid (25 de septiembre)
 
@@ -99,7 +107,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite de 79 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium. Se prueba sobre SQLite temporal y PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite actual de 82 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium sobre SQLite temporal. La ejecución previa de 79 verificaciones también pasó sobre PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.

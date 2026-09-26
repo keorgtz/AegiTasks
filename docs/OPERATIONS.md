@@ -137,3 +137,10 @@ El espectro utiliza Web Audio y frecuencias reales. Sin señal permanece en repo
 Los fondos limitan partículas, resolución y frecuencia de dibujo; dejan de dibujarse con la pestaña oculta. Desactivar animaciones o activar movimiento reducido deja una composición estática, incluido el espectro, sin modificar el timer. El audio conectado bloquea la recarga automática de la PWA hasta desconectarlo.
 
 Las carpetas de notas se archivan indirectamente conservando sus notas; para eliminar una carpeta primero hay que mover sus notas y subcarpetas. Los espacios y las notas no se eliminan de forma destructiva desde la interfaz. Las notas pueden archivarse y restaurarse.
+
+
+## Pestañas del detalle de pendientes
+
+Al abrir un pendiente existente se muestra «Detalle general», con los campos de edición, guardar, archivar/restaurar y eliminar. «Evidencias» reúne los adjuntos y su carga. «Conversación y actividad» contiene el historial y el formulario de comentarios. El reporte nuevo conserva su formulario simple; las pestañas aparecen después de crearlo.
+
+Cambiar de pestaña conserva los campos y comentarios sin publicar y no guarda automáticamente. Cerrar con cambios pendientes sigue solicitando confirmación. Los errores y avisos de cambios externos son comunes a las tres secciones. La cabecera y las pestañas permanecen visibles; solo se desplaza el contenido. Las flechas izquierda/derecha cambian de pestaña, Home/End seleccionan la primera/última y Tab entra al panel activo. No hay cambios de API ni migraciones de base de datos.

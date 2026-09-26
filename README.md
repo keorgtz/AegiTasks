@@ -16,7 +16,7 @@ Espacios personales y compartidos para organizar pendientes, documentar conocimi
 - **Reporte simple:** solo título y proyecto obligatorios. El estado inicial se asigna automáticamente. Descripción, etiquetas, responsable, prioridad, fecha límite y estimación en minutos son opcionales.
 - **Estados de pendientes personalizables:** cada proyecto define el recorrido de sus pendientes mediante nombre, color, orden y si cuenta como resuelto. Los proyectos nuevos incluyen Pendiente, Por iniciar, En progreso, Resuelto y Resuelto y revisado. Los estados de proyectos existentes se conservan.
 - **Etiquetas del equipo:** BUG, ADD y FIX iniciales; crea y modifica las que necesites.
-- **Conversación y evidencias:** comentarios, historial de cambios de estado y adjuntos PNG/JPG/WebP/PDF de hasta 10 MB, máximo 20 por pendiente.
+- **Detalle del pendiente:** pestañas de Detalle general, Evidencias y Conversación y actividad. Conserva las ediciones y comentarios al cambiar de sección; las pestañas permanecen visibles mientras el contenido se desplaza. Comentarios, historial de cambios de estado y adjuntos PNG/JPG/WebP/PDF de hasta 10 MB, máximo 20 por pendiente.
 - **Usuarios y roles:** Admin, User y roles personalizados. Solo Admin crea/gestiona cuentas y roles desde **Usuarios y roles**. Los roles nuevos tienen todas las páginas operativas habilitadas por defecto; el administrador puede restringirlas. Sin registro público ni correo saliente.
 - **Archivo reversible:** conserva pendientes e historial. Los proyectos archivados se restauran desde Ajustes → Organización.
 - **Cambios simultáneos:** un pendiente modificado por otra persona rechaza una edición antigua con un mensaje para recargar; no sobrescribe silenciosamente.

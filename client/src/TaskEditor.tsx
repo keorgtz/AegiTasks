@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import {
   Archive,
   ArrowUpRight,
   CalendarDays,
   Clock3,
+  FileText,
   MessageSquare,
   Paperclip,
   Send,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { api, errorMessage, getActiveSpace } from './api';
 import { useChanges } from './changes';
+import './styles/task-editor.css';
 import { Badge, ErrorBox, Field, Modal } from './components';
 import {
   dateLabel,
@@ -20,6 +22,13 @@ import {
   type User,
   type Workspace,
 } from './types';
+
+const detailTabs = [
+  { id: 'general', label: 'Detalle general', icon: FileText },
+  { id: 'evidence', label: 'Evidencias', icon: Paperclip },
+  { id: 'activity', label: 'Conversación y actividad', icon: MessageSquare },
+] as const;
+type DetailTab = (typeof detailTabs)[number]['id'];
 
 type Draft = {
   title: string;
@@ -54,6 +63,13 @@ export function TaskEditor({
   onDeleted: () => void;
   notify: (text: string) => void;
 }) {
+  const [activeTab, setActiveTab] = useState<DetailTab>('general');
+  const tabsId = useId();
+  const body = useRef<HTMLDivElement>(null);
+  const selectTab = (tab: DetailTab) => {
+    setActiveTab(tab);
+    body.current?.scrollTo({ top: 0 });
+  };
   const draftKey = `aegitasks-draft-${user.id}-${getActiveSpace()}`;
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [draft, setDraft] = useState<Draft>(() => {
@@ -255,7 +271,44 @@ export function TaskEditor({
   }
   return (
     <Modal title={id ? 'Detalle del pendiente' : '¿Qué encontraste?'} onClose={close} wide>
-      <div className="modal-body">
+      {id && (
+        <div className="tabs task-detail-tabs" role="tablist" aria-label="Secciones del pendiente">
+          {detailTabs.map((tab, index) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`${tabsId}-${tab.id}-tab`}
+              aria-controls={`${tabsId}-${tab.id}-panel`}
+              aria-selected={activeTab === tab.id}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              className={activeTab === tab.id ? 'active' : ''}
+              onClick={() => selectTab(tab.id)}
+              onKeyDown={(e) => {
+                const next =
+                  e.key === 'ArrowRight'
+                    ? (index + 1) % detailTabs.length
+                    : e.key === 'ArrowLeft'
+                      ? (index + detailTabs.length - 1) % detailTabs.length
+                      : e.key === 'Home'
+                        ? 0
+                        : e.key === 'End'
+                          ? detailTabs.length - 1
+                          : null;
+                if (next === null) return;
+                e.preventDefault();
+                const nextTab = detailTabs[next]!;
+                selectTab(nextTab.id);
+                document.getElementById(`${tabsId}-${nextTab.id}-tab`)?.focus();
+              }}
+            >
+              <tab.icon size={16} aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className={`modal-body ${id ? 'task-detail-body' : ''}`} ref={body}>
         <ErrorBox message={error} />
         {remoteChange && (
           <p className="small" role="status">
@@ -276,195 +329,232 @@ export function TaskEditor({
                 Cuéntalo con tus palabras. No necesitas saber cómo resolverlo.
               </p>
             )}
-            {detail && (
-              <div className="detail-meta">
-                <Badge color="purple">#{detail.item.id.slice(0, 8).toUpperCase()}</Badge>
-                <span>
-                  Creado por {w.users.find((u) => u.id === detail.item.createdById)?.name} ·{' '}
-                  {dateLabel(detail.item.createdAt)}
-                </span>
-                {detail.item.archived && <Badge>Archivado</Badge>}
-              </div>
-            )}
-            <form onSubmit={save}>
-              <fieldset disabled={busy}>
-                <Field label="Proyecto">
-                  <select
-                    required
-                    value={draft.projectId}
-                    onChange={(e) => {
-                      const p = e.target.value;
-                      setDraft((d) => ({
-                        ...d,
-                        projectId: p,
-                        folderId: '',
-                        statusId: w.statuses.find((s) => s.projectId === p && !s.isDone)?.id || '',
-                      }));
-                      setDirty(true);
-                    }}
-                  >
-                    <option value="" disabled>
-                      Selecciona un proyecto
-                    </option>
-                    {w.projects
-                      .filter((p) => !p.archived || p.id === draft.projectId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                          {p.archived ? ' (archivado)' : ''}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
-                <Field
-                  label="Título"
-                  hint="Ejemplo: La pantalla se queda en blanco al guardar una reserva."
-                >
-                  <input
-                    autoFocus={!id}
-                    required
-                    maxLength={200}
-                    value={draft.title}
-                    onChange={(e) => update('title', e.target.value)}
-                    placeholder="Describe el pendiente en una frase"
-                  />
-                </Field>
-                <Field label="Descripción (opcional)">
-                  <textarea
-                    rows={4}
-                    maxLength={12000}
-                    value={draft.description}
-                    onChange={(e) => update('description', e.target.value)}
-                    placeholder="¿Qué estabas haciendo? ¿Qué pasó y qué esperabas que pasara?"
-                  />
-                </Field>
-                <div className="field">
-                  <span>Etiquetas (opcional)</span>
-                  <div className="tag-picker">
-                    {w.tags.map((t) => (
-                      <button
-                        type="button"
-                        key={t.id}
-                        className={`tag-option tone-${t.color} ${draft.tagIds.includes(t.id) ? 'selected' : ''}`}
-                        aria-pressed={draft.tagIds.includes(t.id)}
-                        onClick={() =>
-                          update(
-                            'tagIds',
-                            draft.tagIds.includes(t.id)
-                              ? draft.tagIds.filter((x) => x !== t.id)
-                              : [...draft.tagIds, t.id],
-                          )
-                        }
-                      >
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
+            <section
+              className="task-detail-panel"
+              role={id ? 'tabpanel' : undefined}
+              id={`${tabsId}-general-panel`}
+              aria-labelledby={id ? `${tabsId}-general-tab` : undefined}
+              tabIndex={id ? 0 : undefined}
+              hidden={!!id && activeTab !== 'general'}
+            >
+              {detail && (
+                <div className="detail-meta">
+                  <Badge color="purple">#{detail.item.id.slice(0, 8).toUpperCase()}</Badge>
+                  <span>
+                    Creado por {w.users.find((u) => u.id === detail.item.createdById)?.name} ·{' '}
+                    {dateLabel(detail.item.createdAt)}
+                  </span>
+                  {detail.item.archived && <Badge>Archivado</Badge>}
                 </div>
-                <details className="advanced" open={id ? true : undefined}>
-                  <summary>
-                    Organización y planificación <span>Opcional</span>
-                  </summary>
-                  <div className="form-grid">
-                    <Field label="Estado">
-                      <select
-                        value={draft.statusId}
-                        onChange={(e) => update('statusId', e.target.value)}
-                      >
-                        {w.statuses
-                          .filter((s) => s.projectId === draft.projectId)
-                          .map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                    <Field label="Carpeta">
-                      <select
-                        value={draft.folderId}
-                        onChange={(e) => update('folderId', e.target.value)}
-                      >
-                        <option value="">Sin carpeta</option>
-                        {w.folders
-                          .filter((f) => f.projectId === draft.projectId)
-                          .map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.name}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                    <Field label="Responsable">
-                      <select
-                        value={draft.assigneeId}
-                        onChange={(e) => update('assigneeId', e.target.value)}
-                      >
-                        <option value="">Sin asignar</option>
-                        {w.users
-                          .filter((u) => u.active || u.id === draft.assigneeId)
-                          .map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name}
-                              {u.active ? '' : ' (inactivo)'}
-                            </option>
-                          ))}
-                      </select>
-                    </Field>
-                    <Field label="Prioridad">
-                      <select
-                        value={draft.priority}
-                        onChange={(e) => update('priority', e.target.value)}
-                      >
-                        {priorities.map((p, i) => (
-                          <option key={p} value={i || ''}>
-                            {p}
+              )}
+              <form onSubmit={save}>
+                <fieldset disabled={busy}>
+                  <Field label="Proyecto">
+                    <select
+                      required
+                      value={draft.projectId}
+                      onChange={(e) => {
+                        const p = e.target.value;
+                        setDraft((d) => ({
+                          ...d,
+                          projectId: p,
+                          folderId: '',
+                          statusId:
+                            w.statuses.find((s) => s.projectId === p && !s.isDone)?.id || '',
+                        }));
+                        setDirty(true);
+                      }}
+                    >
+                      <option value="" disabled>
+                        Selecciona un proyecto
+                      </option>
+                      {w.projects
+                        .filter((p) => !p.archived || p.id === draft.projectId)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                            {p.archived ? ' (archivado)' : ''}
                           </option>
                         ))}
-                      </select>
-                    </Field>
-                    <Field label="Fecha límite (opcional)">
-                      <div className="input-icon">
-                        <CalendarDays size={18} />
-                        <input
-                          type="date"
-                          value={draft.dueDate}
-                          onChange={(e) => update('dueDate', e.target.value)}
-                        />
-                      </div>
-                    </Field>
-                    <Field label="Estimación en minutos (opcional)">
-                      <div className="input-icon">
-                        <Clock3 size={18} />
-                        <input
-                          type="number"
-                          min="1"
-                          max="600000"
-                          value={draft.estimateMinutes}
-                          onChange={(e) => update('estimateMinutes', e.target.value)}
-                          placeholder="Sin estimación"
-                        />
-                      </div>
-                    </Field>
+                    </select>
+                  </Field>
+                  <Field
+                    label="Título"
+                    hint="Ejemplo: La pantalla se queda en blanco al guardar una reserva."
+                  >
+                    <input
+                      autoFocus={!id}
+                      required
+                      maxLength={200}
+                      value={draft.title}
+                      onChange={(e) => update('title', e.target.value)}
+                      placeholder="Describe el pendiente en una frase"
+                    />
+                  </Field>
+                  <Field label="Descripción (opcional)">
+                    <textarea
+                      rows={4}
+                      maxLength={12000}
+                      value={draft.description}
+                      onChange={(e) => update('description', e.target.value)}
+                      placeholder="¿Qué estabas haciendo? ¿Qué pasó y qué esperabas que pasara?"
+                    />
+                  </Field>
+                  <div className="field">
+                    <span>Etiquetas (opcional)</span>
+                    <div className="tag-picker">
+                      {w.tags.map((t) => (
+                        <button
+                          type="button"
+                          key={t.id}
+                          className={`tag-option tone-${t.color} ${draft.tagIds.includes(t.id) ? 'selected' : ''}`}
+                          aria-pressed={draft.tagIds.includes(t.id)}
+                          onClick={() =>
+                            update(
+                              'tagIds',
+                              draft.tagIds.includes(t.id)
+                                ? draft.tagIds.filter((x) => x !== t.id)
+                                : [...draft.tagIds, t.id],
+                            )
+                          }
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </details>
-                <div className="form-actions">
-                  <small className="muted">
-                    {!id
-                      ? 'El texto se conserva como borrador en este dispositivo.'
-                      : dirty
-                        ? 'Hay cambios sin guardar.'
-                        : 'Todos los cambios están guardados.'}
-                  </small>
-                  <button className="btn btn-primary" disabled={busy}>
-                    {busy ? 'Guardando…' : id ? 'Guardar cambios' : 'Crear pendiente'}
+                  <details className="advanced" open={id ? true : undefined}>
+                    <summary>
+                      Organización y planificación <span>Opcional</span>
+                    </summary>
+                    <div className="form-grid">
+                      <Field label="Estado">
+                        <select
+                          value={draft.statusId}
+                          onChange={(e) => update('statusId', e.target.value)}
+                        >
+                          {w.statuses
+                            .filter((s) => s.projectId === draft.projectId)
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Field label="Carpeta">
+                        <select
+                          value={draft.folderId}
+                          onChange={(e) => update('folderId', e.target.value)}
+                        >
+                          <option value="">Sin carpeta</option>
+                          {w.folders
+                            .filter((f) => f.projectId === draft.projectId)
+                            .map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Field label="Responsable">
+                        <select
+                          value={draft.assigneeId}
+                          onChange={(e) => update('assigneeId', e.target.value)}
+                        >
+                          <option value="">Sin asignar</option>
+                          {w.users
+                            .filter((u) => u.active || u.id === draft.assigneeId)
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}
+                                {u.active ? '' : ' (inactivo)'}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Field label="Prioridad">
+                        <select
+                          value={draft.priority}
+                          onChange={(e) => update('priority', e.target.value)}
+                        >
+                          {priorities.map((p, i) => (
+                            <option key={p} value={i || ''}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Fecha límite (opcional)">
+                        <div className="input-icon">
+                          <CalendarDays size={18} />
+                          <input
+                            type="date"
+                            value={draft.dueDate}
+                            onChange={(e) => update('dueDate', e.target.value)}
+                          />
+                        </div>
+                      </Field>
+                      <Field label="Estimación en minutos (opcional)">
+                        <div className="input-icon">
+                          <Clock3 size={18} />
+                          <input
+                            type="number"
+                            min="1"
+                            max="600000"
+                            value={draft.estimateMinutes}
+                            onChange={(e) => update('estimateMinutes', e.target.value)}
+                            placeholder="Sin estimación"
+                          />
+                        </div>
+                      </Field>
+                    </div>
+                  </details>
+                  <div className="form-actions">
+                    <small className="muted">
+                      {!id
+                        ? 'El texto se conserva como borrador en este dispositivo.'
+                        : dirty
+                          ? 'Hay cambios sin guardar.'
+                          : 'Todos los cambios están guardados.'}
+                    </small>
+                    <button className="btn btn-primary" disabled={busy}>
+                      {busy ? 'Guardando…' : id ? 'Guardar cambios' : 'Crear pendiente'}
+                    </button>
+                  </div>
+                </fieldset>
+              </form>
+              {detail && (
+                <div className="task-management-actions">
+                  <button
+                    className="btn btn-ghost archive-action"
+                    disabled={busy}
+                    onClick={() => void archive()}
+                  >
+                    <Archive size={17} />
+                    {detail.item.archived ? 'Restaurar pendiente' : 'Archivar pendiente'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={busy}
+                    onClick={() => void remove()}
+                  >
+                    <Trash2 size={16} /> Eliminar pendiente
                   </button>
                 </div>
-              </fieldset>
-            </form>
+              )}
+            </section>
             {detail && (
               <>
-                <section className="detail-section">
+                <section
+                  className="detail-section task-detail-panel"
+                  role="tabpanel"
+                  id={`${tabsId}-evidence-panel`}
+                  aria-labelledby={`${tabsId}-evidence-tab`}
+                  tabIndex={0}
+                  hidden={activeTab !== 'evidence'}
+                >
                   <div className="section-heading">
                     <h3>
                       <Paperclip size={18} /> Evidencias
@@ -487,6 +577,12 @@ export function TaskEditor({
                   <p className="muted small">
                     Capturas PNG, JPG, WebP o PDF. Hasta 10 MB por archivo.
                   </p>
+                  {!detail.attachments.length && (
+                    <p className="task-evidence-empty">
+                      Todavía no hay evidencias. Adjunta una captura o un documento para explicar el
+                      pendiente.
+                    </p>
+                  )}
                   <div className="attachment-list">
                     {detail.attachments.map((a) => (
                       <a
@@ -504,7 +600,14 @@ export function TaskEditor({
                     ))}
                   </div>
                 </section>
-                <section className="detail-section">
+                <section
+                  className="detail-section task-detail-panel"
+                  role="tabpanel"
+                  id={`${tabsId}-activity-panel`}
+                  aria-labelledby={`${tabsId}-activity-tab`}
+                  tabIndex={0}
+                  hidden={activeTab !== 'activity'}
+                >
                   <h3>
                     <MessageSquare size={18} /> Conversación y actividad
                   </h3>
@@ -533,6 +636,7 @@ export function TaskEditor({
                     <Field label="Agregar comentario">
                       <textarea
                         rows={2}
+                        disabled={busy}
                         required
                         maxLength={4000}
                         value={comment}
@@ -545,24 +649,6 @@ export function TaskEditor({
                     </button>
                   </form>
                 </section>
-                <>
-                  <button
-                    className="btn btn-ghost archive-action"
-                    disabled={busy}
-                    onClick={() => void archive()}
-                  >
-                    <Archive size={17} />
-                    {detail.item.archived ? 'Restaurar pendiente' : 'Archivar pendiente'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    disabled={busy}
-                    onClick={() => void remove()}
-                  >
-                    <Trash2 size={16} /> Eliminar pendiente
-                  </button>
-                </>
               </>
             )}
           </>

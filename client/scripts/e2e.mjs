@@ -5,6 +5,7 @@ import { testAssignments } from './assignment-tests.mjs';
 import { testFocusVisuals } from './focus-visual-tests.mjs';
 import { testFocusLayout } from './focus-layout-tests.mjs';
 import { testNoteEditor } from './note-editor-tests.mjs';
+import { testTaskDetailTabs } from './task-detail-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -407,10 +408,18 @@ try {
   await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
   await page.getByRole('heading', { name: 'Detalle del pendiente' }).waitFor();
   await page.getByText('Todos los cambios están guardados.').waitFor();
+  assert.equal(
+    await page
+      .getByRole('tab', { name: 'Detalle general', exact: true })
+      .getAttribute('aria-selected'),
+    'true',
+  );
+  await page.getByRole('tab', { name: 'Conversación y actividad', exact: true }).click();
   await page.getByLabel('Agregar comentario').fill('Comentario desde la interfaz.');
   await page.getByRole('button', { name: 'Comentar', exact: true }).click();
   await page.getByText('Comentario desde la interfaz.', { exact: true }).waitFor();
   pass('Create and comment through actual UI');
+  await testTaskDetailTabs({ page, png, artifacts, pass });
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.goto(`http://localhost:4174/#project/${pms.id}`);
   await page.getByRole('button', { name: 'Vista de tablero' }).click();
