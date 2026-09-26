@@ -144,3 +144,12 @@ Las carpetas de notas se archivan indirectamente conservando sus notas; para eli
 Al abrir un pendiente existente se muestra «Detalle general», con los campos de edición, guardar, archivar/restaurar y eliminar. «Evidencias» reúne los adjuntos y su carga. «Conversación y actividad» contiene el historial y el formulario de comentarios. El reporte nuevo conserva su formulario simple; las pestañas aparecen después de crearlo.
 
 Cambiar de pestaña conserva los campos y comentarios sin publicar y no guarda automáticamente. Cerrar con cambios pendientes sigue solicitando confirmación. Los errores y avisos de cambios externos son comunes a las tres secciones. La cabecera y las pestañas permanecen visibles; solo se desplaza el contenido. Las flechas izquierda/derecha cambian de pestaña, Home/End seleccionan la primera/última y Tab entra al panel activo. No hay cambios de API ni migraciones de base de datos.
+
+
+## Filtros y tableros de pendientes
+
+La barra muestra únicamente el buscador y «Filtros», con un contador de ajustes respecto a los valores iniciales. El diálogo reúne proyecto, carpeta, estado, responsable, etiqueta, prioridad, alcance y orden. «Aplicar filtros» confirma todos los cambios y vuelve a la página 1; «Cancelar», cerrar o Escape conservan los filtros anteriores. «Restablecer» prepara los valores iniciales para aplicarlos y mantiene la búsqueda. En la bandeja, el responsable inicial sigue siendo «Míos y sin responsable», también para Admin.
+
+Seleccionar un proyecto desde el diálogo filtra la bandeja sin navegar a otra página ni perder el responsable. Carpeta y estado dependen de ese proyecto y se limpian cuando cambia. En una página de proyecto, ese proyecto permanece fijo. Al crear un pendiente se toma el proyecto y la carpeta del contexto filtrado, salvo que exista un borrador previo recuperable.
+
+«Tablero» funciona directamente en la bandeja: muestra un grupo por cada proyecto con pendientes en la página actual y columnas con sus propios estados. No mezcla estados personalizados de proyectos diferentes. Cambiar entre lista y tablero conserva búsqueda, filtros y página; tampoco cambia automáticamente de abiertos a todos. Para incluir resueltos, elige «Todos» o «Resueltos» en el diálogo. La paginación sigue siendo global, de 50 pendientes; los contadores de cada tablero describen solo esa página. No se añadieron consultas periódicas, endpoints ni migraciones.

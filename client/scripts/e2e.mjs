@@ -6,6 +6,7 @@ import { testFocusVisuals } from './focus-visual-tests.mjs';
 import { testFocusLayout } from './focus-layout-tests.mjs';
 import { testNoteEditor } from './note-editor-tests.mjs';
 import { testTaskDetailTabs } from './task-detail-tests.mjs';
+import { testInboxFilters } from './inbox-filter-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -421,6 +422,7 @@ try {
   pass('Create and comment through actual UI');
   await testTaskDetailTabs({ page, png, artifacts, pass });
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await testInboxFilters({ page, admin, support, adminUser, json, artifacts, pass });
   await page.goto(`http://localhost:4174/#project/${pms.id}`);
   await page.getByRole('button', { name: 'Vista de tablero' }).click();
   await page.locator('.board-heading').getByText('En revisión', { exact: true }).waitFor();

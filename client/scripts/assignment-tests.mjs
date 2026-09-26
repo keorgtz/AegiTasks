@@ -98,6 +98,12 @@ export async function testAssignments({
     'Focus rejects completed, archived, other-assignee and archived-project tasks on the server',
   );
 
+  async function ownerValue(p) {
+    await p.getByRole('button', { name: 'Abrir filtros', exact: true }).click();
+    const value = await p.getByLabel('Filtrar por responsable').inputValue();
+    await p.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    return value;
+  }
   const titleButton = (p, task) =>
     p.getByRole('button', { name: `Abrir pendiente: ${task.title}`, exact: true });
   async function searchInbox(p) {
@@ -115,19 +121,21 @@ export async function testAssignments({
   }
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('http://localhost:4174/#inbox');
-  assert.equal(await page.getByLabel('Filtrar por responsable').inputValue(), 'mine-or-unassigned');
+  assert.equal(await ownerValue(page), 'mine-or-unassigned');
   await searchInbox(page);
   await titleButton(page, own).waitFor();
   await titleButton(page, unassigned).waitFor();
   assert.equal(await titleButton(page, other).count(), 0);
+  await page.getByRole('button', { name: 'Abrir filtros', exact: true }).click();
   await page.getByLabel('Filtrar por responsable').selectOption(supportUser.id);
+  await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await titleButton(page, other).waitFor();
   assert.equal(await titleButton(page, own).count(), 0);
   await page.goto('http://localhost:4174/#projects');
   await page.goto('http://localhost:4174/#inbox');
-  assert.equal(await page.getByLabel('Filtrar por responsable').inputValue(), 'mine-or-unassigned');
+  assert.equal(await ownerValue(page), 'mine-or-unassigned');
   await page.reload();
-  assert.equal(await page.getByLabel('Filtrar por responsable').inputValue(), 'mine-or-unassigned');
+  assert.equal(await ownerValue(page), 'mine-or-unassigned');
   const state = await support.storageState();
   state.origins.push({
     origin: 'http://localhost:4174',
@@ -139,10 +147,7 @@ export async function testAssignments({
   try {
     const supportPage = await supportContext.newPage();
     await supportPage.goto('http://localhost:4174/#inbox');
-    assert.equal(
-      await supportPage.getByLabel('Filtrar por responsable').inputValue(),
-      'mine-or-unassigned',
-    );
+    assert.equal(await ownerValue(supportPage), 'mine-or-unassigned');
     await searchInbox(supportPage);
     await titleButton(supportPage, other).waitFor();
     await titleButton(supportPage, unassigned).waitFor();

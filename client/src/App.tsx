@@ -32,6 +32,7 @@ import {
   Timer,
   Globe2,
   MoreHorizontal,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { api, ApiError, errorMessage, setActiveSpace } from './api';
 import { useChanges } from './changes';
@@ -39,6 +40,7 @@ import { SidebarSections } from './SidebarSections';
 import { Badge, Brand, Empty, ErrorBox, Field, Modal } from './components';
 import { CatalogEditor, Settings } from './Settings';
 import { TaskEditor } from './TaskEditor';
+import { TaskFilters, type TaskFilterValues } from './TaskFilters';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
 import { FocusPage } from './Focus';
@@ -302,6 +304,8 @@ function WorkspaceApp({
   const [w, setWorkspace] = useState<Workspace | null>(null);
   const [route, setRoute] = useState(location.hash.slice(1) || 'inbox');
   const [folder, setFolder] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [settingsProject, setSettingsProject] = useState('');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -331,11 +335,21 @@ function WorkspaceApp({
   const [install, setInstall] = useState<InstallPrompt | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const projectId = route.startsWith('project/') ? route.split('/')[1] || '' : '';
+  const taskProjectId = projectId || projectFilter;
   const project = w?.projects.find((p) => p.id === projectId);
   useEffect(() => {
     if (w && projectId && !w.projects.some((p) => p.id === projectId))
       location.hash = permissions.includes('projects') ? 'projects' : 'inbox';
   }, [w, projectId, permissions]);
+  useEffect(() => {
+    if (w && projectFilter && !w.projects.some((p) => p.id === projectFilter)) {
+      setProjectFilter('');
+      setFolder('');
+      setStatus('');
+      setPage(1);
+      setFiltersOpen(false);
+    }
+  }, [w, projectFilter]);
   const notify = (message: string) => setToast(message);
   const reload = useCallback(async () => {
     const workspace = await api<Workspace>('/workspace');
@@ -359,6 +373,8 @@ function WorkspaceApp({
       }
       setRoute(location.hash.slice(1) || 'inbox');
       setAssigneeFilter(null);
+      setProjectFilter('');
+      setFiltersOpen(false);
       if (!location.hash.startsWith('#project/')) setView('list');
       setFolder('');
       setStatus('');
@@ -408,7 +424,7 @@ function WorkspaceApp({
       page: String(page),
       assignee,
     });
-    if (projectId) params.set('project', projectId);
+    if (taskProjectId) params.set('project', taskProjectId);
     if (folder) params.set('folder', folder);
     if (status) params.set('status', status);
     if (tag) params.set('tag', tag);
@@ -437,7 +453,7 @@ function WorkspaceApp({
     return () => controller.abort();
   }, [
     w,
-    projectId,
+    taskProjectId,
     folder,
     status,
     tag,
@@ -454,6 +470,8 @@ function WorkspaceApp({
   ]);
   const navigate = (to: string) => {
     setMoreMenu(false);
+    setFiltersOpen(false);
+    setProjectFilter('');
     setAssigneeFilter(null);
     if (to === 'settings' && projectId) setSettingsProject(projectId);
     location.hash = to;
@@ -489,17 +507,28 @@ function WorkspaceApp({
     fn();
     setPage(1);
   };
-  const clearFilters = () => {
-    setAssigneeFilter(null);
-    setSearch('');
-    setQuery('');
-    setFolder('');
-    setStatus('');
-    setTag('');
-    setPriority('');
-    setScope('open');
+  const applyFilters = (values: TaskFilterValues) => {
+    setProjectFilter(projectId ? '' : values.project);
+    setFolder(values.folder);
+    setStatus(values.status);
+    setAssigneeFilter(values.assignee);
+    setTag(values.tag);
+    setPriority(values.priority);
+    setScope(values.scope);
+    setSort(values.sort);
     setPage(1);
+    setFiltersOpen(false);
   };
+  const filterCount = [
+    !projectId && projectFilter,
+    folder,
+    status,
+    tag,
+    priority,
+    !['mine', 'archived'].includes(route) && scope !== 'open',
+    assignee !== (route === 'inbox' ? 'mine-or-unassigned' : route === 'mine' ? 'mine' : 'all'),
+    sort !== 'priority',
+  ].filter(Boolean).length;
   const nav = [
     { id: 'inbox', name: 'Bandeja', icon: Inbox },
     { id: 'mine', name: 'Mis pendientes', icon: UserRound },
@@ -934,6 +963,7 @@ function WorkspaceApp({
                       <button
                         className={view === 'list' ? 'active' : ''}
                         aria-label="Vista de lista"
+                        aria-pressed={view === 'list'}
                         onClick={() => setView('list')}
                       >
                         <List size={17} />
@@ -942,10 +972,9 @@ function WorkspaceApp({
                       <button
                         className={view === 'board' ? 'active' : ''}
                         aria-label="Vista de tablero"
+                        aria-pressed={view === 'board'}
                         onClick={() => {
                           setView('board');
-                          setScope('all');
-                          setPage(1);
                         }}
                       >
                         <LayoutGrid size={17} />
@@ -953,7 +982,7 @@ function WorkspaceApp({
                       </button>
                     </div>
                   </div>
-                  <div className="filter-bar">
+                  <div className="task-search-bar">
                     <div className="search-field">
                       <Search size={18} />
                       <input
@@ -972,127 +1001,48 @@ function WorkspaceApp({
                         </button>
                       )}
                     </div>
-                    {!projectId && (
-                      <select
-                        aria-label="Filtrar por proyecto"
-                        value=""
-                        onChange={(e) => navigate(`project/${e.target.value}`)}
-                      >
-                        <option value="">Todos los proyectos</option>
-                        {w.projects
-                          .filter((p) => !p.archived)
-                          .map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                    {projectId && (
-                      <select
-                        aria-label="Filtrar por estado"
-                        value={status}
-                        onChange={(e) => filter(() => setStatus(e.target.value))}
-                      >
-                        <option value="">Todos los estados</option>
-                        {w.statuses
-                          .filter((s) => s.projectId === projectId)
-                          .map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                    {route !== 'mine' && (
-                      <select
-                        aria-label="Filtrar por responsable"
-                        value={assignee}
-                        onChange={(e) => filter(() => setAssigneeFilter(e.target.value))}
-                      >
-                        <option value="mine-or-unassigned">Míos y sin responsable</option>
-                        <option value="mine">Solo míos</option>
-                        <option value="unassigned">Sin responsable</option>
-                        <option value="all">Todos los responsables</option>
-                        {w.users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
-                            {!u.active ? ' (inactivo)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <select
-                      aria-label="Filtrar por etiqueta"
-                      value={tag}
-                      onChange={(e) => filter(() => setTag(e.target.value))}
-                    >
-                      <option value="">Todas las etiquetas</option>
-                      {w.tags.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Filtrar por prioridad"
-                      value={priority}
-                      onChange={(e) => filter(() => setPriority(e.target.value))}
-                    >
-                      <option value="">Toda prioridad</option>
-                      {priorities.map((p, i) => (
-                        <option key={p} value={i}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                    {route !== 'mine' && route !== 'archived' && (
-                      <select
-                        aria-label="Mostrar pendientes"
-                        value={scope}
-                        onChange={(e) => filter(() => setScope(e.target.value))}
-                      >
-                        <option value="open">Por resolver</option>
-                        <option value="all">Todos</option>
-                        <option value="done">Resueltos</option>
-                        <option value="urgent">Alta prioridad</option>
-                        <option value="overdue">Fuera de fecha</option>
-                        <option value="reported">Reportados por mí</option>
-                      </select>
-                    )}
-                    <select
-                      aria-label="Ordenar pendientes"
-                      value={sort}
-                      onChange={(e) => filter(() => setSort(e.target.value))}
-                    >
-                      <option value="priority">Por prioridad</option>
-                      <option value="due">Por fecha límite</option>
-                      <option value="newest">Más recientes</option>
-                    </select>
                     <button
-                      className="btn-icon"
-                      aria-label="Limpiar filtros"
-                      onClick={clearFilters}
+                      className="btn btn-ghost"
+                      aria-label="Abrir filtros"
+                      aria-haspopup="dialog"
+                      onClick={() => setFiltersOpen(true)}
                     >
-                      <RefreshCw size={17} />
+                      <SlidersHorizontal size={18} /> Filtros
+                      {filterCount > 0 && (
+                        <span
+                          className="task-filter-count"
+                          aria-label={`${filterCount} filtros activos`}
+                        >
+                          {filterCount}
+                        </span>
+                      )}
                     </button>
                   </div>
+                  {filtersOpen && (
+                    <TaskFilters
+                      initial={{
+                        project: taskProjectId,
+                        folder,
+                        status,
+                        assignee,
+                        tag,
+                        priority,
+                        scope,
+                        sort,
+                      }}
+                      workspace={w}
+                      route={route}
+                      projectId={projectId}
+                      onClose={() => setFiltersOpen(false)}
+                      onApply={applyFilters}
+                    />
+                  )}
                   {loading && (
                     <div className="loading-line" role="status">
                       Actualizando pendientes…
                     </div>
                   )}
-                  {view === 'board' && !projectId ? (
-                    <div className="card">
-                      <Empty
-                        icon={<LayoutGrid size={32} />}
-                        title="Cada proyecto tiene su propio recorrido"
-                      >
-                        Selecciona un proyecto en el filtro para ver su tablero con los estados
-                        personalizados.
-                      </Empty>
-                    </div>
-                  ) : !result.items.length && !loading ? (
+                  {!result.items.length && !loading ? (
                     <div className="card">
                       <Empty
                         icon={<CheckCheck size={36} />}
@@ -1110,29 +1060,67 @@ function WorkspaceApp({
                       </Empty>
                     </div>
                   ) : view === 'board' ? (
-                    <div className="board">
-                      {w.statuses
-                        .filter((s) => s.projectId === projectId)
-                        .map((s) => (
-                          <section className="board-column" key={s.id}>
-                            <div className="board-heading">
-                              <Badge color={s.color}>{s.name}</Badge>
-                              <span>{result.items.filter((t) => t.statusId === s.id).length}</span>
+                    <div className="project-boards">
+                      {w.projects
+                        .filter((p) =>
+                          taskProjectId
+                            ? p.id === taskProjectId
+                            : result.items.some((t) => t.projectId === p.id),
+                        )
+                        .map((p) => (
+                          <section
+                            className="project-board"
+                            key={p.id}
+                            aria-label={`Tablero de ${p.name}`}
+                          >
+                            <h3 className="project-board-title">
+                              {p.name}
+                              <Badge color={p.color}>
+                                {result.items.filter((t) => t.projectId === p.id).length} en esta
+                                página
+                              </Badge>
+                            </h3>
+                            <div
+                              className="board"
+                              tabIndex={0}
+                              role="region"
+                              aria-label={`Columnas de ${p.name}`}
+                            >
+                              {w.statuses
+                                .filter((s) => s.projectId === p.id)
+                                .map((s) => (
+                                  <section className="board-column" key={s.id}>
+                                    <div className="board-heading">
+                                      <Badge color={s.color}>{s.name}</Badge>
+                                      <span>
+                                        {
+                                          result.items.filter(
+                                            (t) => t.projectId === p.id && t.statusId === s.id,
+                                          ).length
+                                        }
+                                      </span>
+                                    </div>
+                                    {result.items
+                                      .filter((t) => t.projectId === p.id && t.statusId === s.id)
+                                      .map((t) => (
+                                        <TaskCard
+                                          key={t.id}
+                                          task={t}
+                                          w={w}
+                                          board
+                                          onOpen={() => openTask(t.id)}
+                                        />
+                                      ))}
+                                    {!result.items.some(
+                                      (t) => t.projectId === p.id && t.statusId === s.id,
+                                    ) && (
+                                      <div className="column-empty">
+                                        Sin pendientes en esta página
+                                      </div>
+                                    )}
+                                  </section>
+                                ))}
                             </div>
-                            {result.items
-                              .filter((t) => t.statusId === s.id)
-                              .map((t) => (
-                                <TaskCard
-                                  key={t.id}
-                                  task={t}
-                                  w={w}
-                                  board
-                                  onOpen={() => openTask(t.id)}
-                                />
-                              ))}
-                            {!result.items.some((t) => t.statusId === s.id) && (
-                              <div className="column-empty">Sin pendientes en esta página</div>
-                            )}
                           </section>
                         ))}
                     </div>
@@ -1178,7 +1166,7 @@ function WorkspaceApp({
               <TaskEditor
                 key={editor}
                 id={editor === 'new' ? undefined : editor}
-                projectId={projectId}
+                projectId={taskProjectId}
                 folderId={folder}
                 workspace={w}
                 user={user}

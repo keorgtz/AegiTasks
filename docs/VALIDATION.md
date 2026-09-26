@@ -12,7 +12,7 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **82 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **85 verificaciones aprobadas sobre SQLite**                                           |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**; migración opcional del worker anterior documentada en la validación previa |
 | `node client/scripts/postgres-tests.mjs`                                        | **79 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 (validación previa del editor de notas) |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
@@ -23,6 +23,16 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Filtros en diálogo y tableros en la bandeja (25 de septiembre)
+
+La suite SQLite completa pasó 85 verificaciones después del build de producción; typecheck y lint también finalizaron correctamente. PostgreSQL y la suite dedicada de actualización PWA no se repitieron en esta iteración de cliente; sus resultados anteriores permanecen identificados en la tabla.
+
+Tres grupos nuevos prueban la barra sin combos, apertura del diálogo y aplicación conjunta de proyecto, carpeta, estado, responsable, etiqueta, prioridad y orden. Se verifica que aplicar vuelve a la página 1, cancelar conserva la selección anterior y restablecer recupera los valores iniciales sin borrar la búsqueda. Cambiar de proyecto limpia carpeta/estado; crear un pendiente toma el proyecto y carpeta filtrados. Las pruebas existentes de asignación ahora usan el diálogo y siguen validando el valor inicial para Admin y User, su restauración al navegar/recargar y el aislamiento entre responsables.
+
+El tablero de la bandeja se compara contra la lista con más de 50 pendientes de dos proyectos: mismos elementos, sin duplicados entre páginas, sin incluir otro responsable ni resueltos por defecto. Cada proyecto mantiene sus propias columnas, incluido un estado personalizado. El filtro de proyecto conserva la ruta de bandeja y combinar filtros devuelve el pendiente esperado. Incluir resueltos se contrasta con la respuesta real de la API.
+
+Se verifican 1440×900, 390×844, 320×600 y 844×390 en claro/oscuro: la página no desborda horizontalmente y los botones del diálogo son alcanzables. Se revisaron `artifacts/inbox-board-1440-light.png`, `inbox-board-320-light.png`, `inbox-filters-1440-light.png` e `inbox-filters-390-dark.png`. En escritorio las columnas permiten desplazamiento horizontal dentro del tablero; en móvil se apilan. Capturas y pruebas en Chromium local, sin dispositivos físicos.
 
 ### Detalle del pendiente en pestañas (25 de septiembre)
 
@@ -107,7 +117,7 @@ Evidencia: `artifacts/pwa-test-results.json`, con ambos identificadores de build
 
 Evidencia visual adicional: `artifacts/workflow-sidebar-600.png`, `artifacts/workflow-focus-light.png` y `artifacts/workflow-focus-dark.png`. El Nginx de producción incluye streaming sin buffering; Docker, Nginx Proxy Manager y Cloudflare Tunnel deben validarse en el servidor real.
 
-La suite actual de 82 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium sobre SQLite temporal. La ejecución previa de 79 verificaciones también pasó sobre PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
+La suite actual de 85 verificaciones ejecuta la API real, el cliente compilado de producción y Chromium sobre SQLite temporal. La ejecución previa de 79 verificaciones también pasó sobre PostgreSQL 18.4 local; la imagen Docker prevista continúa siendo PostgreSQL 17 y requiere su validación en infraestructura. Incluyen:
 
 - Autenticación y rechazo de acceso anónimo; cabecera requerida para mutaciones.
 - Restricción de administración a administradores; protección de la propia cuenta administrativa.
@@ -145,7 +155,7 @@ El script genera `artifacts/test-results.json` y capturas locales. También se c
 
 La prueba de migración crea una base con el esquema anterior, usuarios Admin/Member, proyecto, etiqueta personalizada, pendiente, comentario y relación de etiqueta. Aplica la migración de Spaces y comprueba que conserva esos datos, crea el workspace compartido y dos espacios Personal, migra Member a User e inicializa permisos. Una segunda base vacía se levanta mediante la API y sus migraciones automáticas para ejecutar la suite completa.
 
-El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal permanece en ~336 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
+El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal ocupa aproximadamente 340 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
 
 En ejecuciones intermedias aparecieron cortes `ECONNRESET` en peticiones del cliente de pruebas a Vite, antes de llegar a la API. Las pruebas HTTP se dirigen directamente a la API (5213); las pruebas de navegador siguen pasando por el proxy Vite (4174). No se añadieron reintentos automáticos de mutaciones. No se atribuye este fallo al servidor de producción, cuyo proxy es Nginx.
 
