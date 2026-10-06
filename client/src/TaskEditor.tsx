@@ -2,8 +2,6 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import {
   Archive,
   ArrowUpRight,
-  CalendarDays,
-  Clock3,
   FileText,
   MessageSquare,
   Paperclip,
@@ -14,10 +12,10 @@ import { api, errorMessage, getActiveSpace } from './api';
 import { useChanges } from './changes';
 import './styles/task-editor.css';
 import { Badge, ErrorBox, Field, Modal } from './components';
-import { estimateKinds, fibonacciPoints, linearPoints, estimateCategories } from './estimates';
+import { TaskEditorFooter } from './TaskEditorFooter';
+import { TaskRelations, TaskRelationPicker } from './TaskRelations';
 import {
   dateLabel,
-  priorities,
   type TaskDetail,
   type TaskItem,
   type User,
@@ -32,13 +30,15 @@ const detailTabs = [
 ] as const;
 type DetailTab = (typeof detailTabs)[number]['id'];
 
-type Draft = {
+export type Draft = {
   title: string;
   description: string;
   projectId: string;
   folderId: string;
   moduleId: string;
   cycleId: string;
+  parentTaskId: string;
+  parentTitle: string;
   statusId: string;
   assigneeId: string;
   priority: string;
@@ -55,33 +55,41 @@ export function TaskEditor({
   folderId,
   moduleId = '',
   cycleId = '',
+  parentTask,
   workspace: w,
   user,
   onClose,
   onSaved,
   onDeleted,
   notify,
+  onNavigate,
+  onCreateChild,
 }: {
   id?: string;
   projectId: string;
   folderId: string;
   moduleId?: string;
   cycleId?: string;
+  parentTask?: TaskItem | null;
   workspace: Workspace;
   user: User;
   onClose: () => void;
   onSaved: (task: TaskItem) => void;
   onDeleted: () => void;
   notify: (text: string) => void;
+  onNavigate: (id: string) => void;
+  onCreateChild: (parent: TaskItem) => void;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('general');
   const tabsId = useId();
+  const formId = useId();
+  const [parentPicker, setParentPicker] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   const selectTab = (tab: DetailTab) => {
     setActiveTab(tab);
     body.current?.scrollTo({ top: 0 });
   };
-  const draftKey = `aegitasks-draft-${user.id}-${getActiveSpace()}`;
+  const draftKey = `aegitasks-draft-${user.id}-${getActiveSpace()}${parentTask ? `-child-${parentTask.id}` : ''}`;
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [draft, setDraft] = useState<Draft>(() => {
     if (!id) {
@@ -92,6 +100,8 @@ export function TaskEditor({
             ...stored,
             moduleId: stored.moduleId || '',
             cycleId: stored.cycleId || '',
+            parentTaskId: stored.parentTaskId || '',
+            parentTitle: stored.parentTitle || '',
             estimateKind: stored.estimateKind || 'time',
             estimatePoints: stored.estimatePoints || '',
             estimateCategory: stored.estimateCategory || '',
@@ -100,14 +110,16 @@ export function TaskEditor({
         /* Ignore a corrupt local draft. */
       }
     }
-    const p = projectId || w.projects.find((p) => !p.archived)?.id || '';
+    const p = parentTask?.projectId || projectId || w.projects.find((p) => !p.archived)?.id || '';
     return {
       title: '',
       description: '',
       projectId: p,
-      folderId,
-      moduleId,
-      cycleId,
+      folderId: parentTask?.folderId || folderId,
+      moduleId: parentTask?.moduleId || moduleId,
+      cycleId: parentTask?.cycleId || cycleId,
+      parentTaskId: parentTask?.id || '',
+      parentTitle: parentTask?.title || '',
       statusId: w.statuses.find((s) => s.projectId === p && !s.isDone)?.id || '',
       assigneeId: '',
       priority: '',
@@ -160,6 +172,8 @@ export function TaskEditor({
           folderId: t.folderId || '',
           moduleId: t.moduleId || '',
           cycleId: t.cycleId || '',
+          parentTaskId: t.parentTaskId || '',
+          parentTitle: d.parent?.title || '',
           statusId: t.statusId,
           assigneeId: t.assigneeId || '',
           priority: t.priority?.toString() || '',
@@ -210,6 +224,7 @@ export function TaskEditor({
           estimatePoints: draft.estimatePoints !== '' ? Number(draft.estimatePoints) : null,
           estimateCategory: draft.estimateCategory || null,
         },
+        hierarchy: { parentTaskId: draft.parentTaskId || null },
         version: detail?.item.version,
       });
       setDirty(false);
@@ -288,7 +303,7 @@ export function TaskEditor({
     if (
       !detail ||
       !confirm(
-        `¿Eliminar «${detail.item.title}» y sus comentarios y adjuntos? No se puede deshacer. Las notas vinculadas se conservarán.`,
+        `¿Eliminar «${detail.item.title}» y sus comentarios y adjuntos? No se puede deshacer. Las notas y subpendientes se conservarán; los hijos quedan sin padre.`,
       )
     )
       return;
@@ -304,6 +319,15 @@ export function TaskEditor({
       setBusy(false);
     }
   }
+  const canLeave = () =>
+    !busy &&
+    (!(dirty || comment.trim()) || confirm('Hay cambios sin guardar. ¿Salir de este pendiente?'));
+  const openRelated = (taskId: string) => {
+    if (canLeave()) onNavigate(taskId);
+  };
+  const createChild = () => {
+    if (detail && canLeave()) onCreateChild(detail.item);
+  };
   return (
     <Modal title={id ? 'Detalle del pendiente' : '¿Qué encontraste?'} onClose={close} wide>
       {id && (
@@ -343,7 +367,7 @@ export function TaskEditor({
           ))}
         </div>
       )}
-      <div className={`modal-body ${id ? 'task-detail-body' : ''}`} ref={body}>
+      <div className="modal-body task-detail-body" ref={body}>
         <ErrorBox message={error} />
         {remoteChange && (
           <p className="small" role="status">
@@ -382,45 +406,8 @@ export function TaskEditor({
                   {detail.item.archived && <Badge>Archivado</Badge>}
                 </div>
               )}
-              <form onSubmit={save}>
+              <form id={formId} onSubmit={save}>
                 <fieldset disabled={busy}>
-                  <Field label="Proyecto">
-                    <select
-                      required
-                      value={draft.projectId}
-                      onChange={(e) => {
-                        const p = e.target.value;
-                        setDraft((d) => ({
-                          ...d,
-                          projectId: p,
-                          folderId: '',
-                          moduleId: '',
-                          cycleId: '',
-                          estimateKind:
-                            w.projects.find((project) => project.id === p)?.estimateScheme ||
-                            'time',
-                          estimateMinutes: '',
-                          estimatePoints: '',
-                          estimateCategory: '',
-                          statusId:
-                            w.statuses.find((s) => s.projectId === p && !s.isDone)?.id || '',
-                        }));
-                        setDirty(true);
-                      }}
-                    >
-                      <option value="" disabled>
-                        Selecciona un proyecto
-                      </option>
-                      {w.projects
-                        .filter((p) => !p.archived || p.id === draft.projectId)
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                            {p.archived ? ' (archivado)' : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
                   <Field
                     label="Título"
                     hint="Ejemplo: La pantalla se queda en blanco al guardar una reserva."
@@ -443,232 +430,22 @@ export function TaskEditor({
                       placeholder="¿Qué estabas haciendo? ¿Qué pasó y qué esperabas que pasara?"
                     />
                   </Field>
-                  <div className="field">
-                    <span>Etiquetas (opcional)</span>
-                    <div className="tag-picker">
-                      {w.tags.map((t) => (
-                        <button
-                          type="button"
-                          key={t.id}
-                          className={`tag-option tone-${t.color} ${draft.tagIds.includes(t.id) ? 'selected' : ''}`}
-                          aria-pressed={draft.tagIds.includes(t.id)}
-                          onClick={() =>
-                            update(
-                              'tagIds',
-                              draft.tagIds.includes(t.id)
-                                ? draft.tagIds.filter((x) => x !== t.id)
-                                : [...draft.tagIds, t.id],
-                            )
-                          }
-                        >
-                          {t.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <details className="advanced" open={id ? true : undefined}>
-                    <summary>
-                      Organización y planificación <span>Opcional</span>
-                    </summary>
-                    <div className="form-grid">
-                      <Field label="Estado">
-                        <select
-                          value={draft.statusId}
-                          onChange={(e) => update('statusId', e.target.value)}
-                        >
-                          {w.statuses
-                            .filter((s) => s.projectId === draft.projectId)
-                            .map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name}
-                              </option>
-                            ))}
-                        </select>
-                      </Field>
-                      <Field label="Carpeta">
-                        <select
-                          value={draft.folderId}
-                          onChange={(e) => update('folderId', e.target.value)}
-                        >
-                          <option value="">Sin carpeta</option>
-                          {w.folders
-                            .filter((f) => f.projectId === draft.projectId)
-                            .map((f) => (
-                              <option key={f.id} value={f.id}>
-                                {f.name}
-                              </option>
-                            ))}
-                        </select>
-                      </Field>
-                      <Field label="Responsable">
-                        <select
-                          value={draft.assigneeId}
-                          onChange={(e) => update('assigneeId', e.target.value)}
-                        >
-                          <option value="">Sin asignar</option>
-                          {w.users
-                            .filter((u) => u.active || u.id === draft.assigneeId)
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name}
-                                {u.active ? '' : ' (inactivo)'}
-                              </option>
-                            ))}
-                        </select>
-                      </Field>
-                      <Field label="Módulo (opcional)">
-                        <select
-                          value={draft.moduleId}
-                          onChange={(e) => update('moduleId', e.target.value)}
-                        >
-                          <option value="">Sin módulo</option>
-                          {w.modules
-                            .filter((m) => m.projectId === draft.projectId)
-                            .map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name}
-                              </option>
-                            ))}
-                        </select>
-                      </Field>
-                      <Field label="Ciclo (opcional)">
-                        <select
-                          value={draft.cycleId}
-                          onChange={(e) => update('cycleId', e.target.value)}
-                        >
-                          <option value="">Sin ciclo</option>
-                          {w.cycles
-                            .filter((m) => m.projectId === draft.projectId)
-                            .map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name}
-                              </option>
-                            ))}
-                        </select>
-                      </Field>
-                      <Field label="Prioridad">
-                        <select
-                          value={draft.priority}
-                          onChange={(e) => update('priority', e.target.value)}
-                        >
-                          {priorities.map((p, i) => (
-                            <option key={p} value={i || ''}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Fecha límite (opcional)">
-                        <div className="input-icon">
-                          <CalendarDays size={18} />
-                          <input
-                            type="date"
-                            value={draft.dueDate}
-                            onChange={(e) => update('dueDate', e.target.value)}
-                          />
-                        </div>
-                      </Field>
-                      <Field
-                        label="Tipo de estimación"
-                        hint="Opcional. Los puntos representan esfuerzo relativo; no se convierten a horas."
-                      >
-                        <select
-                          value={draft.estimateKind}
-                          onChange={(e) => {
-                            setDraft((d) => ({
-                              ...d,
-                              estimateKind: e.target.value as EstimateKind,
-                              estimateMinutes: '',
-                              estimatePoints: '',
-                              estimateCategory: '',
-                            }));
-                            setDirty(true);
-                          }}
-                        >
-                          {Object.entries(estimateKinds).map(([key, label]) => (
-                            <option key={key} value={key}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      {draft.estimateKind === 'time' && (
-                        <Field label="Estimación en minutos (opcional)">
-                          <div className="input-icon">
-                            <Clock3 size={18} />
-                            <input
-                              type="number"
-                              min="1"
-                              max="600000"
-                              value={draft.estimateMinutes}
-                              onChange={(e) => update('estimateMinutes', e.target.value)}
-                              placeholder="Sin estimación"
-                            />
-                          </div>
-                        </Field>
-                      )}
-                      {draft.estimateKind === 'points' && (
-                        <Field label="Story points (opcional)">
-                          <input
-                            type="number"
-                            min={0}
-                            max={1000}
-                            step={1}
-                            value={draft.estimatePoints}
-                            onChange={(e) => update('estimatePoints', e.target.value)}
-                            placeholder="Sin estimación"
-                          />
-                        </Field>
-                      )}
-                      {['fibonacci', 'linear'].includes(draft.estimateKind) && (
-                        <Field label="Puntos (opcional)">
-                          <select
-                            value={draft.estimatePoints}
-                            onChange={(e) => update('estimatePoints', e.target.value)}
-                          >
-                            <option value="">Sin estimación</option>
-                            {(draft.estimateKind === 'fibonacci'
-                              ? fibonacciPoints
-                              : linearPoints
-                            ).map((n) => (
-                              <option key={n} value={n}>
-                                {n} puntos
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                      )}
-                      {draft.estimateKind === 'categories' && (
-                        <Field label="Categoría (opcional)">
-                          <select
-                            value={draft.estimateCategory}
-                            onChange={(e) => update('estimateCategory', e.target.value)}
-                          >
-                            <option value="">Sin estimación</option>
-                            {estimateCategories.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                      )}
-                    </div>
-                  </details>
-                  <div className="form-actions">
-                    <small className="muted">
-                      {!id
-                        ? 'El texto se conserva como borrador en este dispositivo.'
-                        : dirty
-                          ? 'Hay cambios sin guardar.'
-                          : 'Todos los cambios están guardados.'}
-                    </small>
-                    <button className="btn btn-primary" disabled={busy}>
-                      {busy ? 'Guardando…' : id ? 'Guardar cambios' : 'Crear pendiente'}
-                    </button>
-                  </div>
                 </fieldset>
               </form>
+              {detail && (
+                <TaskRelations
+                  detail={detail}
+                  workspace={w}
+                  disabled={
+                    busy ||
+                    !!detail.item.archived ||
+                    !!w.projects.find((p) => p.id === detail.item.projectId)?.archived
+                  }
+                  onOpen={openRelated}
+                  onCreate={createChild}
+                  onChanged={refreshActivity}
+                />
+              )}
               {detail && (
                 <div className="task-management-actions">
                   <button
@@ -799,6 +576,43 @@ export function TaskEditor({
           </>
         )}
       </div>
+
+      <TaskEditorFooter
+        draft={draft}
+        workspace={w}
+        update={update}
+        setDraft={setDraft}
+        setDirty={setDirty}
+        disabled={busy || (!!id && !detail)}
+        busy={busy}
+        dirty={dirty}
+        existing={!!id}
+        onParent={() => setParentPicker(true)}
+        onSave={() => {
+          const form = document.getElementById(formId) as HTMLFormElement;
+          if (!form.checkValidity()) {
+            selectTab('general');
+            requestAnimationFrame(() => form.reportValidity());
+          } else form.requestSubmit();
+        }}
+      />
+      {parentPicker && (
+        <TaskRelationPicker
+          projectId={draft.projectId}
+          excludeId={detail?.item.projectId === draft.projectId ? id : undefined}
+          relation="parent"
+          onClose={() => setParentPicker(false)}
+          onSelect={(task) => {
+            setDraft((d) => ({
+              ...d,
+              parentTaskId: task?.id || '',
+              parentTitle: task?.title || '',
+            }));
+            setDirty(true);
+            setParentPicker(false);
+          }}
+        />
+      )}
     </Modal>
   );
 }

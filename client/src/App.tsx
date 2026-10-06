@@ -342,6 +342,7 @@ function WorkspaceApp({
   const [editor, setEditor] = useState<string | null>(
     new URLSearchParams(location.search).get('task'),
   );
+  const [parentTask, setParentTask] = useState<TaskItem | null>(null);
   const [projectModal, setProjectModal] = useState(false);
   const [installHelp, setInstallHelp] = useState(false);
   const [install, setInstall] = useState<InstallPrompt | null>(null);
@@ -528,11 +529,13 @@ function WorkspaceApp({
   };
   const closeTask = () => {
     setEditor(null);
+    setParentTask(null);
     const url = new URL(location.href);
     url.searchParams.delete('task');
     history.replaceState(null, '', url);
   };
   const openTask = (id: string) => {
+    setParentTask(null);
     setEditor(id);
     const url = new URL(location.href);
     url.searchParams.set('task', id);
@@ -1281,9 +1284,18 @@ function WorkspaceApp({
             )}
             {editor && (
               <TaskEditor
-                key={editor}
+                key={`${editor}-${parentTask?.id || ''}`}
                 id={editor === 'new' ? undefined : editor}
-                projectId={taskProjectId}
+                projectId={parentTask?.projectId || taskProjectId}
+                parentTask={parentTask}
+                onNavigate={openTask}
+                onCreateChild={(task) => {
+                  setParentTask(task);
+                  setEditor('new');
+                  const url = new URL(location.href);
+                  url.searchParams.delete('task');
+                  history.replaceState(null, '', url);
+                }}
                 folderId={folder}
                 moduleId={
                   planningKind === 'modules'
@@ -1453,6 +1465,7 @@ function TaskCard({
           ))}
           {t.moduleId && <Badge>{w.modules.find((m) => m.id === t.moduleId)?.name}</Badge>}
           {t.cycleId && <Badge>{w.cycles.find((m) => m.id === t.cycleId)?.name}</Badge>}
+          {t.parentTaskId && <Badge>Subpendiente</Badge>}
           {board && (
             <Badge color={priorityColors[t.priority || 0]}>{priorities[t.priority || 0]}</Badge>
           )}

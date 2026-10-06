@@ -164,6 +164,7 @@ public class WorkItem
     public Guid? FolderId { get; set; }
     public Guid? ModuleId { get; set; }
     public Guid? CycleId { get; set; }
+    public Guid? ParentTaskId { get; set; }
     public Guid StatusId { get; set; }
     public Guid CreatedById { get; set; }
     public Guid? AssigneeId { get; set; }

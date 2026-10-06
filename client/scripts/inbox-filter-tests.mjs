@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { openTaskProperties, closeTaskProperties } from './task-property-test-helpers.mjs';
 
 export async function testInboxFilters({ page, admin, support, adminUser, json, artifacts, pass }) {
   const a = await json(admin, 'POST', '/projects', { name: 'Filter QA Alpha', color: 'purple' });
@@ -99,8 +100,10 @@ export async function testInboxFilters({ page, admin, support, adminUser, json, 
   assert.equal(await page.locator('.task-filter-count').textContent(), '7');
   await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
   const report = page.getByRole('dialog', { name: '¿Qué encontraste?' });
-  assert.equal(await report.getByLabel('Proyecto', { exact: true }).inputValue(), a.id);
-  assert.equal(await report.getByLabel('Carpeta', { exact: true }).inputValue(), folder.id);
+  await openTaskProperties(page);
+  assert.equal(await page.getByLabel('Proyecto', { exact: true }).inputValue(), a.id);
+  assert.equal(await page.getByLabel('Carpeta', { exact: true }).inputValue(), folder.id);
+  await closeTaskProperties(page);
   await report.getByRole('button', { name: 'Cerrar', exact: true }).click();
 
   await open();

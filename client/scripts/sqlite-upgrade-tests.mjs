@@ -147,6 +147,7 @@ try {
   assert.equal(existingTask.estimateKind, 'time');
   assert.equal(existingTask.moduleId, null);
   assert.equal(existingTask.cycleId, null);
+  assert.equal(existingTask.parentTaskId, null);
   const module = await api('/modules', 'POST', { projectId: project.id, name: 'Upgraded module' });
   const cycle = await api('/cycles', 'POST', { projectId: project.id, name: 'Upgraded cycle' });
   const assigned = await api(`/tasks/${task.id}`, 'PUT', {
@@ -157,6 +158,14 @@ try {
   assert.equal(assigned.moduleId, module.id);
   assert.equal(assigned.estimateMinutes, 90);
   assert.equal((await api(`/projects/${project.id}/planning`)).project.total, 1);
+  const child = await api('/tasks', 'POST', {
+    ...existingTask,
+    title: 'Child after local upgrade',
+    tagIds: [],
+    hierarchy: { parentTaskId: existingTask.id },
+  });
+  assert.equal(child.parentTaskId, existingTask.id);
+  assert.equal((await api(`/tasks/${existingTask.id}`)).children.total, 1);
   assert.equal((await api('/auth/login', 'POST', { identifier: 'ADMIN-2', password })).id, user.id);
   assert.equal(
     (await api('/auth/login', 'POST', { identifier: 'admin', password })).email,
@@ -184,6 +193,7 @@ try {
         usernameLogin: true,
         retainedTaskEstimates: true,
         newPlanningWorks: true,
+        hierarchyWorks: true,
         testedAt: new Date().toISOString(),
       },
       null,

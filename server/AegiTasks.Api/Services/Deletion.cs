@@ -9,9 +9,14 @@ public static class Deletion
 {
     // Caller owns the transaction. Notes survive; only their deleted links are cleared.
     public record RemovedContent(Guid[] Files, Guid[] FocusUsers);
-    public static async Task<RemovedContent> RemoveTasks(AppDb db, List<WorkItem> tasks, Guid? projectId = null)
+    public static async Task<RemovedContent> RemoveTasks(AppDb db, List<WorkItem> tasks, Guid? projectId = null, Guid? actorId = null)
     {
         var ids = tasks.Select(t => t.Id).ToArray();
+        foreach (var child in await db.Tasks.Where(t => t.ParentTaskId != null && ids.Contains(t.ParentTaskId.Value)).ToListAsync()) {
+            child.ParentTaskId = null; child.Version = Guid.NewGuid(); child.UpdatedAt = DateTime.UtcNow;
+            if (!ids.Contains(child.Id)) Rules.Log(db, child.Id, actorId ?? child.CreatedById, "Su padre fue eliminado; este pendiente se conserva sin padre.");
+        }
+        await db.SaveChangesAsync(); // Clear self-references before deleting any level of the tree.
         var attachments = await db.Attachments.Where(a => ids.Contains(a.WorkItemId)).Select(a => a.Id).ToArrayAsync();
         foreach (var note in await db.Notes.Where(n => (projectId != null && n.ProjectId == projectId) || (n.LinkedTaskId != null && ids.Contains(n.LinkedTaskId.Value))).ToListAsync())
         {

@@ -2,30 +2,44 @@
 
 Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML/shell no se repitieron en esta iteración: frontend corresponde al 25 de septiembre; .NET, YAML y shell al 23 de septiembre.
 
-La iteración del árbol lateral y el muestrario modifica solo frontend, tests y documentación. La validación PostgreSQL y las comprobaciones .NET/migraciones de la tabla corresponden a la iteración anterior; no se repitieron porque API y esquema no cambiaron.
+La iteración del footer compacto y la jerarquía de pendientes modifica frontend, API, modelo y migraciones. Las pruebas utilizan datos temporales aislados; no modifican la base de desarrollo ni el servidor de producción.
 
 ## Ejecutado correctamente
 
-| Verificación                                                                    | Resultado                                                                                                                                       |
-| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dotnet build`                                                                  | Sin errores ni advertencias                                                                                                                     |
-| `dotnet build -c Release`                                                       | Sin errores ni advertencias                                                                                                                     |
-| `dotnet ef migrations has-pending-model-changes --project server/AegiTasks.Api` | Modelo y migración PostgreSQL coinciden                                                                                                         |
-| `npm --prefix client run typecheck`                                             | Correcto                                                                                                                                        |
-| `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                                                |
-| `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                                                  |
-| `npm --prefix client run test:e2e`                                              | **116 verificaciones aprobadas sobre SQLite**                                                                                                   |
-| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa                     |
-| `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Actualización local anterior conserva cuentas, contraseñas, espacio personal, notas y estimaciones en minutos; módulos/ciclos nuevos operativos |
-| `node client/scripts/postgres-tests.mjs`                                        | **112 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                                        |
-| `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                                                                                |
-| `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                                                                             |
-| Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                                                                                      |
-| `sh -n scripts/setup-env.sh` en Ubuntu/WSL                                      | Sintaxis correcta                                                                                                                               |
+| Verificación                                                                    | Resultado                                                                                                                   |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `dotnet build`                                                                  | Sin errores ni advertencias                                                                                                 |
+| `dotnet build -c Release`                                                       | Sin errores ni advertencias                                                                                                 |
+| `dotnet ef migrations has-pending-model-changes --project server/AegiTasks.Api` | Modelo y migración PostgreSQL coinciden                                                                                     |
+| `npm --prefix client run typecheck`                                             | Correcto                                                                                                                    |
+| `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                            |
+| `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                              |
+| `npm --prefix client run test:e2e`                                              | **130 verificaciones aprobadas sobre SQLite**                                                                               |
+| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
+| `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Conserva cuentas, contraseñas, espacio personal, notas y estimaciones; módulos, ciclos y jerarquía nuevos operativos        |
+| `node client/scripts/postgres-tests.mjs`                                        | **130 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                    |
+| `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                                                            |
+| `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                                                         |
+| Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                                                                  |
+| `sh -n scripts/setup-env.sh` en Ubuntu/WSL                                      | Sintaxis correcta                                                                                                           |
 
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Footer compacto y padres/subpendientes (6 de octubre)
+
+La suite completa final pasó **130 verificaciones en SQLite y 130 en PostgreSQL 18.4**, incluyendo catorce grupos nuevos de jerarquía/footer; las actualizaciones PWA pasaron sus **12 verificaciones** con el código final. Resultados en `task-hierarchy-sqlite-results.json`, `postgres-test-results.json`, `postgres-migration-results.json`, `sqlite-upgrade-results.json` y `pwa-test-results.json`. Pasaron build Debug/Release de API, modelo EF sin cambios pendientes, build de producción del cliente con typecheck, lint y formato. La validación visual y funcional utiliza Chromium local; no se ejecutó en dispositivos físicos ni se desplegó al servidor de producción.
+
+El footer mantiene estado, responsable y Guardar fuera del contenido desplazable en las tres pestañas. Las propiedades opcionales se abren con botones compactos y se agrupan en pantallas pequeñas. La prueba real modifica fecha y guarda desde Actividad; verifica que un título inválido devuelve a General y que las selecciones se conservan entre pestañas. Escape cierra solo el diálogo secundario, sin activar la confirmación de salida del pendiente ni perder el borrador. Se corrigió la propagación del evento cancel en el componente Modal y se conservó el fallo que lo detectó como `task-hierarchy-escape-failure*`. Se revisan 1440×900, 390×844, 320×600 y 844×390, en claro/oscuro, sin desbordamiento horizontal, con controles visibles y áreas táctiles de 44 px en teléfono/landscape. Capturas: `task-footer-1440-light.png`, `task-footer-390-dark.png`, `task-footer-320-light.png`, `task-footer-844-dark.png`.
+
+Los casos de API cubren varios niveles, responsables independientes, avance con estados personalizados, compatibilidad con clientes que omiten jerarquía, rechazo de autorreferencias/ciclos/proyectos/Spaces ajenos, tareas archivadas, versiones antiguas, movimiento de hojas entre proyectos, bloqueo de movimiento de padres con hijos y eliminación que conserva los hijos con nueva versión e historial. Dos peticiones simultáneas que intentan A→B y B→A deben producir una aceptación y un rechazo sin ciclo. El borrado del proyecto con múltiples niveles debe completar sin fallos de claves foráneas.
+
+La UI crea un hijo asignado a otro integrante con proyecto/módulo/ciclo heredados; navega al padre y completa al hijo sin completar al padre. También busca, vincula y retira un pendiente existente. La elección de padre permanece como borrador hasta guardar; puede eliminarse con **Sin padre**. Las listas y candidatos incluyen más de 50 pendientes y verifican paginación; los endpoints nuevos requieren permiso Pendientes además de membresía del Space.
+
+`TaskHierarchy` añade una referencia nullable, índice y clave foránea restrictiva en PostgreSQL; los pendientes anteriores siguen como raíces y conservan texto, IDs, comentarios y estimaciones. La extensión del esquema SQLite anterior conserva usuarios, hashes, espacio personal, notas y estimaciones y permite crear un hijo correctamente. El estado de los padres y las estimaciones no se agregan automáticamente: los recuentos de proyectos/módulos/ciclos siguen contando pendientes individuales.
+
+Una primera ejecución SQLite se interrumpió cuando `vite preview` salió con código Windows 3221226505 durante una prueba existente de módulos; la repetición completa pasó 128 verificaciones. PostgreSQL presentó el mismo cierre del preview en otra prueba de planificación. Ambos registros y capturas se conservaron como `task-hierarchy-*-preview-failure*`. El harness carga ahora la configuración de preview con `--configLoader native`, soportado por Node 24 local y CI; conserva Vite preview, su proxy y el build de producción. No se añaden reintentos de escrituras ni se modifica la configuración de producción.
 
 ### Árbol lateral de proyectos y muestrario compartido (6 de octubre)
 

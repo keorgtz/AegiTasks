@@ -106,6 +106,8 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
         b.Entity<WorkItem>().Property(x => x.Title).HasMaxLength(200);
         b.Entity<WorkItem>().Property(x => x.Description).HasMaxLength(12000);
         b.Entity<WorkItem>().Property(x => x.Version).IsConcurrencyToken();
+        b.Entity<WorkItem>().HasOne<WorkItem>().WithMany().HasForeignKey(x => x.ParentTaskId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WorkItem>().HasIndex(x => new { x.ParentTaskId, x.ProjectId });
         b.Entity<WorkItem>().HasIndex(x => new { x.ProjectId, x.Archived, x.StatusId });
         b.Entity<WorkItem>().HasIndex(x => x.UpdatedAt);
         b.Entity<WorkItem>().HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);

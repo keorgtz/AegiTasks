@@ -9,6 +9,7 @@ import { testTaskDetailTabs } from './task-detail-tests.mjs';
 import { testInboxFilters } from './inbox-filter-tests.mjs';
 import { testSpaceAccounts, testSpaceAccountUi } from './space-account-tests.mjs';
 import { testPlanningApi, testPlanningUi } from './planning-tests.mjs';
+import { testTaskHierarchy } from './task-hierarchy-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -91,7 +92,15 @@ try {
   );
   run(
     process.execPath,
-    [path.join(root, 'client/node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1'],
+    [
+      path.join(root, 'client/node_modules/vite/bin/vite.js'),
+      'preview',
+      '--host',
+      '127.0.0.1',
+      // Node loads this TypeScript config directly; preview does not need a native config bundle.
+      '--configLoader',
+      'native',
+    ],
     { cwd: path.join(root, 'client'), env: process.env },
   );
   await ready('http://localhost:5213/api/health');
@@ -536,6 +545,7 @@ try {
   });
   const planningFixtures = await testPlanningApi({ admin, support, personalAdmin, json, pass });
   await testPlanningUi({ page, admin, support, fixtures: planningFixtures, json, pass, artifacts });
+  await testTaskHierarchy({ page, admin, support, personalAdmin, member, json, pass, artifacts });
   await testWorkflow({
     page,
     context,

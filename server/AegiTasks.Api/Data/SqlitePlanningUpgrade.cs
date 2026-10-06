@@ -33,11 +33,12 @@ public static class SqlitePlanningUpgrade
         var tasks = await Columns("Tasks");
         var additions = new Dictionary<string, string> {
             ["ModuleId"] = "TEXT NULL", ["CycleId"] = "TEXT NULL", ["EstimateKind"] = "TEXT NOT NULL DEFAULT 'time'",
-            ["EstimatePoints"] = "INTEGER NULL", ["EstimateCategory"] = "TEXT NULL"
+            ["EstimatePoints"] = "INTEGER NULL", ["EstimateCategory"] = "TEXT NULL", ["ParentTaskId"] = "TEXT NULL"
         };
         foreach (var (name, definition) in additions)
             if (!tasks.Contains(name)) await db.Database.ExecuteSqlRawAsync($"ALTER TABLE Tasks ADD COLUMN {name} {definition}");
         await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_Tasks_ModuleId_ProjectId ON Tasks (ModuleId, ProjectId); CREATE INDEX IF NOT EXISTS IX_Tasks_CycleId_ProjectId ON Tasks (CycleId, ProjectId)");
+        await db.Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_Tasks_ParentTaskId_ProjectId ON Tasks (ParentTaskId, ProjectId)");
     }
 #pragma warning restore EF1002
 }

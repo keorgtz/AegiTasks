@@ -174,6 +174,25 @@ try {
     path.join(artifact, 'migration-planning.sql'),
   ]);
   sql('legacy', await readFile(path.join(artifact, 'migration-planning.sql'), 'utf8'));
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'ProjectPlanning',
+    'TaskHierarchy',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-hierarchy.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-hierarchy.sql'), 'utf8'));
+  assert.equal(
+    sql('legacy', 'SELECT count(*) FROM "Tasks" WHERE "ParentTaskId" IS NOT NULL;').trim(),
+    '0',
+  );
+  console.log(
+    'PASS PostgreSQL hierarchy migration preserves existing tasks as roots with nullable parent references',
+  );
   assert.equal(
     sql('legacy', 'SELECT "EstimateKind" || \':\' || "EstimateMinutes" FROM "Tasks";').trim(),
     'time:90',
@@ -256,6 +275,7 @@ try {
         uniqueUsernames: true,
         retainedPasswordHashes: true,
         retainedTaskEstimates: true,
+        hierarchyMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

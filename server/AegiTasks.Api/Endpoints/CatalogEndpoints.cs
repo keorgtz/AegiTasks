@@ -49,9 +49,10 @@ public static class CatalogEndpoints
             var project = await db.Projects.SingleOrDefaultAsync(p => p.Id == id);
             if (project == null) return Results.NotFound();
             await using var transaction = await db.Database.BeginTransactionAsync();
+            await TaskHierarchy.LockProjects(db, id);
             var tasks = await db.Tasks.Where(t => t.ProjectId == id).ToListAsync();
             if (tasks.Count > 0 && !await Access.Can(db, user, "tasks")) return Results.Forbid();
-            var files = await Deletion.RemoveTasks(db, tasks, id);
+            var files = await Deletion.RemoveTasks(db, tasks, id, user.UserId());
             db.Folders.RemoveRange(await db.Folders.Where(f => f.ProjectId == id).ToListAsync());
             db.Statuses.RemoveRange(await db.Statuses.Where(s => s.ProjectId == id).ToListAsync());
             db.Modules.RemoveRange(await db.Modules.Where(s => s.ProjectId == id).ToListAsync());

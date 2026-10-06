@@ -52,6 +52,7 @@ public static class Rules
         if (input.Priority is < 1 or > 4) throw new InputError("Prioridad no válida.");
         if (input.EstimateMinutes is < 1 or > 600000) throw new InputError("La estimación debe ser de 1 a 600000 minutos.");
         await PlanningRules.Apply(db, item, input.Planning, input.ProjectId, input.EstimateMinutes, projectChanged);
+        await TaskHierarchy.Apply(db, item, input.Hierarchy, input.ProjectId);
         var ids = (input.TagIds ?? []).Distinct().ToArray();
         var tags = await db.Tags.Where(x => ids.Contains(x.Id)).ToListAsync();
         if (tags.Count != ids.Length || ids.Length > 20) throw new InputError("Etiquetas no válidas (máximo 20).");
@@ -60,5 +61,6 @@ public static class Rules
         item.Tags = tags;
     }
 }
-public record TaskInput(string Title, string? Description, Guid ProjectId, Guid StatusId, Guid? FolderId, Guid? AssigneeId, int? Priority, DateOnly? DueDate, int? EstimateMinutes, Guid[]? TagIds, Guid? Version, TaskPlanningInput? Planning = null);
+public record TaskInput(string Title, string? Description, Guid ProjectId, Guid StatusId, Guid? FolderId, Guid? AssigneeId, int? Priority, DateOnly? DueDate, int? EstimateMinutes, Guid[]? TagIds, Guid? Version, TaskPlanningInput? Planning = null, TaskHierarchyInput? Hierarchy = null);
+public record TaskHierarchyInput(Guid? ParentTaskId);
 public record TaskPlanningInput(Guid? ModuleId, Guid? CycleId, string EstimateKind, int? EstimatePoints, string? EstimateCategory);

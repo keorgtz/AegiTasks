@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { testPlanningViews } from './planning-view-tests.mjs';
+import { openTaskProperties, closeTaskProperties } from './task-property-test-helpers.mjs';
 
 export async function testPlanningApi({ admin, support, personalAdmin, json, pass }) {
   const project = await json(admin, 'POST', '/projects', {
@@ -401,18 +402,19 @@ export async function testPlanningUi({ page, admin, support, fixtures, json, pas
   );
   await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
   await page.getByLabel('Título', { exact: true }).fill('Planning UI estimated task');
-  await page.locator('details.advanced').evaluate((d) => {
-    d.open = true;
-  });
+  await openTaskProperties(page);
   assert.equal(await page.getByLabel('Módulo (opcional)').inputValue(), mod.id);
   assert.equal(await page.getByLabel('Tipo de estimación').inputValue(), 'categories');
   await page.getByLabel('Ciclo (opcional)').selectOption(fixtures.cycle.id);
   await page.getByLabel('Tipo de estimación').selectOption('fibonacci');
   await page.getByLabel('Puntos (opcional)').selectOption('8');
+  await closeTaskProperties(page);
   await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
   await page.getByRole('heading', { name: 'Detalle del pendiente' }).waitFor();
   await page.getByText('Todos los cambios están guardados.', { exact: true }).waitFor();
+  await openTaskProperties(page);
   assert.equal(await page.getByLabel('Puntos (opcional)').inputValue(), '8');
+  await closeTaskProperties(page);
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page
     .getByRole('button', { name: 'Abrir pendiente: Planning UI estimated task', exact: true })
@@ -441,11 +443,13 @@ export async function testPlanningUi({ page, admin, support, fixtures, json, pas
     ['none', null, null],
     ['fibonacci', 'Puntos (opcional)', '8'],
   ]) {
+    await openTaskProperties(page);
     await page.getByLabel('Tipo de estimación').selectOption(kind);
     if (label) {
       if (kind === 'points' || kind === 'time') await page.getByLabel(label).fill(value);
       else await page.getByLabel(label).selectOption(value);
     }
+    await closeTaskProperties(page);
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('dialog fieldset')?.disabled);
     const stored = (

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { testProjectNavigation } from './project-navigation-tests.mjs';
+import { openTaskProperties, closeTaskProperties } from './task-property-test-helpers.mjs';
 
 export async function testPlanningViews({ page, admin, support, fixtures, json, pass, artifacts }) {
   await testProjectNavigation({ page, admin, fixtures, json, pass, artifacts });
@@ -159,10 +160,9 @@ export async function testPlanningViews({ page, admin, support, fixtures, json, 
 
   await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
   await page.getByLabel('Título', { exact: true }).fill('Nuevo desde detalle del módulo');
-  await page.locator('details.advanced').evaluate((d) => {
-    d.open = true;
-  });
+  await openTaskProperties(page);
   assert.equal(await page.getByLabel('Módulo (opcional)').inputValue(), mod.id);
+  await closeTaskProperties(page);
   await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
   await page.getByText('Todos los cambios están guardados.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();

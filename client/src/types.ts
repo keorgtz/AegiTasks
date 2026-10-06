@@ -111,6 +111,7 @@ export interface TaskItem {
   folderId: string | null;
   moduleId: string | null;
   cycleId: string | null;
+  parentTaskId: string | null;
   statusId: string;
   assigneeId: string | null;
   createdById: string;
@@ -128,6 +129,11 @@ export interface TaskItem {
 }
 export interface TaskDetail {
   item: TaskItem;
+  parent: Pick<
+    TaskItem,
+    'id' | 'title' | 'projectId' | 'statusId' | 'assigneeId' | 'archived' | 'version'
+  > | null;
+  children: { total: number; done: number; archived: number };
   activities: { id: string; userId: string; body: string; kind: string; createdAt: string }[];
   attachments: { id: string; name: string; size: number; contentType: string }[];
 }

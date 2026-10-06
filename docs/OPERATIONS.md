@@ -100,6 +100,16 @@ La migración `ProjectLabels` añade una columna vacía para las etiquetas de pr
 
 ## Espacios, notas y enfoque
 
+### Organización y jerarquía de pendientes
+
+El detalle mantiene sus propiedades y Guardar en un footer independiente del contenido desplazable, disponible en las tres pestañas. Estado y responsable se editan directamente; las demás propiedades se abren con botones compactos, agrupados en **Más propiedades** en pantallas pequeñas. Cerrar un diálogo de propiedades conserva la selección en el borrador: hay que guardar el pendiente para aplicarla. La elección de padre también se guarda con el pendiente. Crear, vincular, retirar y cambiar el estado de hijos son operaciones explícitas sobre esos hijos.
+
+La migración `TaskHierarchy` añade `ParentTaskId` nullable e índice, sin cambiar el contenido anterior: todos los pendientes existentes empiezan sin padre. PostgreSQL aplica la migración al arrancar la API; SQLite de desarrollo añade la columna si falta. Actualiza API y frontend juntos con el procedimiento habitual y conserva los volúmenes.
+
+Cada pendiente admite un padre y varios hijos dentro del mismo proyecto y Space. Los hijos tienen responsable, estado y estimación propios y participan como pendientes individuales en los recuentos del proyecto, módulos y ciclos; no hay suma ni estado automático de padres. Crear un hijo desde el detalle hereda proyecto, carpeta, módulo y ciclo, pero permite cambiar esas propiedades y asignar otro responsable. Vincular uno existente conserva sus datos y sustituye su padre anterior. El servidor valida pertenencia, ciclos y versiones y serializa los cambios de jerarquía por proyecto en PostgreSQL. SQLite usa su bloqueo de escritura.
+
+Eliminar un padre retira la relación de sus hijos, conserva sus datos y actualiza su versión e historial. Los niveles siguientes siguen unidos a esos hijos. Para mover un padre a otro proyecto primero hay que retirar sus hijos, incluidos los archivados; mover un hijo sin descendientes limpia la relación anterior. El borrado del proyecto elimina todos sus pendientes, conservando las notas conforme a las reglas habituales. Los candidatos archivados no se ofrecen como nuevos padres, pero una relación existente se conserva al archivar y puede consultarse desde el detalle.
+
 Los permisos de página y la membresía se comprueban en el servidor. Las claves de sesión no conceden acceso al espacio Personal de otra cuenta. Retirar una membresía deja de autorizar nuevas llamadas inmediatamente; los datos que esa persona ya descargó no se pueden recuperar. Los datos personales permanecen en la base al desactivar una cuenta.
 
 Las notas se guardan en PostgreSQL y se exportan solo bajo sesión y espacio autorizados. El editor procesa Markdown GFM y permite clases de estilo acotadas; filtra HTML activo, atributos de eventos y enlaces ejecutables. No carga imágenes remotas. Las notas no usan cifrado de extremo a extremo: el operador de la base y los respaldos puede leer su contenido. Para referencias a cuentas/VPN, guarda documentación y enlaces a la bóveda de credenciales que use el equipo; AegiTasks no implementa una bóveda de contraseñas.
