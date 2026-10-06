@@ -1,0 +1,14 @@
+.view-picker {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.view-picker button[aria-pressed='true'] {
+  color: var(--readable-primary);
+  background: var(--primary-bg);
+  border-color: var(--primary-pale);
+}
+.work-section > .section-heading {
+  flex-wrap: wrap;
+}

@@ -96,32 +96,44 @@ export async function testProjectNavigation({ page, admin, fixtures, json, pass,
         await sidebar.evaluate((s) => s.scrollHeight <= s.clientHeight + 1),
         `sidebar ${height} ${theme}`,
       );
-      assert.ok(
+      const projectsPanel = sidebar.locator('#sidebar-projects');
+      assert.equal(
         await sidebar
-          .locator('.sidebar-panel')
-          .evaluate((s) => s.scrollHeight <= s.clientHeight + 1),
-        `tree panel ${height} ${theme}`,
+          .getByRole('button', { name: 'WORKSPACE COMPARTIDO', exact: true })
+          .getAttribute('aria-expanded'),
+        'true',
       );
-      if (height >= 600) assert.equal(await tree().getByRole('button').count(), 3);
-      const previous = sidebar.getByRole('button', { name: 'Opciones anteriores', exact: true });
-      while ((await previous.count()) && (await previous.isEnabled())) await previous.click();
-      const names = new Set();
-      while (true) {
-        for (const name of await sidebar.locator('.project-link').allTextContents())
-          names.add(name.trim());
-        const next = sidebar.getByRole('button', { name: 'Más opciones', exact: true });
-        if (!(await next.count()) || (await next.isDisabled())) break;
-        await next.click();
-      }
+      assert.equal(
+        await sidebar
+          .getByRole('button', { name: 'Contraer proyectos', exact: true })
+          .getAttribute('aria-expanded'),
+        'true',
+      );
+      assert.ok(
+        await projectsPanel.evaluate((element) => getComputedStyle(element).overflowY === 'auto'),
+      );
+      assert.equal(await tree().getByRole('button').count(), 3);
+      const names = new Set(
+        (await sidebar.locator('.project-link').allTextContents()).map((name) => name.trim()),
+      );
       assert.ok(names.has(last.name));
       assert.ok(names.has(project.name));
+      await projectsPanel.evaluate((element) => (element.scrollTop = element.scrollHeight));
+      const lastButton = sidebar.getByRole('button', { name: last.name, exact: true });
+      await lastButton.scrollIntoViewIfNeeded();
+      const bounds = await lastButton.boundingBox();
+      const panelBounds = await projectsPanel.boundingBox();
+      assert(
+        bounds.y >= panelBounds.y &&
+          bounds.y + bounds.height <= panelBounds.y + panelBounds.height + 1,
+      );
       if (height === 600)
         await page.screenshot({ path: path.join(artifacts, `project-tree-600-${theme}.png`) });
     }
   }
   for (const item of created) await json(admin, 'DELETE', `/projects/${item.id}`, undefined, 204);
   pass(
-    'Project trees keep child links together when height permits, paginate all projects and remain scroll-free at 900/768/600/450px in both themes',
+    'Workspace and project tree stay expanded together with local scrolling, all project links and no sidebar overflow at 900/768/600/450px in both themes',
   );
 
   for (const theme of ['light', 'dark']) {

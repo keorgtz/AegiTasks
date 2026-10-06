@@ -294,6 +294,7 @@ export function Settings({
   logout,
   initialProject,
   canOrganize = true,
+  mode,
 }: {
   workspace: Workspace;
   user: User;
@@ -302,8 +303,10 @@ export function Settings({
   logout: () => void;
   initialProject: string;
   canOrganize?: boolean;
+  mode?: 'organization' | 'account';
 }) {
-  const [tab, setTab] = useState(canOrganize ? 'organization' : 'account');
+  const [selectedTab, setTab] = useState(canOrganize ? 'organization' : 'account');
+  const tab = mode || selectedTab;
   const [project, setProject] = useState(
     initialProject || w.projects.find((p) => !p.archived)?.id || '',
   );
@@ -351,25 +354,32 @@ export function Settings({
       <div className="page-heading">
         <div>
           <div className="eyebrow">A TU MANERA</div>
-          <h1>Ajustes</h1>
+          <h1>{mode === 'account' ? 'Mi cuenta' : 'Ajustes'}</h1>
           <p>Un espacio simple, con la organización que tu equipo necesita.</p>
         </div>
       </div>
-      <div className="tabs">
-        {canOrganize && (
-          <>
-            <button
-              className={tab === 'organization' ? 'active' : ''}
-              onClick={() => setTab('organization')}
-            >
-              <SlidersHorizontal size={17} /> Organización
-            </button>
-          </>
-        )}
-        <button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>
-          <LockKeyhole size={17} /> Mi cuenta
-        </button>
-      </div>
+      {!mode && (
+        <div className="tabs">
+          {canOrganize && (
+            <>
+              <button
+                className={tab === 'organization' ? 'active' : ''}
+                onClick={() => setTab('organization')}
+              >
+                <SlidersHorizontal size={17} /> Organización
+              </button>
+            </>
+          )}
+          <button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>
+            <LockKeyhole size={17} /> Mi cuenta
+          </button>
+        </div>
+      )}
+      {tab === 'organization' && !canOrganize && (
+        <p className="card">
+          Tu rol no tiene permiso para administrar la organización de proyectos.
+        </p>
+      )}
       <ErrorBox message={error} />
       {tab === 'organization' && canOrganize && (
         <div className="settings-grid">

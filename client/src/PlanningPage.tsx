@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CalendarRange,
-  Columns3,
   Filter,
   Layers3,
-  LayoutGrid,
   List,
   Pencil,
   Plus,
@@ -31,14 +29,8 @@ import {
 } from './types';
 import './styles/planning-page.css';
 
-type Layout = 'gallery' | 'list' | 'board' | 'timeline';
+import { ViewPicker, layouts, type Layout } from './ViewPicker';
 type Entry = { group: ProjectGroup; progress: PlanningProgress };
-const layouts = [
-  { id: 'gallery', label: 'Tarjetas', icon: LayoutGrid },
-  { id: 'list', label: 'Lista', icon: List },
-  { id: 'board', label: 'Tablero', icon: Columns3 },
-  { id: 'timeline', label: 'Cronología', icon: CalendarRange },
-] as const;
 const moduleStages = [
   { id: 'empty', label: 'Sin pendientes' },
   { id: 'pending', label: 'Sin resolver' },
@@ -75,38 +67,6 @@ function period(group: ProjectGroup) {
   return group.startsOn || group.endsOn
     ? `${group.startsOn ? dateLabel(group.startsOn) : 'Sin inicio'} → ${group.endsOn ? dateLabel(group.endsOn) : 'Sin fecha final'}`
     : 'Fechas opcionales · sin programar';
-}
-function LayoutPicker({
-  value,
-  onChange,
-  detail = false,
-}: {
-  value: string;
-  onChange: (value: Layout) => void;
-  detail?: boolean;
-}) {
-  return (
-    <div
-      className="planning-layouts"
-      role="group"
-      aria-label={detail ? 'Vista de pendientes de la agrupación' : 'Vista de agrupaciones'}
-    >
-      {layouts
-        .filter((l) => !detail || ['list', 'board'].includes(l.id))
-        .map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className="btn-icon"
-            title={label}
-            aria-label={label}
-            aria-pressed={value === id}
-            onClick={() => onChange(id)}
-          >
-            <Icon size={18} />
-          </button>
-        ))}
-    </div>
-  );
 }
 export function PlanningPage({
   project,
@@ -454,7 +414,7 @@ export function PlanningPage({
                 </span>
               )}
             </button>
-            <LayoutPicker value={layout} onChange={changeLayout} />
+            <ViewPicker value={layout} onChange={changeLayout} />
           </div>
           <div className="planning-result-caption">
             <span className="muted small">
@@ -826,7 +786,7 @@ function GroupTasks({
         <button className="btn btn-ghost" onClick={() => setFilters(true)}>
           <Filter size={17} /> Filtros{status && <span className="badge tone-purple">1</span>}
         </button>
-        <LayoutPicker value={layout} onChange={setLayout} detail />
+        <ViewPicker value={layout} onChange={setLayout} context="group-tasks" />
       </div>
       <ErrorBox message={error} />
       <ErrorBox message={actionError} />

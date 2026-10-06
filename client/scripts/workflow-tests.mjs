@@ -278,7 +278,7 @@ export async function testWorkflow({
     'User can permanently delete a task; linked notes survive and deleted attachments are inaccessible',
   );
 
-  // Desktop pagination keeps long project lists reachable without hiding overflow.
+  // Each desktop section scrolls its own long content without moving the sidebar.
   for (let i = 0; i < 12; i++)
     await json(admin, 'POST', '/projects', {
       name: `Sidebar ${String(i).padStart(2, '0')}`,
@@ -286,48 +286,43 @@ export async function testWorkflow({
     });
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('http://localhost:4174/#projects');
+  await page.locator('.sidebar').getByRole('button', { name: 'Sidebar 11', exact: true }).waitFor();
   for (const height of [900, 768, 600]) {
     await page.setViewportSize({ width: 1366, height });
     const sidebar = page.locator('.sidebar');
+    const workspaceToggle = sidebar.getByRole('button', {
+      name: 'WORKSPACE COMPARTIDO',
+      exact: true,
+    });
+    if ((await workspaceToggle.getAttribute('aria-expanded')) !== 'true')
+      await workspaceToggle.click();
+    const expand = sidebar.getByRole('button', { name: 'Expandir proyectos', exact: true });
+    if (await expand.count()) await expand.click();
+    assert.equal(await workspaceToggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(
+      await sidebar
+        .getByRole('button', { name: 'Contraer proyectos', exact: true })
+        .getAttribute('aria-expanded'),
+      'true',
+    );
     await sidebar.getByRole('button', { name: 'PROYECTOS', exact: true }).click();
-    await page.waitForTimeout(100);
+    await page.getByRole('heading', { name: 'Tus proyectos', exact: true }).waitFor();
+    assert(await sidebar.evaluate((element) => element.scrollHeight <= element.clientHeight + 1));
+    const panel = sidebar.locator('#sidebar-projects');
+    assert(await panel.evaluate((element) => element.scrollHeight > element.clientHeight));
+    await sidebar.getByRole('button', { name: 'Sidebar 11', exact: true }).scrollIntoViewIfNeeded();
+    const bounds = await sidebar
+      .getByRole('button', { name: 'Sidebar 11', exact: true })
+      .boundingBox();
+    assert(bounds.y >= 0 && bounds.y + bounds.height <= height);
+    await workspaceToggle.click();
     assert.equal(
       await sidebar
-        .getByRole('button', { name: 'WORKSPACE COMPARTIDO', exact: true })
+        .getByRole('button', { name: 'Contraer proyectos', exact: true })
         .getAttribute('aria-expanded'),
-      'false',
+      'true',
     );
-    assert(
-      await sidebar.evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
-      `sidebar overflow at ${height}`,
-    );
-    assert(
-      await sidebar
-        .getByRole('button', { name: 'Nuevo proyecto', exact: true })
-        .evaluate(
-          (el) =>
-            el.getBoundingClientRect().right <=
-            el.closest('.sidebar').getBoundingClientRect().right,
-        ),
-      'create-project control stays within sidebar',
-    );
-    const found = new Set();
-    while (true) {
-      for (const name of await sidebar.locator('.project-link').allTextContents())
-        found.add(name.trim());
-      const next = sidebar.getByRole('button', { name: 'Más opciones', exact: true });
-      if (!(await next.count()) || (await next.isDisabled())) break;
-      await next.click();
-    }
-    assert(found.has('Sidebar 11'));
-    await sidebar.getByRole('button', { name: 'WORKSPACE COMPARTIDO', exact: true }).click();
-    assert.equal(
-      await sidebar
-        .getByRole('button', { name: 'PROYECTOS', exact: true })
-        .getAttribute('aria-expanded'),
-      'false',
-    );
-    assert(await sidebar.evaluate((el) => el.scrollHeight <= el.clientHeight + 1));
+    await workspaceToggle.click();
   }
   await page.screenshot({ path: path.join(artifacts, 'workflow-sidebar-600.png') });
   await page
@@ -341,7 +336,7 @@ export async function testWorkflow({
   );
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
   pass(
-    'Exclusive sidebar sections paginate large catalogs without vertical overflow at 900/768/600px; logo opens installation dialog',
+    'Independent sidebar sections scroll large catalogs locally at 900/768/600px, navigate from the Projects heading and retain installation through the logo',
   );
 
   // Exercise deletion through both UI entry points, preserving note contents and clearing Focus links.

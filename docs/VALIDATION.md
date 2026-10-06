@@ -2,7 +2,7 @@
 
 Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML/shell no se repitieron en esta iteración: frontend corresponde al 25 de septiembre; .NET, YAML y shell al 23 de septiembre.
 
-La iteración del footer compacto y la jerarquía de pendientes modifica frontend, API, modelo y migraciones. Las pruebas utilizan datos temporales aislados; no modifican la base de desarrollo ni el servidor de producción.
+La iteración de navegación y vistas de bandeja modifica solo frontend, pruebas y documentación. Se repiten build/typecheck, lint, formato, suite SQLite y PWA. Los resultados .NET, migraciones, actualización SQLite y PostgreSQL corresponden a la iteración previa de padres/subpendientes: API y esquema no cambian. Las pruebas utilizan datos temporales aislados y no modifican la base de desarrollo ni el servidor de producción.
 
 ## Ejecutado correctamente
 
@@ -14,7 +14,7 @@ La iteración del footer compacto y la jerarquía de pendientes modifica fronten
 | `npm --prefix client run typecheck`                                             | Correcto                                                                                                                    |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                            |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                              |
-| `npm --prefix client run test:e2e`                                              | **130 verificaciones aprobadas sobre SQLite**                                                                               |
+| `npm --prefix client run test:e2e`                                              | **138 verificaciones aprobadas sobre SQLite**                                                                               |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
 | `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Conserva cuentas, contraseñas, espacio personal, notas y estimaciones; módulos, ciclos y jerarquía nuevos operativos        |
 | `node client/scripts/postgres-tests.mjs`                                        | **130 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                    |
@@ -26,6 +26,18 @@ La iteración del footer compacto y la jerarquía de pendientes modifica fronten
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Navegación y cuatro vistas de bandeja (6 de octubre)
+
+La suite final completa pasó **138 verificaciones sobre SQLite** y la suite PWA pasó **12 verificaciones** con el código final. Build de producción con typecheck, lint y formato correctos. Resultados en `navigation-inbox-sqlite-results.json` y `pwa-test-results.json`; API, modelo, migraciones y dependencias no cambian. No se repitió PostgreSQL ni se ejecutó el despliegue de producción o aceptación en dispositivos físicos.
+
+Ocho grupos nuevos comprueban el encabezado Proyectos sin expansión automática, retirada de enlaces duplicados, submenú completo de Ajustes, rutas antiguas redirigidas, permisos de Usuarios y roles, aislamiento de preferencias por usuario y ocultación independiente/persistente de bienvenida y KPIs. Se conserva el acceso a cuenta, organización, espacios, administración, proyectos individuales y sus módulos/ciclos. Los paneles de workspace y proyectos se mantienen abiertos a la vez a alturas 900, 768, 600 y 450 px en ambos temas: cada scroll cambia solo su región y todos los enlaces permanecen alcanzables; el sidebar no desborda ni desplaza su logo/perfil. Se sustituyen las comprobaciones anteriores de exclusión/paginación lateral por la navegación solicitada.
+
+Un conjunto de 54 pendientes comprueba que el filtro inicial incluye 52 propios/sin asignar, excluye el responsable ajeno y el completado, y que las cuatro vistas muestran exactamente los mismos IDs antes y después de cambiar página. Cambiar proyecto, responsable y alcance conserva equivalencia entre tarjetas, lista, tablero y cronología. El selector de vista se comparte con Módulos/Ciclos y conserva sus flujos existentes. La cronología verifica fechas límite y pendientes sin fecha sin inventar duraciones; abrir una fila lleva al detalle normal. En 320 y 390 px, los vencimientos se presentan como una agenda sin scroll horizontal; en escritorio se conserva el eje con marcadores y hoy.
+
+Las vistas y Ajustes se revisan en 1440×900, 390×844, 320×740 y 844×390, con temas claro/oscuro y controles de 44 px, sin desbordamiento de página. Capturas revisadas: `navigation-panels-450-dark.png`, `inbox-tarjetas-390-light.png`, `inbox-cronología-320-dark.png`, `inbox-cronología-1440-dark.png` y `settings-workspace-320-dark.png`. Las pruebas previas de notas, Focus, edición concurrente, padres/hijos, roles, archivos, actualizaciones y ausencia de polling siguen dentro del recorrido completo.
+
+Dos ejecuciones intermedias detectaron esperas incompletas en pruebas: una contaba filas durante el refresco del tablero de un módulo y otra comprobaba el scroll antes de que los proyectos creados por API llegaran al catálogo del cliente. Se añadieron esperas acotadas sobre la fila esperada y el último proyecto antes de mantener las mismas comprobaciones. No se añadieron pausas arbitrarias ni reintentos de escrituras; registros y capturas conservados como `navigation-inbox-planning-wait*` y `navigation-inbox-catalog-wait*`.
 
 ### Footer compacto y padres/subpendientes (6 de octubre)
 

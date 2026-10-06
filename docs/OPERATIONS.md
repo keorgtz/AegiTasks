@@ -100,6 +100,16 @@ La migración `ProjectLabels` añade una columna vacía para las etiquetas de pr
 
 ## Espacios, notas y enfoque
 
+### Navegación, ajustes y vistas
+
+Workspace y Proyectos se expanden por separado en el sidebar de escritorio. Sus paneles son regiones desplazables y enfocables con teclado; no se desplaza el contenedor completo. El encabezado Proyectos abre el catálogo y su flecha controla únicamente la expansión. El proyecto seleccionado conserva su árbol de Pendientes/Módulos/Ciclos. Usuarios y roles se encuentran en **Ajustes → Usuarios y roles**, junto a Organización, Workspace y Mi cuenta. Las autorizaciones de página siguen utilizando las claves originales `settings`, `spaces`, `users` y `projects`; mover un enlace no otorga permisos nuevos. En móvil se llega al submenú desde Más → Ajustes.
+
+Los enlaces `#admin`, `#spaces` y `#settings` se normalizan a `#settings/users`, `#settings/workspace` y `#settings/organization`; `#mine` redirige a `#inbox`. La bandeja sigue entrando con responsable propio o sin asignar. El filtro Solo míos se conserva aunque se retire la vista duplicada.
+
+Las cuatro vistas de pendientes reciben la misma página filtrada: tarjetas, lista, tablero y cronología. El tablero conserva estados por proyecto; la cronología usa fechas límite como puntos, sin inferir inicio/duración. Los pendientes sin fecha se muestran aparte y en móvil se usa una agenda vertical. Todas las vistas indican que muestran la página actual, con un máximo de 50 resultados. Cambiar de vista no altera la búsqueda, filtros, estado del pendiente ni página.
+
+Las claves `aegitasks-sidebar-<user>-<space>`, `aegitasks-inbox-summary-<user>-<space>` y `aegitasks-task-view-<user>-<space>-<context>` guardan preferencias de navegación, bienvenida/KPIs y vista en localStorage del dispositivo. Son valores de interfaz, no respuestas de la API; se separan por usuario y Space. Una preferencia inválida vuelve a los valores iniciales. Los controles Mostrar bienvenida/Mostrar indicadores permanecen accesibles al ocultar esas secciones. Esta iteración no cambia API, esquema ni migraciones y se despliega con el procedimiento habitual.
+
 ### Organización y jerarquía de pendientes
 
 El detalle mantiene sus propiedades y Guardar en un footer independiente del contenido desplazable, disponible en las tres pestañas. Estado y responsable se editan directamente; las demás propiedades se abren con botones compactos, agrupados en **Más propiedades** en pantallas pequeñas. Cerrar un diálogo de propiedades conserva la selección en el borrador: hay que guardar el pendiente para aplicarla. La elección de padre también se guarda con el pendiente. Crear, vincular, retirar y cambiar el estado de hijos son operaciones explícitas sobre esos hijos.

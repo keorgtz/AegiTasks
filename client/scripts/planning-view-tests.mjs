@@ -141,6 +141,10 @@ export async function testPlanningViews({ page, admin, support, fixtures, json, 
     .getByRole('group', { name: 'Vista de pendientes de la agrupación' })
     .getByRole('button', { name: 'Tablero', exact: true })
     .click();
+  await page
+    .getByRole('region', { name: `Estado ${fixtures.done.name}`, exact: true })
+    .getByRole('article', { name: `Pendiente ${task.title}`, exact: true })
+    .waitFor();
   assert.equal(
     await page
       .getByRole('region', { name: `Estado ${fixtures.done.name}`, exact: true })

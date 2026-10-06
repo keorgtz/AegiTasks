@@ -130,22 +130,20 @@ export function TaskFilters({
               </select>
             </Field>
           ))}
-          {route !== 'mine' && (
-            <Field label="Filtrar por responsable">
-              <select value={values.assignee} onChange={(e) => change('assignee', e.target.value)}>
-                <option value="mine-or-unassigned">Míos y sin responsable</option>
-                <option value="mine">Solo míos</option>
-                <option value="unassigned">Sin responsable</option>
-                <option value="all">Todos los responsables</option>
-                {w.users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                    {u.active ? '' : ' (inactivo)'}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
+          <Field label="Filtrar por responsable">
+            <select value={values.assignee} onChange={(e) => change('assignee', e.target.value)}>
+              <option value="mine-or-unassigned">Míos y sin responsable</option>
+              <option value="mine">Solo míos</option>
+              <option value="unassigned">Sin responsable</option>
+              <option value="all">Todos los responsables</option>
+              {w.users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                  {u.active ? '' : ' (inactivo)'}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Filtrar por etiqueta">
             <select value={values.tag} onChange={(e) => change('tag', e.target.value)}>
               <option value="">Todas las etiquetas</option>
@@ -166,7 +164,7 @@ export function TaskFilters({
               ))}
             </select>
           </Field>
-          {route !== 'mine' && route !== 'archived' && (
+          {route !== 'archived' && (
             <Field label="Mostrar pendientes">
               <select value={values.scope} onChange={(e) => change('scope', e.target.value)}>
                 <option value="open">Por resolver</option>
@@ -197,8 +195,7 @@ export function TaskFilters({
                 module: '',
                 cycle: '',
                 status: '',
-                assignee:
-                  route === 'inbox' ? 'mine-or-unassigned' : route === 'mine' ? 'mine' : 'all',
+                assignee: route === 'inbox' ? 'mine-or-unassigned' : 'all',
                 tag: '',
                 priority: '',
                 scope: 'open',

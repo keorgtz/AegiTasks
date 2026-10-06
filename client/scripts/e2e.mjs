@@ -10,6 +10,7 @@ import { testInboxFilters } from './inbox-filter-tests.mjs';
 import { testSpaceAccounts, testSpaceAccountUi } from './space-account-tests.mjs';
 import { testPlanningApi, testPlanningUi } from './planning-tests.mjs';
 import { testTaskHierarchy } from './task-hierarchy-tests.mjs';
+import { testNavigationInbox } from './navigation-inbox-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -503,7 +504,11 @@ try {
     .click();
   await page
     .getByRole('dialog', { name: 'Más opciones' })
-    .getByRole('button', { name: 'Usuarios y roles' })
+    .getByRole('button', { name: 'Ajustes', exact: true })
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Más opciones' })
+    .getByRole('button', { name: 'Usuarios y roles', exact: true })
     .click();
   await page.getByRole('heading', { name: 'Usuarios y roles', exact: true }).waitFor();
   await page
@@ -546,6 +551,7 @@ try {
   const planningFixtures = await testPlanningApi({ admin, support, personalAdmin, json, pass });
   await testPlanningUi({ page, admin, support, fixtures: planningFixtures, json, pass, artifacts });
   await testTaskHierarchy({ page, admin, support, personalAdmin, member, json, pass, artifacts });
+  await testNavigationInbox({ page, admin, support, member, adminUser, json, pass, artifacts });
   await testWorkflow({
     page,
     context,

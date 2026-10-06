@@ -16,7 +16,6 @@ import {
   FolderTree,
   Inbox,
   LayoutGrid,
-  List,
   LogOut,
   Moon,
   Plus,
@@ -31,7 +30,6 @@ import {
   X,
   FileText,
   Timer,
-  Globe2,
   MoreHorizontal,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -45,6 +43,15 @@ import { TaskFilters, type TaskFilterValues } from './TaskFilters';
 import { ProjectPlanning } from './ProjectPlanning';
 import { PlanningPage } from './PlanningPage';
 import { estimateLabel } from './estimates';
+import { ViewPicker, layouts, type Layout } from './ViewPicker';
+import { TaskGallery, TaskTimeline } from './TaskViews';
+import {
+  SettingsDisclosure,
+  SettingsNavigation,
+  normalizeRoute,
+  pageForRoute,
+  settingsSections,
+} from './SettingsNavigation';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
 import { FocusPage } from './Focus';
@@ -299,20 +306,14 @@ function WorkspaceApp({
   const permissions = spaceSession.permissions;
   const [moreMenu, setMoreMenu] = useState(false);
   const [projectMenu, setProjectMenu] = useState(false);
-  const routePage = (r: string) =>
-    r.startsWith('notes/')
-      ? 'notes'
-      : r.startsWith('project/')
-        ? ['modules', 'cycles'].includes(r.split('/')[2] || '')
-          ? 'projects'
-          : 'tasks'
-        : ['inbox', 'mine', 'archived'].includes(r)
-          ? 'tasks'
-          : r === 'admin'
-            ? 'users'
-            : r;
+  const routePage = pageForRoute;
   const [w, setWorkspace] = useState<Workspace | null>(null);
-  const [route, setRoute] = useState(location.hash.slice(1) || 'inbox');
+  const [route, setRoute] = useState(() => normalizeRoute(location.hash.slice(1)));
+  useEffect(() => {
+    const raw = location.hash.slice(1);
+    const normalized = normalizeRoute(raw);
+    if (raw && raw !== normalized) history.replaceState(null, '', '#' + normalized);
+  }, []);
   const [folder, setFolder] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
   const [cycleFilter, setCycleFilter] = useState('');
@@ -326,12 +327,56 @@ function WorkspaceApp({
   const [priority, setPriority] = useState('');
   const [scope, setScope] = useState('open');
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
-  const assignee =
-    route === 'mine'
-      ? 'mine'
-      : (assigneeFilter ?? (route === 'inbox' ? 'mine-or-unassigned' : 'all'));
+  const assignee = assigneeFilter ?? (route === 'inbox' ? 'mine-or-unassigned' : 'all');
   const [sort, setSort] = useState('priority');
-  const [view, setView] = useState('list');
+  const viewKey =
+    'aegitasks-task-view-' +
+    user.id +
+    '-' +
+    space.id +
+    '-' +
+    (route.startsWith('project/') ? route.split('/').slice(0, 2).join('/') : route);
+  const readView = (key: string): Layout => {
+    try {
+      const stored = localStorage.getItem(key);
+      return layouts.some((layout) => layout.id === stored) ? (stored as Layout) : 'list';
+    } catch {
+      return 'list';
+    }
+  };
+  const [view, setView] = useState<Layout>(() => readView(viewKey));
+  useEffect(() => setView(readView(viewKey)), [viewKey]);
+  const chooseView = (value: Layout) => {
+    setView(value);
+    try {
+      localStorage.setItem(viewKey, value);
+    } catch {
+      /* The view remains available. */
+    }
+  };
+  const summaryKey = 'aegitasks-inbox-summary-' + user.id + '-' + space.id;
+  const [summaryVisibility, setSummaryVisibility] = useState<{ banner: boolean; metrics: boolean }>(
+    () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(summaryKey) || 'null');
+        if (stored && typeof stored.banner === 'boolean' && typeof stored.metrics === 'boolean')
+          return stored;
+      } catch {
+        /* Ignore an invalid preference. */
+      }
+      return { banner: true, metrics: true };
+    },
+  );
+  const toggleSummary = (part: 'banner' | 'metrics') =>
+    setSummaryVisibility((previous) => {
+      const next = { ...previous, [part]: !previous[part] };
+      try {
+        localStorage.setItem(summaryKey, JSON.stringify(next));
+      } catch {
+        /* Controls remain available. */
+      }
+      return next;
+    });
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<TaskPage>({ items: [], total: 0, page: 1, pageSize: 50 });
   const [summary, setSummary] = useState<Summary>({ open: 0, urgent: 0, overdue: 0, done: 0 });
@@ -401,11 +446,12 @@ function WorkspaceApp({
         history.replaceState(null, '', event.oldURL);
         return;
       }
-      setRoute(location.hash.slice(1) || 'inbox');
+      const normalized = normalizeRoute(location.hash.slice(1));
+      if (location.hash.slice(1) !== normalized) history.replaceState(null, '', '#' + normalized);
+      setRoute(normalized);
       setAssigneeFilter(null);
       setProjectFilter('');
       setFiltersOpen(false);
-      if (!location.hash.startsWith('#project/')) setView('list');
       setFolder('');
       setModuleFilter('');
       setCycleFilter('');
@@ -445,16 +491,13 @@ function WorkspaceApp({
     if (
       !w ||
       !permissions.includes('tasks') ||
-      !(
-        ['inbox', 'mine', 'archived'].includes(route) ||
-        (route.startsWith('project/') && !planningKind)
-      )
+      !(['inbox', 'archived'].includes(route) || (route.startsWith('project/') && !planningKind))
     )
       return;
     const controller = new AbortController();
     setLoading(true);
     const params = new URLSearchParams({
-      scope: route === 'mine' ? 'mine' : route === 'archived' ? 'archived' : scope,
+      scope: route === 'archived' ? 'archived' : scope,
       sort,
       page: String(page),
       assignee,
@@ -515,7 +558,7 @@ function WorkspaceApp({
     setProjectFilter('');
     setAssigneeFilter(null);
     if (to === 'settings' && projectId) setSettingsProject(projectId);
-    location.hash = to;
+    location.hash = normalizeRoute(to);
     setPage(1);
     setFolder('');
     setModuleFilter('');
@@ -574,41 +617,40 @@ function WorkspaceApp({
     status,
     tag,
     priority,
-    !['mine', 'archived'].includes(route) && scope !== 'open',
-    assignee !== (route === 'inbox' ? 'mine-or-unassigned' : route === 'mine' ? 'mine' : 'all'),
+    route !== 'archived' && scope !== 'open',
+    assignee !== (route === 'inbox' ? 'mine-or-unassigned' : 'all'),
     sort !== 'priority',
   ].filter(Boolean).length;
   const nav = [
     { id: 'inbox', name: 'Bandeja', icon: Inbox },
-    { id: 'mine', name: 'Mis pendientes', icon: UserRound },
-    { id: 'projects', name: 'Proyectos', icon: FolderKanban },
     { id: 'notes', name: 'Notas', icon: FileText },
     { id: 'focus', name: 'Focus', icon: Timer },
-    { id: 'spaces', name: 'Spaces', icon: Globe2 },
-    { id: 'settings', name: 'Ajustes', icon: SettingsIcon },
-    { id: 'admin', name: 'Usuarios y roles', icon: ShieldCheck },
   ];
-  const navigation = (mobile = false) =>
-    nav
-      .filter(
-        (n) =>
-          permissions.includes(routePage(n.id)) &&
-          (!mobile || ['inbox', 'notes', 'focus', 'spaces'].includes(n.id)),
-      )
-      .map((n) => (
-        <button
-          key={n.id}
-          className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) || (n.id === 'projects' && !!projectId) ? 'active' : ''}`}
-          onClick={() => navigate(n.id)}
-        >
-          <n.icon size={21} />
-          <span>{n.name}</span>
-          {!mobile && n.id === 'inbox' && <span className="nav-count">{summary.open}</span>}
-        </button>
-      ));
-  const title =
-    project?.name ||
-    (route === 'mine' ? 'Mis pendientes' : route === 'archived' ? 'Archivados' : 'Tu bandeja');
+  const navigation = (mobile = false) => (
+    <>
+      {nav
+        .filter(
+          (n) =>
+            permissions.includes(routePage(n.id)) &&
+            (!mobile || ['inbox', 'notes', 'focus'].includes(n.id)),
+        )
+        .map((n) => (
+          <button
+            key={n.id}
+            className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) ? 'active' : ''}`}
+            onClick={() => navigate(n.id)}
+          >
+            <n.icon size={21} />
+            <span>{n.name}</span>
+            {!mobile && n.id === 'inbox' && <span className="nav-count">{summary.open}</span>}
+          </button>
+        ))}
+      {!mobile && (
+        <SettingsDisclosure route={route} permissions={permissions} navigate={navigate} />
+      )}
+    </>
+  );
+  const title = project?.name || (route === 'archived' ? 'Archivados' : 'Tu bandeja');
   return (
     <div className="app-shell">
       <a href="#main-content" className="skip-link">
@@ -619,6 +661,8 @@ function WorkspaceApp({
         <SidebarSections
           label={space.isPersonal ? 'MI ESPACIO' : 'WORKSPACE COMPARTIDO'}
           navigation={navigation()}
+          preferenceKey={'aegitasks-sidebar-' + user.id + '-' + space.id}
+          catalogActive={route === 'projects'}
           createProject={permissions.includes('projects') ? () => setProjectModal(true) : undefined}
           projects={
             w?.projects.filter(
@@ -671,7 +715,11 @@ function WorkspaceApp({
             <ChevronRight size={15} />
             <strong>
               {nav.find((n) => n.id === (route.startsWith('notes/') ? 'notes' : route))?.name ||
-                (route === 'account' ? 'Mi cuenta' : title)}
+                (route === 'account'
+                  ? 'Mi cuenta'
+                  : route === 'projects'
+                    ? 'Proyectos'
+                    : settingsSections.find((item) => item.id === route)?.name || title)}
             </strong>
           </div>
         </div>
@@ -733,7 +781,7 @@ function WorkspaceApp({
                 <FolderTree size={17} /> Explorar proyecto
               </button>
             )}
-            {route !== 'account' && !permissions.includes(routePage(route)) ? (
+            {routePage(route) !== 'account' && !permissions.includes(routePage(route)) ? (
               <section className="card">
                 <Empty icon={<ShieldCheck size={32} />} title="Página sin acceso">
                   Tu rol no tiene permiso para esta página.
@@ -763,33 +811,41 @@ function WorkspaceApp({
                 canTasks={permissions.includes('tasks')}
                 openTask={openTask}
               />
-            ) : route === 'spaces' ? (
-              <SpacesPage
-                user={user}
-                active={space}
-                session={spaceSession}
-                reload={reloadSpaces}
-                switchSpace={switchSpace}
-              />
-            ) : route === 'admin' ? (
-              <AdminAccess />
-            ) : route === 'settings' || route === 'account' ? (
+            ) : route.startsWith('settings/') || route === 'account' ? (
               <>
-                <Settings
-                  key={route}
-                  workspace={w}
-                  user={user}
-                  reload={reload}
-                  notify={notify}
-                  logout={logout}
-                  initialProject={settingsProject}
-                  canOrganize={route !== 'account' && permissions.includes('projects')}
-                />
+                {route !== 'account' && (
+                  <SettingsNavigation route={route} permissions={permissions} navigate={navigate} />
+                )}
+                {route === 'settings/workspace' ? (
+                  <SpacesPage
+                    user={user}
+                    active={space}
+                    session={spaceSession}
+                    reload={reloadSpaces}
+                    switchSpace={switchSpace}
+                  />
+                ) : route === 'settings/users' ? (
+                  <AdminAccess />
+                ) : (
+                  <Settings
+                    key={route}
+                    workspace={w}
+                    user={user}
+                    reload={reload}
+                    notify={notify}
+                    logout={logout}
+                    initialProject={settingsProject}
+                    canOrganize={permissions.includes('projects')}
+                    mode={routePage(route) === 'account' ? 'account' : 'organization'}
+                  />
+                )}
                 <section className="card mobile-tools">
                   <h2>La app, siempre a mano</h2>
-                  <button className="btn btn-ghost" onClick={() => navigate('archived')}>
-                    <Archive size={17} /> Ver archivados
-                  </button>
+                  {permissions.includes('tasks') && (
+                    <button className="btn btn-ghost" onClick={() => navigate('archived')}>
+                      <Archive size={17} /> Ver archivados
+                    </button>
+                  )}
                   <button className="btn btn-ghost" onClick={logout}>
                     <LogOut size={17} /> Cerrar sesión
                   </button>
@@ -907,11 +963,9 @@ function WorkspaceApp({
                     </h1>
                     <p>
                       {project?.description ||
-                        (route === 'mine'
-                          ? 'Lo que está en tus manos, con el siguiente paso siempre claro.'
-                          : route === 'archived'
-                            ? 'El trabajo que guardaste. Puedes restaurarlo cuando lo necesites.'
-                            : 'Todo lo que encuentra tu equipo. Un siguiente paso a la vez.')}
+                        (route === 'archived'
+                          ? 'El trabajo que guardaste. Puedes restaurarlo cuando lo necesites.'
+                          : 'Todo lo que encuentra tu equipo. Un siguiente paso a la vez.')}
                     </p>
                   </div>
                   <button
@@ -924,89 +978,117 @@ function WorkspaceApp({
                 </div>
                 {route === 'inbox' && (
                   <>
-                    <section className="hero">
-                      <div>
-                        <div className="hero-label">
-                          <Sparkles size={15} /> UN POCO MÁS CERCA
-                        </div>
-                        <h2>
-                          Hola, {user.name.split(' ')[0]}.<br />
-                          Hagamos espacio para avanzar.
-                        </h2>
-                        <p>
-                          {summary.urgent
-                            ? `Hay ${summary.urgent} pendientes de prioridad alta o urgente. Empieza por lo que más importa.`
-                            : 'Las buenas ideas y los pequeños hallazgos también merecen su lugar.'}
-                        </p>
-                      </div>
-                      <div className="hero-ring">
-                        <svg viewBox="0 0 120 120" aria-hidden="true">
-                          <circle cx="60" cy="60" r="50" />
-                          <circle
-                            cx="60"
-                            cy="60"
-                            r="50"
-                            strokeDasharray={`${(summary.done / (summary.open + summary.done || 1)) * 314} 314`}
-                          />
-                        </svg>
-                        <div>
-                          <strong>
-                            {Math.round((summary.done / (summary.open + summary.done || 1)) * 100)}
-                            <small>%</small>
-                          </strong>
-                          <span>resueltos</span>
-                        </div>
-                      </div>
-                    </section>
-                    <div className="stats-grid">
-                      {[
-                        {
-                          key: 'open',
-                          label: 'Por resolver',
-                          value: summary.open,
-                          icon: Inbox,
-                          color: 'purple',
-                          note: 'Cada uno, un siguiente paso',
-                        },
-                        {
-                          key: 'urgent',
-                          label: 'Alta prioridad',
-                          value: summary.urgent,
-                          icon: Bell,
-                          color: 'orange',
-                          note: 'Lo que merece atención',
-                        },
-                        {
-                          key: 'overdue',
-                          label: 'Fuera de fecha',
-                          value: summary.overdue,
-                          icon: Clock3,
-                          color: 'red',
-                          note: 'Es momento de revisarlos',
-                        },
-                        {
-                          key: 'done',
-                          label: 'Resueltos',
-                          value: summary.done,
-                          icon: CircleCheck,
-                          color: 'green',
-                          note: 'Avances que cuentan',
-                        },
-                      ].map((s) => (
-                        <button
-                          key={s.key}
-                          className="card stat-card"
-                          onClick={() => filter(() => setScope(s.key))}
-                        >
-                          <span className={`stat-icon tone-${s.color}`}>
-                            <s.icon size={20} />
-                          </span>
-                          <span className="stat-label">{s.label}</span>
-                          <strong>{s.value}</strong>
-                          <small>{s.note}</small>
-                        </button>
-                      ))}
+                    <div
+                      className="inbox-summary-controls"
+                      role="group"
+                      aria-label="Visibilidad del resumen de la bandeja"
+                    >
+                      <button
+                        className="btn btn-ghost"
+                        aria-expanded={summaryVisibility.banner}
+                        aria-controls="inbox-welcome"
+                        onClick={() => toggleSummary('banner')}
+                      >
+                        {summaryVisibility.banner ? 'Ocultar bienvenida' : 'Mostrar bienvenida'}
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        aria-expanded={summaryVisibility.metrics}
+                        aria-controls="inbox-metrics"
+                        onClick={() => toggleSummary('metrics')}
+                      >
+                        {summaryVisibility.metrics ? 'Ocultar indicadores' : 'Mostrar indicadores'}
+                      </button>
                     </div>
+                    {summaryVisibility.banner && (
+                      <section className="hero" id="inbox-welcome">
+                        <div>
+                          <div className="hero-label">
+                            <Sparkles size={15} /> UN POCO MÁS CERCA
+                          </div>
+                          <h2>
+                            Hola, {user.name.split(' ')[0]}.<br />
+                            Hagamos espacio para avanzar.
+                          </h2>
+                          <p>
+                            {summary.urgent
+                              ? `Hay ${summary.urgent} pendientes de prioridad alta o urgente. Empieza por lo que más importa.`
+                              : 'Las buenas ideas y los pequeños hallazgos también merecen su lugar.'}
+                          </p>
+                        </div>
+                        <div className="hero-ring">
+                          <svg viewBox="0 0 120 120" aria-hidden="true">
+                            <circle cx="60" cy="60" r="50" />
+                            <circle
+                              cx="60"
+                              cy="60"
+                              r="50"
+                              strokeDasharray={`${(summary.done / (summary.open + summary.done || 1)) * 314} 314`}
+                            />
+                          </svg>
+                          <div>
+                            <strong>
+                              {Math.round(
+                                (summary.done / (summary.open + summary.done || 1)) * 100,
+                              )}
+                              <small>%</small>
+                            </strong>
+                            <span>resueltos</span>
+                          </div>
+                        </div>
+                      </section>
+                    )}
+                    {summaryVisibility.metrics && (
+                      <div className="stats-grid" id="inbox-metrics">
+                        {[
+                          {
+                            key: 'open',
+                            label: 'Por resolver',
+                            value: summary.open,
+                            icon: Inbox,
+                            color: 'purple',
+                            note: 'Cada uno, un siguiente paso',
+                          },
+                          {
+                            key: 'urgent',
+                            label: 'Alta prioridad',
+                            value: summary.urgent,
+                            icon: Bell,
+                            color: 'orange',
+                            note: 'Lo que merece atención',
+                          },
+                          {
+                            key: 'overdue',
+                            label: 'Fuera de fecha',
+                            value: summary.overdue,
+                            icon: Clock3,
+                            color: 'red',
+                            note: 'Es momento de revisarlos',
+                          },
+                          {
+                            key: 'done',
+                            label: 'Resueltos',
+                            value: summary.done,
+                            icon: CircleCheck,
+                            color: 'green',
+                            note: 'Avances que cuentan',
+                          },
+                        ].map((s) => (
+                          <button
+                            key={s.key}
+                            className="card stat-card"
+                            onClick={() => filter(() => setScope(s.key))}
+                          >
+                            <span className={`stat-icon tone-${s.color}`}>
+                              <s.icon size={20} />
+                            </span>
+                            <span className="stat-label">{s.label}</span>
+                            <strong>{s.value}</strong>
+                            <small>{s.note}</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
                 {project && permissions.includes('projects') && (
@@ -1070,35 +1152,16 @@ function WorkspaceApp({
                         <span className="count">{result.total}</span>
                       </h2>
                       <p className="muted small">
-                        {sort === 'priority'
-                          ? 'Lo más importante aparece primero.'
-                          : sort === 'due'
-                            ? 'Ordenados por fecha límite.'
-                            : 'Los reportes más recientes aparecen primero.'}
+                        {view === 'timeline'
+                          ? 'Cronología de las fechas límite de esta página.'
+                          : sort === 'priority'
+                            ? 'Lo más importante aparece primero.'
+                            : sort === 'due'
+                              ? 'Ordenados por fecha límite.'
+                              : 'Los reportes más recientes aparecen primero.'}
                       </p>
                     </div>
-                    <div className="view-switch">
-                      <button
-                        className={view === 'list' ? 'active' : ''}
-                        aria-label="Vista de lista"
-                        aria-pressed={view === 'list'}
-                        onClick={() => setView('list')}
-                      >
-                        <List size={17} />
-                        <span>Lista</span>
-                      </button>
-                      <button
-                        className={view === 'board' ? 'active' : ''}
-                        aria-label="Vista de tablero"
-                        aria-pressed={view === 'board'}
-                        onClick={() => {
-                          setView('board');
-                        }}
-                      >
-                        <LayoutGrid size={17} />
-                        <span>Tablero</span>
-                      </button>
-                    </div>
+                    <ViewPicker value={view} onChange={chooseView} context="tasks" />
                   </div>
                   <div className="task-search-bar">
                     <div className="search-field">
@@ -1179,6 +1242,15 @@ function WorkspaceApp({
                             : 'Pide a alguien con permiso de Proyectos que cree uno en este espacio.'}
                       </Empty>
                     </div>
+                  ) : view === 'gallery' ? (
+                    <TaskGallery
+                      tasks={result.items}
+                      renderTask={(task) => (
+                        <TaskCard task={task} w={w} board onOpen={() => openTask(task.id)} />
+                      )}
+                    />
+                  ) : view === 'timeline' ? (
+                    <TaskTimeline tasks={result.items} workspace={w} onOpen={openTask} />
                   ) : view === 'board' ? (
                     <div className="project-boards">
                       {w.projects
@@ -1255,7 +1327,7 @@ function WorkspaceApp({
                     <div className="pagination">
                       <span>
                         {(page - 1) * 50 + 1}–{Math.min(page * 50, result.total)} de {result.total}{' '}
-                        · El tablero muestra esta página
+                        · Todas las vistas muestran esta página
                       </span>
                       <button
                         className="btn btn-ghost"
@@ -1350,6 +1422,11 @@ function WorkspaceApp({
         <Modal title="Más opciones" onClose={() => setMoreMenu(false)}>
           <div className="modal-body mobile-menu">
             {navigation()}
+            {permissions.includes('projects') && (
+              <button className="sidebar-link" onClick={() => navigate('projects')}>
+                <FolderKanban size={19} /> Proyectos
+              </button>
+            )}
             {(permissions.includes('tasks') || permissions.includes('projects')) && (
               <button
                 className="sidebar-link"
@@ -1361,9 +1438,6 @@ function WorkspaceApp({
                 <FolderTree size={19} /> Explorar proyectos
               </button>
             )}
-            <button className="sidebar-link" onClick={() => navigate('account')}>
-              Mi cuenta
-            </button>
           </div>
         </Modal>
       )}
