@@ -6,7 +6,7 @@
 }
 .project-tree-children {
   position: relative;
-  margin-left: 20px;
+  margin: 6px 0 8px 20px;
 }
 .project-tree-children[hidden] {
   display: none;
@@ -60,6 +60,7 @@
 .project-tree-menu {
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 .project-tree-menu .project-link {
   min-height: 44px;
@@ -67,6 +68,7 @@
 .project-tree-menu .project-tree-children {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 .project-tree-menu .project-tree-children[hidden] {
   display: none;
@@ -91,10 +93,8 @@
   min-height: 0;
   flex: 0 0 auto;
 }
-.sidebar-group.is-expanded {
-  flex: 1 1 0;
-}
 .sidebar .sidebar-panel {
+  flex: 0 1 auto;
   display: block;
   overflow-y: auto;
   overflow-x: hidden;
@@ -107,8 +107,32 @@
 .settings-submenu[hidden] {
   display: none;
 }
-.sidebar-panel > nav {
+.sidebar-panel-content > nav {
   padding: 2px 0 8px;
+}
+.sidebar .sidebar-panel-content nav {
+  gap: 4px;
+}
+.sidebar .sidebar-panel-content > nav[aria-label='Proyectos'] {
+  gap: 6px;
+}
+.sidebar .sidebar-project-heading {
+  min-height: 44px;
+  gap: 8px;
+  padding-right: 4px;
+}
+.sidebar-project-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar .sidebar-project-action {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 10px;
 }
 .sidebar-section-title {
   flex: 1;
@@ -133,8 +157,16 @@
 }
 .settings-submenu {
   position: relative;
-  margin-left: 16px;
+  margin: 6px 0 8px 18px;
   border-left: 1px solid var(--hairline-strong);
+}
+@media (pointer: coarse) {
+  .sidebar .sidebar-project-action {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
 }
 .settings-navigation {
   display: flex;

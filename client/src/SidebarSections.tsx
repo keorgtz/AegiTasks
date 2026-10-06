@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, Layers3, List, Plus, Repeat2 } from 'lucide-react';
 import type { Project } from './types';
 import './styles/project-tree.css';
@@ -134,6 +134,7 @@ export function SidebarSections({
   preferenceKey: string;
   catalogActive: boolean;
 }) {
+  const container = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState<{ workspace: boolean; projects: boolean }>(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(preferenceKey) || 'null');
@@ -146,6 +147,43 @@ export function SidebarSections({
   });
   const [expandedId, setExpandedId] = useState(props.activeProjectId);
   const projectIds = props.projects.map((project) => project.id).join(',');
+  useLayoutEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const groups = Array.from(element.children) as HTMLElement[];
+    const panels = groups.map((group) => group.querySelector<HTMLElement>('.sidebar-panel')!);
+    function resize() {
+      // Keep short sections at their natural height; share only the remaining space.
+      const gap = parseFloat(getComputedStyle(element!).rowGap) || 0;
+      let remaining = Math.max(
+        0,
+        element!.clientHeight -
+          gap * Math.max(0, groups.length - 1) -
+          groups.reduce(
+            (sum, group) => sum + group.firstElementChild!.getBoundingClientRect().height,
+            0,
+          ),
+      );
+      const visible = panels
+        .filter((panel) => !panel.hidden)
+        .map((panel) => ({
+          panel,
+          height: panel.firstElementChild!.getBoundingClientRect().height,
+        }))
+        .sort((a, b) => a.height - b.height);
+      visible.forEach(({ panel, height }, index) => {
+        const allocated = Math.min(height, remaining / (visible.length - index));
+        panel.style.maxHeight = `${allocated}px`;
+        remaining = Math.max(0, remaining - allocated);
+      });
+    }
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    groups.forEach((group) => observer.observe(group.firstElementChild!));
+    panels.forEach((panel) => observer.observe(panel.firstElementChild!));
+    resize();
+    return () => observer.disconnect();
+  }, [open.workspace, open.projects, props.canTasks, props.canProjects]);
   useEffect(() => {
     setExpandedId(props.activeProjectId);
     if (props.activeProjectId) setOpen((value) => ({ ...value, projects: true }));
@@ -172,7 +210,7 @@ export function SidebarSections({
       props.navigate('project/' + project.id + (props.canTasks ? '' : '/modules'));
   }
   return (
-    <div className="sidebar-sections">
+    <div className="sidebar-sections" ref={container}>
       <section
         className={open.workspace ? 'sidebar-group is-expanded' : 'sidebar-group'}
         aria-label={label}
@@ -194,7 +232,9 @@ export function SidebarSections({
           role="region"
           aria-label="Opciones del workspace"
         >
-          <nav aria-label="Navegación principal">{navigation}</nav>
+          <div className="sidebar-panel-content">
+            <nav aria-label="Navegación principal">{navigation}</nav>
+          </div>
         </div>
       </section>
       {(props.canTasks || props.canProjects) && (
@@ -210,20 +250,26 @@ export function SidebarSections({
             >
               PROYECTOS
             </button>
-            <button
-              className="btn-icon sidebar-project-toggle"
-              aria-label={open.projects ? 'Contraer proyectos' : 'Expandir proyectos'}
-              aria-expanded={open.projects}
-              aria-controls="sidebar-projects"
-              onClick={() => setOpen((value) => ({ ...value, projects: !value.projects }))}
-            >
-              <ChevronDown size={16} />
-            </button>
-            {createProject && (
-              <button className="btn-icon" aria-label="Nuevo proyecto" onClick={createProject}>
-                <Plus size={17} />
+            <div className="sidebar-project-actions">
+              <button
+                className="btn-icon sidebar-project-action sidebar-project-toggle"
+                aria-label={open.projects ? 'Contraer proyectos' : 'Expandir proyectos'}
+                aria-expanded={open.projects}
+                aria-controls="sidebar-projects"
+                onClick={() => setOpen((value) => ({ ...value, projects: !value.projects }))}
+              >
+                <ChevronDown size={15} />
               </button>
-            )}
+              {createProject && (
+                <button
+                  className="btn-icon sidebar-project-action"
+                  aria-label="Nuevo proyecto"
+                  onClick={createProject}
+                >
+                  <Plus size={15} />
+                </button>
+              )}
+            </div>
           </div>
           <div
             className="sidebar-panel"
@@ -233,16 +279,20 @@ export function SidebarSections({
             role="region"
             aria-label="Árbol de proyectos"
           >
-            <nav aria-label="Proyectos">
-              <ProjectTreeRows
-                {...props}
-                rows={treeRows(props.projects, expandedId, props.canTasks, props.canProjects)}
-                expandedId={expandedId}
-                onToggle={toggleProject}
-                prefix="sidebar"
-              />
-            </nav>
-            {!props.projects.length && <p className="muted small">No hay proyectos disponibles.</p>}
+            <div className="sidebar-panel-content">
+              <nav aria-label="Proyectos">
+                <ProjectTreeRows
+                  {...props}
+                  rows={treeRows(props.projects, expandedId, props.canTasks, props.canProjects)}
+                  expandedId={expandedId}
+                  onToggle={toggleProject}
+                  prefix="sidebar"
+                />
+              </nav>
+              {!props.projects.length && (
+                <p className="muted small">No hay proyectos disponibles.</p>
+              )}
+            </div>
           </div>
         </section>
       )}

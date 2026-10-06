@@ -184,7 +184,7 @@ La migración PostgreSQL `Usernames` agrega la columna e índice único y asigna
 
 ## Módulos, ciclos y estimaciones
 
-Desde **Proyectos**, cada tarjeta ofrece acceso a **Módulos** y **Ciclos**. En escritorio, seleccionar un proyecto en el sidebar despliega un árbol con **Pendientes, Módulos y Ciclos**, filtrado por los permisos de página. Solo un proyecto permanece desplegado; el enlace activo se marca también al abrir un detalle mediante su URL. El proyecto puede plegarse con su botón y teclado. Las opciones se paginan según la altura del sidebar, manteniendo el grupo de tres enlaces junto cuando cabe; en alturas pequeñas puede continuar en la página siguiente. No hay pestañas de navegación de proyecto encima del contenido.
+Desde **Proyectos**, cada tarjeta ofrece acceso a **Módulos** y **Ciclos**. En escritorio, seleccionar un proyecto en el sidebar despliega un árbol con **Pendientes, Módulos y Ciclos**, filtrado por los permisos de página. Solo un proyecto permanece desplegado; el enlace activo se marca también al abrir un detalle mediante su URL. El proyecto puede plegarse con su botón y teclado. Las opciones utilizan scroll dentro del panel de Proyectos cuando falta altura; el catálogo no se pagina en el sidebar. No hay pestañas de navegación de proyecto encima del contenido.
 
 En móvil y tablet, **Explorar proyecto** abre el árbol en un diálogo compacto. También se puede entrar desde **Más → Explorar proyectos**. Desplegar un proyecto dentro de ese diálogo permite elegir su sección sin cambiar de página hasta seleccionar el enlace. Escape cierra el diálogo sin navegar. Los botones tienen un área de al menos 44 px y los nombres largos del proyecto se truncan visualmente sin perder su nombre accesible.
 

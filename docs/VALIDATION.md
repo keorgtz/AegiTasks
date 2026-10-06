@@ -14,7 +14,7 @@ La iteración de navegación y vistas de bandeja modifica solo frontend, pruebas
 | `npm --prefix client run typecheck`                                             | Correcto                                                                                                                    |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                            |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                              |
-| `npm --prefix client run test:e2e`                                              | **138 verificaciones aprobadas sobre SQLite**                                                                               |
+| `npm --prefix client run test:e2e`                                              | **139 verificaciones aprobadas sobre SQLite**                                                                               |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
 | `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Conserva cuentas, contraseñas, espacio personal, notas y estimaciones; módulos, ciclos y jerarquía nuevos operativos        |
 | `node client/scripts/postgres-tests.mjs`                                        | **130 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                    |
@@ -26,6 +26,14 @@ La iteración de navegación y vistas de bandeja modifica solo frontend, pruebas
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Altura natural y espaciado del sidebar (6 de octubre)
+
+La suite completa pasó **139 verificaciones sobre SQLite** y la suite de actualización PWA pasó **12 verificaciones**. Build de producción con typecheck, lint y formato correctos. Resultados: `sidebar-sizing-sqlite-results.json`, `pwa-test-results.json`; registros: `sidebar-sizing-build.log`, `sidebar-sizing-sqlite.log` y `sidebar-sizing-pwa.log`.
+
+La prueba adicional comprueba que Workspace conserva su altura natural cuando cabe, que Proyectos plegado permanece inmediatamente debajo a alturas 900/600/450 px y que sus acciones miden 32 px con separación de 8 px en computadora. Verifica la eliminación del mensaje inferior y el espaciado del submenú de Ajustes. Las pruebas existentes cubren ambos paneles abiertos, catálogos extensos, scroll independiente, teclado, navegación móvil y ausencia de desbordamiento en ambos temas. Capturas revisadas: `sidebar-content-sized-light.png`, `sidebar-content-sized-dark.png`, `sidebar-projects-collapsed-dark.png` y `project-tree-600-dark.png`.
+
+Una comprobación inicial exigía mostrar todo Workspace incluso a 450 px, donde el contenido requiere scroll local. Se corrigió esa expectativa: altura natural cuando cabe y encabezados contiguos también cuando no cabe; las esperas nuevas tienen un límite de cinco segundos. No cambiaron API, esquema, migraciones ni dependencias. No se repitió PostgreSQL ni se desplegó en producción o verificó en dispositivos físicos.
 
 ### Navegación y cuatro vistas de bandeja (6 de octubre)
 

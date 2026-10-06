@@ -685,14 +685,6 @@ function WorkspaceApp({
               <Archive size={19} /> Archivados
             </button>
           )}
-          <div className="sidebar-note">
-            <Sparkles size={18} />
-            <p>
-              Una cosa a la vez.
-              <br />
-              <strong>Cada avance cuenta.</strong>
-            </p>
-          </div>
           <div className="profile">
             <div className="avatar">{initials(user.name)}</div>
             <span>

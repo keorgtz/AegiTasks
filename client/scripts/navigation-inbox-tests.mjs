@@ -158,6 +158,67 @@ export async function testNavigationInbox({
     'Workspace and Projects remain open simultaneously and scroll independently without moving the sidebar in either theme at 900/600/450px',
   );
 
+  await settings.click();
+  assert.equal(await settings.getAttribute('aria-expanded'), 'false');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForFunction(
+      () => {
+        const panel = document.querySelector('#sidebar-workspace');
+        return (
+          Math.abs(panel.clientHeight - panel.firstElementChild.getBoundingClientRect().height) <= 1
+        );
+      },
+      undefined,
+      { timeout: 5000 },
+    );
+    const workspacePanel = sidebar.locator('#sidebar-workspace');
+    assert.equal(
+      await workspacePanel.evaluate((element) => element.scrollHeight > element.clientHeight + 1),
+      false,
+    );
+    assert.equal(await sidebar.locator('.sidebar-note').count(), 0);
+    const collapse = sidebar.getByRole('button', { name: 'Contraer proyectos', exact: true });
+    const create = sidebar.getByRole('button', { name: 'Nuevo proyecto', exact: true });
+    const collapseBounds = await collapse.boundingBox();
+    const createBounds = await create.boundingBox();
+    assert(collapseBounds.width === 32 && collapseBounds.height === 32);
+    assert(createBounds.width === 32 && createBounds.height === 32);
+    assert(createBounds.x - collapseBounds.x - collapseBounds.width >= 8);
+    await page.screenshot({ path: path.join(artifacts, `sidebar-content-sized-${theme}.png`) });
+    await collapse.click();
+    for (const height of [900, 600, 450]) {
+      await page.setViewportSize({ width: 1440, height });
+      await page.waitForFunction(
+        (height) => {
+          const workspace = document.querySelector('#sidebar-workspace');
+          const heading = document.querySelector('.sidebar-project-heading');
+          const bounds = workspace.getBoundingClientRect();
+          const naturalHeight = workspace.firstElementChild.getBoundingClientRect().height;
+          return (
+            (height < 600 || Math.abs(bounds.height - naturalHeight) <= 1) &&
+            Math.abs(heading.getBoundingClientRect().top - bounds.bottom - 8) <= 1
+          );
+        },
+        height,
+        { timeout: 5000 },
+      );
+    }
+    await page.screenshot({
+      path: path.join(artifacts, `sidebar-projects-collapsed-${theme}.png`),
+    });
+    await sidebar.getByRole('button', { name: 'Expandir proyectos', exact: true }).click();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settings.click();
+  await submenu.waitFor();
+  assert(await submenu.evaluate((element) => parseFloat(getComputedStyle(element).rowGap) >= 4));
+  await settings.click();
+  pass(
+    'Short workspace content keeps its natural height, collapsed Projects follows it at 900/600/450px, compact actions are spaced and the sidebar message is removed in both themes',
+  );
+
   await search();
   const before = await work().boundingBox();
   await page.getByRole('button', { name: 'Ocultar bienvenida', exact: true }).click();
