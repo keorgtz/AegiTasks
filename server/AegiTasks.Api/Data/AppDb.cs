@@ -67,6 +67,8 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
         b.Entity<FocusSession>().HasIndex(x => x.UserId).IsUnique().HasFilter("\"FinishedAt\" IS NULL");
         b.Entity<FocusSession>().Property(x => x.Version).IsConcurrencyToken();
         b.Entity<User>().HasIndex(x => x.Email).IsUnique();
+        b.Entity<User>().HasIndex(x => x.Username).IsUnique();
+        b.Entity<User>().Property(x => x.Username).HasMaxLength(40);
         b.Entity<User>().Property(x => x.Email).HasMaxLength(200);
         b.Entity<User>().Property(x => x.Name).HasMaxLength(80);
         b.Entity<Project>().Property(x => x.Name).HasMaxLength(80);

@@ -16,10 +16,12 @@ public static class AuthEndpoints
     {
         app.MapPost("/api/auth/login", async (LoginInput input, AppDb db, IPasswordHasher<User> hash, HttpContext context) =>
         {
-            var email = Rules.Text(input.Email, 200, "Correo").ToLowerInvariant();
-            var user = await db.Users.SingleOrDefaultAsync(x => x.Email == email && x.Active);
+            // Keep Email as a fallback for clients running the previous PWA release.
+            var identifier = (input.Identifier ?? input.Email)?.Trim().ToLowerInvariant() ?? "";
+            if (identifier.Length is 0 or > 200) return Results.Json(new { error = "Correo, usuario o contraseña incorrectos." }, statusCode: 401);
+            var user = await db.Users.SingleOrDefaultAsync(x => (identifier.Contains('@') ? x.Email == identifier : x.Username == identifier) && x.Active);
             if (user == null || string.IsNullOrEmpty(input.Password) || input.Password.Length > 128 || hash.VerifyHashedPassword(user, user.PasswordHash, input.Password) == PasswordVerificationResult.Failed)
-                return Results.Json(new { error = "Correo o contraseña incorrectos." }, statusCode: 401);
+                return Results.Json(new { error = "Correo, usuario o contraseña incorrectos." }, statusCode: 401);
             var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), new Claim(ClaimTypes.Role, user.Role), new Claim("sv", user.SessionVersion.ToString()) }, CookieAuthenticationDefaults.AuthenticationScheme);
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
             return Results.Ok(Rules.PublicUser(user));
@@ -41,6 +43,10 @@ public static class AuthEndpoints
             Rules.Password(input.Password ?? "");
             if (!await db.Roles.AnyAsync(r => r.Name == input.Role)) throw new InputError("Rol no válido.");
             var user = new User { Email = email, Name = Rules.Text(input.Name, 80, "Nombre"), Role = input.Role };
+            user.Username = input.Username == null
+                ? Rules.DefaultUsername(email, (await db.Users.Select(u => u.Username).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase))
+                : Rules.Username(input.Username);
+            if (await db.Users.AnyAsync(u => u.Username == user.Username)) throw new InputError("Ese nombre de usuario ya está en uso.");
             user.PasswordHash = hash.HashPassword(user, input.Password!); db.Users.Add(user); Access.AddPersonal(db, user); await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
         admin.MapPut("/{id:guid}", async (Guid id, UserUpdate input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal) =>
@@ -48,13 +54,18 @@ public static class AuthEndpoints
             var user = await db.Users.FindAsync(id); if (user == null) return Results.NotFound();
             if (id == principal.UserId() && (!input.Active || input.Role != "Admin")) throw new InputError("No puedes desactivar tu propia cuenta ni quitarte el rol de administrador.");
             if (!await db.Roles.AnyAsync(r => r.Name == input.Role)) throw new InputError("Rol no válido.");
+            if (input.Username != null) {
+                var username = Rules.Username(input.Username);
+                if (await db.Users.AnyAsync(u => u.Id != id && u.Username == username)) throw new InputError("Ese nombre de usuario ya está en uso.");
+                user.Username = username;
+            }
             user.Name = Rules.Text(input.Name, 80, "Nombre"); user.Active = input.Active; user.Role = input.Role; user.SessionVersion++;
             if (!string.IsNullOrWhiteSpace(input.Password)) { Rules.Password(input.Password); user.PasswordHash = hash.HashPassword(user, input.Password); }
             await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
     }
-    public record LoginInput(string Email, string Password);
+    public record LoginInput(string? Email, string Password, string? Identifier = null);
     public record PasswordInput(string CurrentPassword, string NewPassword);
-    public record UserInput(string Email, string Name, string Role, string? Password);
-    public record UserUpdate(string Name, string Role, bool Active, string? Password);
+    public record UserInput(string Email, string Name, string Role, string? Password, string? Username = null);
+    public record UserUpdate(string Name, string Role, bool Active, string? Password, string? Username = null);
 }

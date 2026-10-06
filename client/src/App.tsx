@@ -169,7 +169,7 @@ function Login({
     setBusy(true);
     setError('');
     try {
-      onLogin(await api<User>('/auth/login', 'POST', { email, password }));
+      onLogin(await api<User>('/auth/login', 'POST', { identifier: email, password }));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -233,14 +233,17 @@ function Login({
           )}
           <form onSubmit={submit} data-update-blocked={!!email || !!password || busy}>
             <fieldset disabled={busy}>
-              <Field label="Correo electrónico">
+              <Field label="Correo o nombre de usuario">
                 <input
-                  type="email"
+                  type="text"
                   required
+                  maxLength={200}
+                  autoCapitalize="none"
+                  spellCheck={false}
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@equipo.com"
+                  placeholder="tu@equipo.com o tu usuario"
                 />
               </Field>
               <Field label="Contraseña">
@@ -620,7 +623,7 @@ function WorkspaceApp({
           <Brand onInstall={() => setInstallHelp(true)} />
         </div>
         <div className="breadcrumb">
-          <span>{space.isPersonal ? 'Personal' : space.name}</span>
+          <span>{space.name}</span>
           <ChevronRight size={15} />
           <strong>
             {nav.find((n) => n.id === (route.startsWith('notes/') ? 'notes' : route))?.name ||

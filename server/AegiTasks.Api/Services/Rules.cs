@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using AegiTasks.Api.Data;
 using AegiTasks.Api.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,24 @@ public static class Rules
     }
     public static string Color(string value) => new[] { "purple", "pink", "green", "blue", "orange", "red" }.Contains(value) ? value : throw new InputError("Color no válido.");
     public static Guid UserId(this ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    public static object PublicUser(User u) => new { u.Id, u.Name, u.Email, u.Role, u.Active };
+    public static object PublicUser(User u) => new { u.Id, u.Name, u.Username, u.Email, u.Role, u.Active };
+    public static string Username(string? value)
+    {
+        var username = Text(value, 40, "Nombre de usuario").ToLowerInvariant();
+        if (!Regex.IsMatch(username, @"\A[a-z0-9][a-z0-9._-]{2,39}\z"))
+            throw new InputError("Nombre de usuario: de 3 a 40 caracteres; letras sin acentos, números, puntos, guiones o guiones bajos. Debe comenzar con una letra o número.");
+        return username;
+    }
+    public static string DefaultUsername(string email, ISet<string> used)
+    {
+        var stem = Regex.Replace(email.Split('@')[0].ToLowerInvariant(), "[^a-z0-9._-]+", "-").Trim('.', '-', '_');
+        stem = stem[..Math.Min(stem.Length, 32)];
+        if (stem.Length < 3) stem = "user";
+        var candidate = stem;
+        for (var suffix = 2; used.Contains(candidate); suffix++) candidate = $"{stem}-{suffix}";
+        used.Add(candidate);
+        return candidate;
+    }
     public static void Password(string? value)
     {
         if (value is null || value.Length < 12 || value.Length > 128) throw new InputError("La contraseña debe tener entre 12 y 128 caracteres.");

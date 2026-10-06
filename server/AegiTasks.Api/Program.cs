@@ -136,11 +136,17 @@ if (!app.Environment.IsEnvironment("Testing"))
                 while (await columns.ReadAsync()) focusColumns.Add(columns.GetString(1));
             if (!focusColumns.Contains("AccentColor")) await db.Database.ExecuteSqlRawAsync("ALTER TABLE FocusProfiles ADD COLUMN AccentColor TEXT NOT NULL DEFAULT '#A78BFA'");
             if (!focusColumns.Contains("ParticleShape")) await db.Database.ExecuteSqlRawAsync("ALTER TABLE FocusProfiles ADD COLUMN ParticleShape TEXT NOT NULL DEFAULT 'mixed'");
+            command.CommandText = "PRAGMA table_info('Users')";
+            var hasUsername = false;
+            await using (var columns = await command.ExecuteReaderAsync())
+                while (await columns.ReadAsync()) hasUsername |= columns.GetString(1) == "Username";
+            if (!hasUsername) await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users ADD COLUMN Username TEXT NOT NULL DEFAULT ''");
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }
     else await db.Database.MigrateAsync();
     await Bootstrap.Seed(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>(), app.Configuration);
+    if (app.Configuration["DatabaseProvider"] == "Sqlite") await db.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS IX_Users_Username ON Users (Username)");
 }
 app.Run();
 public partial class Program;

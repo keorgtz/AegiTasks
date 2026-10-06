@@ -17,7 +17,7 @@ public static class CatalogEndpoints
             folders = await db.Folders.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
             statuses = await db.Statuses.AsNoTracking().OrderBy(x => x.Position).ThenBy(x => x.Name).ToListAsync(),
             tags = await db.Tags.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
-            users = await Access.Members(db, db.CurrentSpaceId).AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Email, x.Role, x.Active }).ToListAsync()
+            users = await Access.Members(db, db.CurrentSpaceId).AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Username, x.Email, x.Role, x.Active }).ToListAsync()
         })).RequireAuthorization();
         var group = app.MapGroup("/api").RequireAuthorization("page:projects");
         group.MapPost("/projects", async (ProjectInput input, AppDb db) =>

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:net';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const dir = await mkdtemp(path.join(tmpdir(), 'aegitasks-pg-'));
 const artifact = path.join(root, 'artifacts');
@@ -17,7 +18,16 @@ const run = (exe, args, input) =>
     input,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-const port = '55439';
+// Let Windows select an available port outside reserved Hyper-V/WSL ranges.
+const reservation = createServer();
+await new Promise((resolve, reject) => {
+  reservation.once('error', reject);
+  reservation.listen(0, '127.0.0.1', resolve);
+});
+const port = String(reservation.address().port);
+await new Promise((resolve, reject) =>
+  reservation.close((error) => (error ? reject(error) : resolve())),
+);
 const sql = (database, text) =>
   run(
     'psql',
@@ -130,6 +140,50 @@ try {
     path.join(artifact, 'migration-focus-visuals.sql'),
   ]);
   sql('legacy', await readFile(path.join(artifact, 'migration-focus-visuals.sql'), 'utf8'));
+  sql(
+    'legacy',
+    `
+    INSERT INTO "Users" ("Id", "Email", "Name", "PasswordHash", "Role", "Active", "SessionVersion") VALUES
+    ('20000000-0000-4000-8000-000000000003', 'same@one.example', 'Same visible name', 'retained-hash-1', 'User', true, 0),
+    ('20000000-0000-4000-8000-000000000004', 'same@two.example', 'Same visible name', 'retained-hash-2', 'User', true, 0),
+    ('20000000-0000-4000-8000-000000000005', 'a@short.example', 'Same visible name', 'retained-hash-3', 'User', true, 0);
+  `,
+  );
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'FocusVisuals',
+    'Usernames',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-usernames.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-usernames.sql'), 'utf8'));
+  assert.equal(sql('legacy', 'SELECT count(DISTINCT "Username") FROM "Users";').trim(), '5');
+  assert.equal(
+    sql('legacy', 'SELECT "Username" FROM "Users" WHERE "Email" = \'same@one.example\';').trim(),
+    'same',
+  );
+  assert.equal(
+    sql('legacy', 'SELECT "Username" FROM "Users" WHERE "Email" = \'same@two.example\';').trim(),
+    'same-2',
+  );
+  assert.equal(
+    sql('legacy', 'SELECT "Username" FROM "Users" WHERE "Email" = \'a@short.example\';').trim(),
+    'user',
+  );
+  assert.equal(
+    sql(
+      'legacy',
+      'SELECT "PasswordHash" FROM "Users" WHERE "Email" = \'same@two.example\';',
+    ).trim(),
+    'retained-hash-2',
+  );
+  console.log(
+    'PASS PostgreSQL username migration backfills unique handles with duplicate display names and email prefixes, preserving password hashes',
+  );
   assert.equal(
     sql(
       'legacy',
@@ -176,6 +230,8 @@ try {
         retainedMemberships: 2,
         retainedCustomTags: true,
         retainedFocusPreferences: true,
+        uniqueUsernames: true,
+        retainedPasswordHashes: true,
         testedAt: new Date().toISOString(),
       },
       null,

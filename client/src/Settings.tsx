@@ -51,6 +51,7 @@ export function CatalogEditor({
   const [position, setPosition] = useState(value.position || 0);
   const [archived, setArchived] = useState(value.archived || false);
   const [email, setEmail] = useState(value.email || '');
+  const [username, setUsername] = useState(value.username || '');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState(value.role || 'User');
   const [active, setActive] = useState(value.active ?? true);
@@ -70,6 +71,7 @@ export function CatalogEditor({
         position,
         archived,
         email,
+        ...(kind === 'users' ? { username } : {}),
         password: password || null,
         role,
         active,
@@ -178,6 +180,22 @@ export function CatalogEditor({
           )}
           {kind === 'users' && (
             <>
+              <Field
+                label="Nombre de usuario"
+                hint="Único, de 3 a 40 caracteres: letras sin acentos, números, puntos, guiones o guiones bajos. Se puede usar para iniciar sesión."
+              >
+                <input
+                  required
+                  minLength={3}
+                  maxLength={40}
+                  pattern={'[a-zA-Z0-9][a-zA-Z0-9._\\-]{2,39}'}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </Field>
               <Field label="Correo electrónico">
                 <input
                   type="email"
@@ -512,6 +530,7 @@ export function Settings({
         <section className="card account-card">
           <h2>{user.name}</h2>
           <p className="muted">{user.email}</p>
+          <p className="muted">Usuario: {user.username}</p>
           <h3 className="subsection">Cambiar contraseña</h3>
           <form
             onSubmit={password}

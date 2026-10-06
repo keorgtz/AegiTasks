@@ -74,7 +74,9 @@ export function AdminAccess() {
             <div className="avatar">{initials(u.name)}</div>
             <span>
               <strong>{u.name}</strong>
-              <small>{u.email}</small>
+              <small>
+                {u.username} · {u.email}
+              </small>
             </span>
             <Badge color={u.active ? 'green' : 'neutral'}>{u.active ? u.role : 'Inactivo'}</Badge>
             <button

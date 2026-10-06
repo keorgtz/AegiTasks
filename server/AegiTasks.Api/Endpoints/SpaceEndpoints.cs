@@ -35,13 +35,22 @@ public static class SpaceEndpoints
         });
         group.MapGet("/{id:guid}/members", async (Guid id, AppDb db, ClaimsPrincipal user) => {
             if (!await Access.SpacesFor(db, user.UserId()).AnyAsync(s => s.Id == id)) return Results.NotFound();
-            return Results.Ok(await Access.Members(db, id).Select(u => new { u.Id, u.Name, u.Email, u.Active }).ToListAsync());
+            return Results.Ok(await Access.Members(db, id).OrderBy(u => u.Name).Select(u => new { u.Id, u.Name, u.Username, u.Email, u.Active }).ToListAsync());
         });
         group.MapPut("/{id:guid}", async (Guid id, SpaceInput input, AppDb db, ClaimsPrincipal user) => {
-            var space = await db.Spaces.SingleOrDefaultAsync(s => s.Id == id && s.OwnerId == user.UserId());
+            var space = await Access.SpacesFor(db, user.UserId()).SingleOrDefaultAsync(s => s.Id == id);
             if (space == null) return Results.NotFound();
+            if (space.OwnerId != user.UserId() && !user.IsInRole("Admin")) return Results.Forbid();
             space.Name = Rules.Text(input.Name, 80, "Nombre"); await db.SaveChangesAsync(); return Results.NoContent();
         });
+        group.MapPost("/{id:guid}/members", async (Guid id, OwnerInput input, AppDb db, ClaimsPrincipal user) => {
+            var space = await Access.SpacesFor(db, user.UserId()).SingleOrDefaultAsync(s => s.Id == id && !s.IsPersonal);
+            if (space == null) return Results.NotFound();
+            if (!await db.Users.AnyAsync(u => u.Id == input.UserId && u.Active)) throw new InputError("Selecciona un usuario existente y activo.");
+            if (space.OwnerId == input.UserId || await db.SpaceMembers.AnyAsync(m => m.SpaceId == id && m.UserId == input.UserId)) return Results.NoContent();
+            db.SpaceMembers.Add(new SpaceMember { SpaceId = id, UserId = input.UserId });
+            await db.SaveChangesAsync(); return Results.NoContent();
+        }).RequireAuthorization("Admin");
         group.MapPost("/{id:guid}/invite", async (Guid id, AppDb db, ClaimsPrincipal user) => {
             var space = await db.Spaces.SingleOrDefaultAsync(s => s.Id == id && s.OwnerId == user.UserId() && !s.IsPersonal);
             if (space == null) return Results.NotFound();
@@ -57,7 +66,7 @@ public static class SpaceEndpoints
             var space = await Access.SpacesFor(db, user.UserId()).SingleOrDefaultAsync(s => s.Id == id && !s.IsPersonal);
             if (space == null) return Results.NotFound();
             if (member == space.OwnerId) throw new InputError("El propietario conserva su membresía. Transfiere primero la propiedad.");
-            if (space.OwnerId != user.UserId() && member != user.UserId()) return Results.Forbid();
+            if (space.OwnerId != user.UserId() && member != user.UserId() && !user.IsInRole("Admin")) return Results.Forbid();
             var membership = await db.SpaceMembers.FindAsync(id, member); if (membership == null) return Results.NotFound();
             db.SpaceMembers.Remove(membership); await db.SaveChangesAsync(); return Results.NoContent();
         });

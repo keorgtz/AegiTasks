@@ -7,6 +7,7 @@ import { testFocusLayout } from './focus-layout-tests.mjs';
 import { testNoteEditor } from './note-editor-tests.mjs';
 import { testTaskDetailTabs } from './task-detail-tests.mjs';
 import { testInboxFilters } from './inbox-filter-tests.mjs';
+import { testSpaceAccounts, testSpaceAccountUi } from './space-account-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -361,6 +362,17 @@ try {
     task,
     attachment,
   });
+  const accountFixtures = await testSpaceAccounts({
+    request,
+    admin,
+    support,
+    adminUser,
+    member,
+    shared,
+    password,
+    json,
+    pass,
+  });
   const storedSession = await admin.storageState();
   storedSession.origins.push({
     origin: 'http://localhost:4174',
@@ -484,7 +496,11 @@ try {
     .getByRole('button', { name: 'Usuarios y roles' })
     .click();
   await page.getByRole('heading', { name: 'Usuarios y roles', exact: true }).waitFor();
-  await page.getByText('María López', { exact: true }).waitFor();
+  await page
+    .locator('.settings-row')
+    .filter({ hasText: member.email })
+    .getByText(member.name, { exact: true })
+    .waitFor();
   pass('Mobile settings and team navigation');
   assert.equal((await page.request.get('/manifest.webmanifest')).status(), 200);
   const manifest = await (await page.request.get('/manifest.webmanifest')).json();
@@ -505,6 +521,17 @@ try {
     json,
     spaceTests,
     shared,
+  });
+  await testSpaceAccountUi({
+    browser,
+    page,
+    admin,
+    json,
+    fixtures: accountFixtures,
+    shared,
+    password,
+    pass,
+    artifacts,
   });
   await testWorkflow({
     page,

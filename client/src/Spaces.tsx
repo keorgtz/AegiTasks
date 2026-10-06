@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Copy, Globe2, LockKeyhole, Plus, UserRound, Users } from 'lucide-react';
+import { Copy, Globe2, LockKeyhole, Pencil, Plus, UserPlus, UserRound, Users } from 'lucide-react';
 import { api, errorMessage, setActiveSpace } from './api';
 import { emitChanges, useChanges } from './changes';
 import { Brand, ErrorBox, Field } from './components';
 import type { Space, SpaceSession, User } from './types';
+import { SpaceEditor, SpaceMemberDialog } from './SpaceDialogs';
 
 export function SpaceGate({
   user,
@@ -126,7 +127,7 @@ export function SpaceSelector({
       >
         {spaces.map((s) => (
           <option key={s.id} value={s.id}>
-            {s.isPersonal ? 'Personal · solo tú' : s.name}
+            {s.isPersonal ? `${s.name} · solo tú` : s.name}
           </option>
         ))}
       </select>
@@ -153,11 +154,23 @@ export function SpacesPage({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
-  const loadMembers = async () => setMembers(await api<User[]>(`/spaces/${active.id}/members`));
+  const [editor, setEditor] = useState<'edit' | 'member' | null>(null);
+  const [message, setMessage] = useState('');
+  const canEdit = active.ownerId === user.id || (!active.isPersonal && user.role === 'Admin');
+  const loadMembers = async (signal?: AbortSignal) => {
+    const result = await api<User[]>(`/spaces/${active.id}/members`, 'GET', undefined, signal);
+    if (!signal?.aborted) setMembers(result);
+  };
   useChanges(['access'], () => void loadMembers().catch((e) => setError(errorMessage(e))));
   useEffect(() => {
+    const controller = new AbortController();
     setInvite('');
-    void loadMembers().catch((e) => setError(errorMessage(e)));
+    setMessage('');
+    setMembers([]);
+    void loadMembers(controller.signal).catch((e) => {
+      if (!controller.signal.aborted) setError(errorMessage(e));
+    });
+    return () => controller.abort();
   }, [active.id]);
   async function run(action: () => Promise<void>) {
     setError('');
@@ -209,7 +222,7 @@ export function SpacesPage({
             <div className="project-symbol tone-purple">
               {s.isPersonal ? <LockKeyhole /> : <Globe2 />}
             </div>
-            <h2>{s.isPersonal ? 'Tu espacio personal' : s.name}</h2>
+            <h2>{s.name}</h2>
             <p>
               {s.isPersonal
                 ? 'Tus notas, tus pendientes. Solo tú puedes acceder.'
@@ -257,16 +270,39 @@ export function SpacesPage({
           </form>
         </section>
       </div>
-      {!active.isPersonal && (
-        <section className="card">
-          <div className="section-heading">
-            <div>
-              <h2>{active.name}</h2>
-              <p className="muted">Miembros de este workspace</p>
-            </div>
-            {active.ownerId === user.id && (
+      {message && (
+        <p role="status" className="success-message">
+          {message}
+        </p>
+      )}
+      <section className="card">
+        <div className="section-heading">
+          <div>
+            <h2>{active.name}</h2>
+            <p className="muted">
+              {active.isPersonal ? 'Espacio personal · solo tú' : 'Miembros de este workspace'}
+            </p>
+          </div>
+          {canEdit && (
+            <button className="btn btn-ghost" disabled={busy} onClick={() => setEditor('edit')}>
+              <Pencil size={16} /> Editar espacio
+            </button>
+          )}
+        </div>
+        {!active.isPersonal && (active.ownerId === user.id || user.role === 'Admin') && (
+          <div className="form-actions">
+            {user.role === 'Admin' && (
               <button
                 className="btn btn-primary"
+                disabled={busy}
+                onClick={() => setEditor('member')}
+              >
+                <UserPlus size={16} /> Agregar usuario
+              </button>
+            )}
+            {active.ownerId === user.id && (
+              <button
+                className="btn btn-ghost"
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
@@ -279,74 +315,62 @@ export function SpacesPage({
               </button>
             )}
           </div>
-          {active.ownerId === user.id && (
-            <div className="form-actions">
-              <button
-                className="btn btn-ghost"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await api(`/spaces/${active.id}/invite`, 'DELETE');
-                    setInvite('');
-                    alert('Invitaciones revocadas. Los miembros actuales conservan su acceso.');
-                  })
-                }
-              >
-                Revocar invitaciones
-              </button>
-              <button
-                className="btn btn-ghost"
-                disabled={busy}
-                onClick={() => {
-                  const value = prompt('Nuevo nombre del workspace', active.name);
-                  if (value?.trim())
-                    void run(async () => {
-                      await api(`/spaces/${active.id}`, 'PUT', { name: value.trim() });
-                      await reload();
-                    });
-                }}
-              >
-                Renombrar workspace
-              </button>
-            </div>
-          )}
-          {invite && (
-            <div className="invite-box">
-              <p>Válida por 7 días. Generar otra invalida la anterior.</p>
-              <code>{invite}</code>
-              <button
-                className="btn btn-ghost"
-                onClick={() =>
-                  void run(async () => {
-                    await navigator.clipboard.writeText(invite);
-                  })
-                }
-              >
-                <Copy size={15} /> Copiar código
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() =>
-                  void run(async () => {
-                    await api(`/spaces/${active.id}/invite`, 'DELETE');
-                    setInvite('');
-                  })
-                }
-              >
-                Revocar
-              </button>
-            </div>
-          )}
-          {members.map((m) => (
-            <div className="settings-row" key={m.id}>
-              <UserRound size={18} />
-              <span>
-                <strong>{m.name}</strong>
-                <small>
-                  {m.id === active.ownerId ? 'Propietario' : 'Miembro'} · {m.email}
-                </small>
-              </span>
-              {m.id !== active.ownerId && (active.ownerId === user.id || m.id === user.id) && (
+        )}
+        {!active.isPersonal && active.ownerId === user.id && (
+          <div className="form-actions">
+            <button
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await api(`/spaces/${active.id}/invite`, 'DELETE');
+                  setInvite('');
+                  alert('Invitaciones revocadas. Los miembros actuales conservan su acceso.');
+                })
+              }
+            >
+              Revocar invitaciones
+            </button>
+          </div>
+        )}
+        {invite && (
+          <div className="invite-box">
+            <p>Válida por 7 días. Generar otra invalida la anterior.</p>
+            <code>{invite}</code>
+            <button
+              className="btn btn-ghost"
+              onClick={() =>
+                void run(async () => {
+                  await navigator.clipboard.writeText(invite);
+                })
+              }
+            >
+              <Copy size={15} /> Copiar código
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() =>
+                void run(async () => {
+                  await api(`/spaces/${active.id}/invite`, 'DELETE');
+                  setInvite('');
+                })
+              }
+            >
+              Revocar
+            </button>
+          </div>
+        )}
+        {members.map((m) => (
+          <div className="settings-row" key={m.id}>
+            <UserRound size={18} />
+            <span>
+              <strong>{m.name}</strong>
+              <small>
+                {m.id === active.ownerId ? 'Propietario' : 'Miembro'} · {m.email}
+              </small>
+            </span>
+            {m.id !== active.ownerId &&
+              (active.ownerId === user.id || user.role === 'Admin' || m.id === user.id) && (
                 <button
                   className="btn btn-ghost"
                   disabled={busy}
@@ -368,25 +392,46 @@ export function SpacesPage({
                   {m.id === user.id ? 'Salir' : 'Quitar'}
                 </button>
               )}
-              {active.ownerId === user.id && m.id !== user.id && m.active && (
-                <button
-                  className="btn btn-ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    if (confirm(`¿Transferir la propiedad a ${m.name}?`))
-                      void run(async () => {
-                        await api(`/spaces/${active.id}/owner`, 'POST', { userId: m.id });
-                        await reload();
-                        await loadMembers();
-                      });
-                  }}
-                >
-                  Hacer propietario
-                </button>
-              )}
-            </div>
-          ))}
-        </section>
+            {!active.isPersonal && active.ownerId === user.id && m.id !== user.id && m.active && (
+              <button
+                className="btn btn-ghost"
+                disabled={busy}
+                onClick={() => {
+                  if (confirm(`¿Transferir la propiedad a ${m.name}?`))
+                    void run(async () => {
+                      await api(`/spaces/${active.id}/owner`, 'POST', { userId: m.id });
+                      await reload();
+                      await loadMembers();
+                    });
+                }}
+              >
+                Hacer propietario
+              </button>
+            )}
+          </div>
+        ))}
+      </section>
+      {editor === 'edit' && (
+        <SpaceEditor
+          space={active}
+          onClose={() => setEditor(null)}
+          onSaved={async () => {
+            await reload();
+            setMessage('Espacio actualizado.');
+          }}
+        />
+      )}
+      {editor === 'member' && (
+        <SpaceMemberDialog
+          space={active}
+          members={members}
+          onClose={() => setEditor(null)}
+          onSaved={async () => {
+            await reload();
+            await loadMembers();
+            setMessage('Usuario agregado al workspace.');
+          }}
+        />
       )}
     </>
   );

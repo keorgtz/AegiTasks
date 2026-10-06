@@ -1,6 +1,6 @@
 # Evidencia de validación
 
-Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. La auditoría de dependencias frontend se repitió el 25 de septiembre. La auditoría .NET y las comprobaciones de YAML y shell documentadas abajo corresponden al 23 de septiembre.
+Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML/shell no se repitieron en esta iteración: frontend corresponde al 25 de septiembre; .NET, YAML y shell al 23 de septiembre.
 
 ## Ejecutado correctamente
 
@@ -12,9 +12,10 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **85 verificaciones aprobadas sobre SQLite**                                           |
-| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas**; migración opcional del worker anterior documentada en la validación previa |
-| `node client/scripts/postgres-tests.mjs`                                        | **79 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4 (validación previa del editor de notas) |
+| `npm --prefix client run test:e2e`                                              | **94 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
+| `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Actualización local anterior conserva cuentas, contraseñas, espacio personal y notas; usuarios únicos y ambos logins correctos |
+| `node client/scripts/postgres-tests.mjs`                                        | **94 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -23,6 +24,16 @@ Actualización funcional: 25 de septiembre de 2026. Entorno local: Windows, .NET
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Edición de Spaces, incorporación directa y login con usuario (6 de octubre)
+
+Build Debug/Release de la API sin errores ni advertencias; modelo y migración PostgreSQL coinciden. El cliente pasó build de producción (incluye typecheck), lint y comprobación de formato de los archivos modificados. La suite SQLite completa pasó 94 verificaciones y las 12 de actualización PWA se repitieron con el nuevo campo de login. La revisión visual incluyó los diálogos de edición y selección de usuarios en 1440×900 claro, 320×600 claro y 390×844 oscuro. Capturas: `space-edit-desktop.png`, `space-member-desktop.png`, `space-member-mobile.png` y `space-edit-mobile-dark.png` en `artifacts/`. Sin validación en teléfonos físicos ni despliegue de producción.
+
+La suite completa también pasó 94 verificaciones sobre PostgreSQL 18.4 después de validar la migración con datos anteriores. El cluster temporal utiliza un puerto disponible del sistema para evitar los rangos reservados de Windows. Nueve grupos nuevos comprueban login por correo y usuario con mayúsculas/espacios, compatibilidad con el payload anterior, credenciales inválidas con error genérico, cuentas inactivas, validación y unicidad de usuarios con nombres visibles repetidos y prefijos de correo en colisión. El admin edita el usuario en el formulario real; el identificador anterior deja de autenticar y el nuevo funciona sin cambiar el nombre visible. Los clientes anteriores que omiten usuario conservan creación y actualización.
+
+Spaces verifica edición propia personal, edición del workspace por propietario o Admin integrante, rechazo para miembros normales/admin sin acceso, nombres vacíos/largos, cancelación sin escritura, persistencia tras recargar y actualización de navegación. La incorporación directa exige Admin y una cuenta activa existente, excluye integrantes del selector y es idempotente. Un segundo navegador conectado recibe el workspace por SSE y puede abrirlo sin código. Un Admin integrante puede retirar miembros de un workspace de otro propietario; no puede retirar al propietario ni incorporar miembros a espacios personales.
+
+La prueba de actualización SQLite crea contenido, simula la tabla de cuentas anterior sin columna de usuario y reinicia la API. Comprueba dos cuentas con mismo nombre visible y prefijo de correo, conserva IDs, hashes de contraseña, nota y espacio personal, verifica ambos tipos de login y el índice único. La prueba de migración PostgreSQL agrega datos anteriores con nombres/prefijos duplicados y cortos antes de aplicar `Usernames`, y comprueba identificadores únicos sin alterar los hashes ni los datos existentes.
 
 ### Filtros en diálogo y tableros en la bandeja (25 de septiembre)
 
@@ -155,7 +166,7 @@ El script genera `artifacts/test-results.json` y capturas locales. También se c
 
 La prueba de migración crea una base con el esquema anterior, usuarios Admin/Member, proyecto, etiqueta personalizada, pendiente, comentario y relación de etiqueta. Aplica la migración de Spaces y comprueba que conserva esos datos, crea el workspace compartido y dos espacios Personal, migra Member a User e inicializa permisos. Una segunda base vacía se levanta mediante la API y sus migraciones automáticas para ejecutar la suite completa.
 
-El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal ocupa aproximadamente 340 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
+El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal ocupa aproximadamente 345 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
 
 En ejecuciones intermedias aparecieron cortes `ECONNRESET` en peticiones del cliente de pruebas a Vite, antes de llegar a la API. Las pruebas HTTP se dirigen directamente a la API (5213); las pruebas de navegador siguen pasando por el proxy Vite (4174). No se añadieron reintentos automáticos de mutaciones. No se atribuye este fallo al servidor de producción, cuyo proxy es Nginx.
 

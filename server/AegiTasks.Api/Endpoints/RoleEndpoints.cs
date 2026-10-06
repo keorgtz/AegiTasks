@@ -8,7 +8,7 @@ public static class RoleEndpoints
 {
     public static void MapRoles(this WebApplication app)
     {
-        app.MapGet("/api/users", async (AppDb db) => await db.Users.OrderBy(u => u.Name).Select(u => new { u.Id, u.Name, u.Email, u.Role, u.Active }).ToListAsync()).RequireAuthorization("Admin");
+        app.MapGet("/api/users", async (AppDb db) => await db.Users.OrderBy(u => u.Name).Select(u => new { u.Id, u.Name, u.Username, u.Email, u.Role, u.Active }).ToListAsync()).RequireAuthorization("Admin");
         var group = app.MapGroup("/api/roles").RequireAuthorization("Admin");
         group.MapGet("/", async (AppDb db) => Results.Ok(new { pages = Access.Pages, roles = await db.Roles.OrderBy(r => r.Name).ToListAsync(), permissions = await db.PagePermissions.ToListAsync() }));
         group.MapPost("/", async (RoleInput input, AppDb db) => {

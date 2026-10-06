@@ -129,7 +129,7 @@ try {
   });
   const loginContext = await browser.newContext();
   const login = await tab(loginContext);
-  await login.getByLabel('Correo').fill('draft@example.com');
+  await login.getByLabel('Correo o nombre de usuario').fill('draft@example.com');
   const offlineContext = await browser.newContext();
   const offline = await tab(offlineContext);
   await offlineContext.setOffline(true);
@@ -191,8 +191,11 @@ try {
   );
   await new Promise((resolve) => setTimeout(resolve, 1500));
   assert.equal(await version(login), versionA);
-  assert.equal(await login.getByLabel('Correo').inputValue(), 'draft@example.com');
-  await login.getByLabel('Correo').fill('');
+  assert.equal(
+    await login.getByLabel('Correo o nombre de usuario').inputValue(),
+    'draft@example.com',
+  );
+  await login.getByLabel('Correo o nombre de usuario').fill('');
   await login.clock.fastForward(1500);
   await waitVersion(login, versionB);
   pass('Actual React form values defer automatic reload until cleared or submitted');
