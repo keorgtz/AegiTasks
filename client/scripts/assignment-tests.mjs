@@ -266,16 +266,18 @@ export async function testAssignments({
     .waitFor();
   const staleVersion = session.version;
   const taskIds = JSON.parse(session.taskIdsJson);
-  const refreshedTasks = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/focus/${session.id}/tasks`) &&
-      response.request().method() === 'GET',
-  );
+  // Wait for a completed request: response headers can belong to a fetch
+  // subsequently cancelled by another SSE refresh, and finished() has no timeout.
+  const refreshedTasks = page.waitForEvent('requestfinished', {
+    predicate: (request) =>
+      request.url().endsWith(`/focus/${session.id}/tasks`) && request.method() === 'GET',
+    timeout: 30000,
+  });
   session = await json(admin, 'PUT', `/focus/${session.id}/tasks`, {
     taskIds: [...taskIds, taskIds[0]],
     version: session.version,
   });
-  await (await refreshedTasks).finished();
+  await refreshedTasks;
   assert.equal(JSON.parse(session.taskIdsJson).length, 52);
   await json(
     admin,

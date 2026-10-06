@@ -2,6 +2,8 @@
 
 Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML/shell no se repitieron en esta iteración: frontend corresponde al 25 de septiembre; .NET, YAML y shell al 23 de septiembre.
 
+La iteración del árbol lateral y el muestrario modifica solo frontend, tests y documentación. La validación PostgreSQL y las comprobaciones .NET/migraciones de la tabla corresponden a la iteración anterior; no se repitieron porque API y esquema no cambiaron.
+
 ## Ejecutado correctamente
 
 | Verificación                                                                    | Resultado                                                                                                                                       |
@@ -12,7 +14,7 @@ Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK
 | `npm --prefix client run typecheck`                                             | Correcto                                                                                                                                        |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                                                |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                                                  |
-| `npm --prefix client run test:e2e`                                              | **112 verificaciones aprobadas sobre SQLite**                                                                                                   |
+| `npm --prefix client run test:e2e`                                              | **116 verificaciones aprobadas sobre SQLite**                                                                                                   |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa                     |
 | `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Actualización local anterior conserva cuentas, contraseñas, espacio personal, notas y estimaciones en minutos; módulos/ciclos nuevos operativos |
 | `node client/scripts/postgres-tests.mjs`                                        | **112 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                                        |
@@ -24,6 +26,16 @@ Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Árbol lateral de proyectos y muestrario compartido (6 de octubre)
+
+La suite completa pasó **116 verificaciones en SQLite** y las actualizaciones PWA pasaron sus **12 verificaciones**. Resultados en `project-tree-sqlite-results.json` y `pwa-test-results.json`. Una espera existente de `Response.finished()` en la prueba de sincronización de Focus carecía de límite; se sustituyó por `requestfinished` con un máximo de 30 segundos, manteniendo la comprobación de refresco real. La repetición completa pasó; la ejecución detenida se conserva en `project-tree-e2e-interrupted.log`. El producto Focus no se modificó.
+
+La navegación Pendientes / Módulos / Ciclos se trasladó al árbol del sidebar; las pestañas del contenido se eliminaron. Las pruebas verifican despliegue y plegado por teclado, cambio de sección, indicador activo al abrir un enlace de detalle y recarga. Un catálogo adicional de nueve proyectos, incluido un nombre largo, verifica que todas las opciones son alcanzables mediante paginación y que el sidebar y su panel no desbordan a alturas 900, 768, 600 y 450 px en ambos temas. Cuando cabe, el encabezado y sus tres enlaces permanecen juntos.
+
+En 390×844, 320×740 y 844×390 se verifica el diálogo móvil de navegación, sus enlaces, cierre con Escape sin navegar y ausencia de las pestañas superiores. Proyectos, módulos y ciclos utilizan un único componente de muestrario con seis botones de 44 px, nombre accesible y selección anunciada. Las pruebas guardan azul en un módulo y verde en un ciclo, recuperan el color al editar y comprueban que Cancelar conserva el valor anterior; Enter selecciona un color sin enviar el formulario. El mismo componente conserva la selección en proyectos.
+
+Se revisaron capturas de `planning-views-modules-Tarjetas-1440-dark.png`, `project-tree-mobile-390-light.png`, `planning-swatches-modules-320-light.png` y `planning-swatches-cycles-1440-dark.png`. El build de producción, typecheck, lint y formato se validaron. Las pruebas son en Chromium local; no en dispositivos físicos ni en el servidor de producción. Esta iteración solo modifica cliente y documentación: no cambia API, modelo ni migraciones.
 
 ### Páginas de gestión de módulos y ciclos (6 de octubre)
 

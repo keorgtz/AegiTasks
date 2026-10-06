@@ -10,6 +10,39 @@ import {
   type ReactElement,
 } from 'react';
 import { X } from 'lucide-react';
+import { colors, colorNames } from './types';
+
+export function ColorSwatches({
+  label = 'Color',
+  value,
+  onChange,
+}: {
+  label?: string;
+  value: string;
+  onChange: (color: string) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="field">
+      <span id={id}>{label}</span>
+      <div className="color-picker" role="group" aria-labelledby={id}>
+        {colors.map((color) => (
+          <button
+            type="button"
+            key={color}
+            aria-label={colorNames[color]}
+            title={colorNames[color]}
+            aria-pressed={value === color}
+            className={`color-option tone-${color} ${value === color ? 'selected' : ''}`}
+            onClick={() => onChange(color)}
+          >
+            <span />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 export function Brand({ onInstall }: { onInstall?: () => void }) {
   return (
     <div className="brand">

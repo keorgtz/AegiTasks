@@ -9,11 +9,9 @@ import {
   Tags,
 } from 'lucide-react';
 import { api, errorMessage } from './api';
-import { Badge, ErrorBox, Field, Modal } from './components';
+import { Badge, ColorSwatches, ErrorBox, Field, Modal } from './components';
 import { estimateKinds } from './estimates';
 import {
-  colors,
-  colorNames,
   type Folder,
   type Project,
   type Status,
@@ -161,22 +159,7 @@ export function CatalogEditor({
             </>
           )}
           {['projects', 'statuses', 'tags'].includes(kind) && (
-            <Field label="Color">
-              <div className="color-picker">
-                {colors.map((c) => (
-                  <button
-                    type="button"
-                    key={c}
-                    aria-label={colorNames[c]}
-                    aria-pressed={color === c}
-                    className={`color-option tone-${c} ${color === c ? 'selected' : ''}`}
-                    onClick={() => setColor(c)}
-                  >
-                    <span />
-                  </button>
-                ))}
-              </div>
-            </Field>
+            <ColorSwatches value={color} onChange={setColor} />
           )}
           {kind === 'statuses' && (
             <>

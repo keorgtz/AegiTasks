@@ -1310,6 +1310,7 @@ body:has(dialog[open]) {
 }
 .color-picker {
   display: flex;
+  flex-wrap: wrap;
   gap: 9px;
 }
 .color-option {

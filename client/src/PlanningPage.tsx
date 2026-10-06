@@ -108,52 +108,6 @@ function LayoutPicker({
     </div>
   );
 }
-export function ProjectSections({
-  project,
-  section,
-  navigate,
-  canTasks,
-  canProjects,
-}: {
-  project: Project;
-  section: string;
-  navigate: (route: string) => void;
-  canTasks: boolean;
-  canProjects: boolean;
-}) {
-  return (
-    <nav className="project-sections" aria-label="Secciones del proyecto">
-      {canTasks && (
-        <button
-          className="btn btn-ghost"
-          aria-current={!section ? 'page' : undefined}
-          onClick={() => navigate(`project/${project.id}`)}
-        >
-          <List size={17} /> Pendientes
-        </button>
-      )}
-      {canProjects && (
-        <>
-          <button
-            className="btn btn-ghost"
-            aria-current={section === 'modules' ? 'page' : undefined}
-            onClick={() => navigate(`project/${project.id}/modules`)}
-          >
-            <Layers3 size={17} /> Módulos
-          </button>
-          <button
-            className="btn btn-ghost"
-            aria-current={section === 'cycles' ? 'page' : undefined}
-            onClick={() => navigate(`project/${project.id}/cycles`)}
-          >
-            <Repeat2 size={17} /> Ciclos
-          </button>
-        </>
-      )}
-    </nav>
-  );
-}
-
 export function PlanningPage({
   project,
   kind,
@@ -343,13 +297,6 @@ export function PlanningPage({
   }
   return (
     <section className="planning-page" aria-label={`Gestión de ${title.toLowerCase()}`}>
-      <ProjectSections
-        project={project}
-        section={kind}
-        navigate={navigate}
-        canTasks={canTasks}
-        canProjects
-      />
       <div className="page-heading">
         <div>
           <div className="eyebrow">{project.name}</div>

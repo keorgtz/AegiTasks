@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { testProjectNavigation } from './project-navigation-tests.mjs';
 
 export async function testPlanningViews({ page, admin, support, fixtures, json, pass, artifacts }) {
+  await testProjectNavigation({ page, admin, fixtures, json, pass, artifacts });
+  await page.setViewportSize({ width: 1440, height: 900 });
   const project = fixtures.project;
   const base = `http://localhost:4174/#project/${project.id}`;
   const nav = () => page.getByRole('navigation', { name: 'Secciones del proyecto' });

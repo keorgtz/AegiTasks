@@ -13,6 +13,7 @@ import {
   Clock3,
   Folder,
   FolderKanban,
+  FolderTree,
   Inbox,
   LayoutGrid,
   List,
@@ -36,13 +37,13 @@ import {
 } from 'lucide-react';
 import { api, ApiError, errorMessage, setActiveSpace } from './api';
 import { useChanges } from './changes';
-import { SidebarSections } from './SidebarSections';
+import { ProjectTreeMenu, SidebarSections } from './SidebarSections';
 import { Badge, Brand, Empty, ErrorBox, Field, Modal } from './components';
 import { CatalogEditor, Settings } from './Settings';
 import { TaskEditor } from './TaskEditor';
 import { TaskFilters, type TaskFilterValues } from './TaskFilters';
 import { ProjectPlanning } from './ProjectPlanning';
-import { PlanningPage, ProjectSections } from './PlanningPage';
+import { PlanningPage } from './PlanningPage';
 import { estimateLabel } from './estimates';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
@@ -297,6 +298,7 @@ function WorkspaceApp({
 }) {
   const permissions = spaceSession.permissions;
   const [moreMenu, setMoreMenu] = useState(false);
+  const [projectMenu, setProjectMenu] = useState(false);
   const routePage = (r: string) =>
     r.startsWith('notes/')
       ? 'notes'
@@ -507,6 +509,7 @@ function WorkspaceApp({
   ]);
   const navigate = (to: string) => {
     setMoreMenu(false);
+    setProjectMenu(false);
     setFiltersOpen(false);
     setProjectFilter('');
     setAssigneeFilter(null);
@@ -614,19 +617,17 @@ function WorkspaceApp({
           label={space.isPersonal ? 'MI ESPACIO' : 'WORKSPACE COMPARTIDO'}
           navigation={navigation()}
           createProject={permissions.includes('projects') ? () => setProjectModal(true) : undefined}
-          projects={w?.projects
-            .filter((p) => !p.archived && permissions.includes('tasks'))
-            .map((p) => (
-              <button
-                key={p.id}
-                onClick={() => navigate(`project/${p.id}`)}
-                className={`project-link ${projectId === p.id ? 'active' : ''}`}
-              >
-                <span className={`project-dot tone-${p.color}`} />
-                <span>{p.name}</span>
-                <ChevronRight size={14} />
-              </button>
-            ))}
+          projects={
+            w?.projects.filter(
+              (p) =>
+                !p.archived && (permissions.includes('tasks') || permissions.includes('projects')),
+            ) || []
+          }
+          activeProjectId={projectId}
+          activeSection={planningKind || ''}
+          canTasks={permissions.includes('tasks')}
+          canProjects={permissions.includes('projects')}
+          navigate={navigate}
         />
         <div className="sidebar-bottom">
           {permissions.includes('tasks') && (
@@ -720,6 +721,15 @@ function WorkspaceApp({
           </div>
         ) : (
           <>
+            {project && (permissions.includes('tasks') || permissions.includes('projects')) && (
+              <button
+                className="btn btn-ghost project-navigation-mobile"
+                aria-label="Explorar proyecto"
+                onClick={() => setProjectMenu(true)}
+              >
+                <FolderTree size={17} /> Explorar proyecto
+              </button>
+            )}
             {route !== 'account' && !permissions.includes(routePage(route)) ? (
               <section className="card">
                 <Empty icon={<ShieldCheck size={32} />} title="Página sin acceso">
@@ -883,15 +893,6 @@ function WorkspaceApp({
               />
             ) : (
               <>
-                {project && (
-                  <ProjectSections
-                    project={project}
-                    section=""
-                    navigate={navigate}
-                    canTasks={permissions.includes('tasks')}
-                    canProjects={permissions.includes('projects')}
-                  />
-                )}
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
@@ -1337,9 +1338,38 @@ function WorkspaceApp({
         <Modal title="Más opciones" onClose={() => setMoreMenu(false)}>
           <div className="modal-body mobile-menu">
             {navigation()}
+            {(permissions.includes('tasks') || permissions.includes('projects')) && (
+              <button
+                className="sidebar-link"
+                onClick={() => {
+                  setMoreMenu(false);
+                  setProjectMenu(true);
+                }}
+              >
+                <FolderTree size={19} /> Explorar proyectos
+              </button>
+            )}
             <button className="sidebar-link" onClick={() => navigate('account')}>
               Mi cuenta
             </button>
+          </div>
+        </Modal>
+      )}
+      {projectMenu && w && (
+        <Modal title="Explorar proyectos" onClose={() => setProjectMenu(false)}>
+          <div className="modal-body">
+            <ProjectTreeMenu
+              projects={w.projects.filter(
+                (p) =>
+                  !p.archived &&
+                  (permissions.includes('tasks') || permissions.includes('projects')),
+              )}
+              activeProjectId={projectId}
+              activeSection={planningKind || ''}
+              canTasks={permissions.includes('tasks')}
+              canProjects={permissions.includes('projects')}
+              navigate={navigate}
+            />
           </div>
         </Modal>
       )}

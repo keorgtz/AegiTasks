@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Layers3, Pencil, Plus, Repeat2, Trash2 } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { useChanges } from './changes';
-import { Badge, ErrorBox, Field, Modal } from './components';
+import { Badge, ColorSwatches, ErrorBox, Field, Modal } from './components';
 import { estimateKinds, estimateLabel } from './estimates';
 import {
-  colors,
-  colorNames,
   dateLabel,
   type PlanningProgress,
   type Project,
@@ -342,15 +340,7 @@ export function GroupEditor({
               />
             </Field>
           </div>
-          <Field label="Color de la agrupación">
-            <select value={color} onChange={(e) => setColor(e.target.value)}>
-              {colors.map((c) => (
-                <option key={c} value={c}>
-                  {colorNames[c]}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <ColorSwatches label="Color de la agrupación" value={color} onChange={setColor} />
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Cancelar
