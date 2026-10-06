@@ -1,0 +1,168 @@
+.task-card-open {
+  text-align: left;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+}
+.task-status-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.task-status-button .badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-status-button svg {
+  flex-shrink: 0;
+}
+.task-status-button:hover:not(:disabled) {
+  border-color: var(--primary-pale);
+  color: var(--readable-primary);
+}
+.task-status-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.task-status-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.modal:has(.task-status-options) {
+  width: min(440px, calc(100% - 24px));
+}
+.task-status-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  text-align: left;
+  color: var(--text);
+}
+.task-status-option[aria-pressed='true'] {
+  background: var(--primary-bg);
+  border-color: var(--primary-pale);
+}
+.task-card.board-task .task-status {
+  display: block;
+  grid-column: 1 / -1;
+}
+.task-draggable {
+  position: relative;
+  padding-top: 36px;
+  margin-bottom: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.task-draggable > .task-card {
+  border: 0;
+  margin: 0;
+}
+.task-draggable > .planning-detail-task {
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 0;
+  margin: 0;
+}
+.task-draggable .planning-task-open {
+  flex-basis: 100%;
+}
+.planning-detail-task .task-status-button {
+  max-width: 180px;
+}
+.focus-session-task-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 300px;
+}
+.focus-session-task-actions .task-status-button {
+  max-width: 180px;
+}
+.task-child-row .task-status-button {
+  max-width: 160px;
+  flex-shrink: 0;
+}
+.task-drag-handle.btn-icon {
+  position: absolute;
+  right: 8px;
+  top: 4px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  touch-action: none;
+  cursor: grab;
+}
+.task-drag-handle:active {
+  cursor: grabbing;
+}
+.task-draggable.is-dragging {
+  opacity: 0.35;
+}
+.task-drop-column {
+  min-height: 130px;
+  max-height: min(700px, calc(100dvh - 160px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.task-drop-column .board-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  padding: 4px 0;
+}
+@media (min-width: 641px) {
+  .task-drop-column {
+    height: clamp(220px, calc(100dvh - 240px), 700px);
+    min-height: 220px;
+  }
+}
+.task-drop-column.is-over {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+.task-board-help {
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+.task-drag-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--primary-pale);
+  background: var(--surface-1);
+  color: var(--text);
+  border-radius: 16px;
+  box-shadow: var(--shadow-2);
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  .task-drag-handle.btn-icon {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .task-draggable {
+    padding-top: 48px;
+  }
+}

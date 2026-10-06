@@ -52,7 +52,7 @@ export async function testInboxFilters({ page, admin, support, adminUser, json, 
   assert.equal(await page.locator('.task-search-bar select').count(), 0);
   const titles = () =>
     page
-      .locator('.work-section .task-card')
+      .locator('.work-section .task-card .task-card-open')
       .evaluateAll((cards) => cards.map((card) => card.getAttribute('aria-label')).sort());
   const listTitles = await titles();
   assert.equal(listTitles.length, 50);

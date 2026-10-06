@@ -1,8 +1,8 @@
 # Evidencia de validación
 
-Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright. Las auditorías de dependencias y las comprobaciones de YAML/shell no se repitieron en esta iteración: frontend corresponde al 25 de septiembre; .NET, YAML y shell al 23 de septiembre.
+Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright y PostgreSQL 18.4. La auditoría de npm se repitió el 6 de octubre; las auditorías de .NET y comprobaciones de YAML/shell siguen correspondiendo al 23 de septiembre.
 
-La iteración de navegación y vistas de bandeja modifica solo frontend, pruebas y documentación. Se repiten build/typecheck, lint, formato, suite SQLite y PWA. Los resultados .NET, migraciones, actualización SQLite y PostgreSQL corresponden a la iteración previa de padres/subpendientes: API y esquema no cambian. Las pruebas utilizan datos temporales aislados y no modifican la base de desarrollo ni el servidor de producción.
+La iteración de Kanban, estado rápido y calendario modifica frontend, filtros opcionales de consultas de pendientes en la API, pruebas y documentación. Se repiten build/typecheck, lint, formato, builds Debug/Release de API, comprobación del modelo, suites SQLite/PostgreSQL y PWA. No cambia el esquema ni se agrega una migración. Las pruebas utilizan datos temporales aislados y no modifican la base de desarrollo ni el servidor de producción.
 
 ## Ejecutado correctamente
 
@@ -14,11 +14,11 @@ La iteración de navegación y vistas de bandeja modifica solo frontend, pruebas
 | `npm --prefix client run typecheck`                                             | Correcto                                                                                                                    |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                            |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                              |
-| `npm --prefix client run test:e2e`                                              | **139 verificaciones aprobadas sobre SQLite**                                                                               |
+| `npm --prefix client run test:e2e`                                              | **145 verificaciones aprobadas sobre SQLite**                                                                               |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
 | `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Conserva cuentas, contraseñas, espacio personal, notas y estimaciones; módulos, ciclos y jerarquía nuevos operativos        |
-| `node client/scripts/postgres-tests.mjs`                                        | **130 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                    |
-| `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                                                            |
+| `node client/scripts/postgres-tests.mjs`                                        | **145 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                    |
+| `npm --prefix client audit --omit=dev`                                          | Dos avisos bajos de KaTeX/Mermaid; sin avisos moderados, altos o críticos el 6 de octubre                                   |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                                                         |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                                                                  |
 | `sh -n scripts/setup-env.sh` en Ubuntu/WSL                                      | Sintaxis correcta                                                                                                           |
@@ -26,6 +26,18 @@ La iteración de navegación y vistas de bandeja modifica solo frontend, pruebas
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Kanban, estado rápido y calendario (6 de octubre)
+
+Las suites completas aprobaron **145 verificaciones en SQLite y 145 en PostgreSQL 18.4**, y la suite PWA aprobó **12 verificaciones**. El recorrido específico aprobó además **44 verificaciones** de arranque/API, interacciones y sesión, tanto en SQLite como en la revisión final de PostgreSQL con los controles habilitados durante refrescos. Evidencia: `task-interactions-sqlite-results.json`, `task-interactions-postgres-results.json`, `task-interactions-focused-results.json`, `task-interactions-postgres-focused-results.json` y `pwa-test-results.json`. Compilaciones Debug/Release, modelo EF sin cambios pendientes, build del cliente con typecheck, lint y formato correctos. No se desplegó en producción ni se verificó en dispositivos físicos.
+
+Seis grupos nuevos comprueban rangos inclusivos, año bisiesto, más de 50 resultados, responsable, proyecto y consultas sin fecha; cambios de estado desde listas, tarjetas y cronología sin abrir detalles; arrastre con mouse y teclado, cancelación y rechazo de otro proyecto; conflictos persistentes con actualización segura; tableros y calendarios de módulos/ciclos, incluyendo eventos táctiles reales enviados a Chromium; y mes anterior/siguiente, Hoy, paginación del calendario, agenda móvil y estado rápido en ambos temas a 1440, 390, 320 y 844 px. Las columnas tienen scroll local y se verifica arrastrar también una tarea al final de una columna extensa. Los recorridos existentes comprueban estados de subpendientes y Focus, progreso, permisos, notas, archivos, actualizaciones y ausencia de polling.
+
+Capturas revisadas: `task-calendar-1440-light.png`, `task-calendar-320-dark.png`, `task-calendar-grid-320-dark.png`, `group-board-touch.png` y `tasks-drag-board-dark.png`. El nombre de la última captura identifica el escenario; su tema depende del contexto inicial del recorrido. Los botones rápidos son hermanos del botón de apertura, evitando controles interactivos anidados. Su selector vive fuera de las listas y se conserva durante refrescos SSE. Una operación iniciada de arrastre conserva su tarea/version original durante el refresco; el servidor decide si la escritura sigue vigente.
+
+Las ejecuciones intermedias detectaron selectores antiguos que contaban todos los botones de una fila, duplicación visual del estado en Focus, un picker descartado al refrescar y gestos/clics ignorados por bloqueo transitorio de carga. Se corrigieron la composición y las esperas sobre activación/columna elegida; los gestos de teclado esperan la pintura del overlay, sin reintentar escrituras. Una prueba de desvinculación de hijos confundía el ocultamiento temporal de la lista con la finalización del PUT: ahora espera la respuesta 200 antes de comprobar la relación. Los conflictos siguen devolviendo 409. El preview de Vite terminó una vez con el código nativo Windows `3221226505`; el harness ahora sirve el mismo `client/dist` con un servidor Node y proxy API/SSE, sin cargar herramientas nativas durante la navegación. Se conserva un modo opcional `AEGITASKS_TEST_ONLY=interactions` para revisar este recorrido; no sustituye la suite completa.
+
+Se añadió `@dnd-kit/core` 6.3.1 y se actualizó la dependencia de desarrollo `source-map-js` a 1.2.2, eliminando su aviso alto. npm mantiene dos avisos bajos de la dependencia existente KaTeX/Mermaid; no se aplicó la reducción a Mermaid 10 propuesta por `audit --force`, porque perdería diagramas ya soportados. La auditoría completa final figura en `task-interactions-full-audit.json`, y la de producción en `task-interactions-audit.json`.
 
 ### Altura natural y espaciado del sidebar (6 de octubre)
 

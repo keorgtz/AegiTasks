@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { CalendarDays } from 'lucide-react';
-import { Badge } from './components';
+import { TaskStatusButton, type ChangeTaskStatus } from './TaskStatusButton';
 import { dateLabel, localDate, type TaskItem, type Workspace } from './types';
 import './styles/task-views.css';
 
@@ -26,10 +26,14 @@ export function TaskTimeline({
   tasks,
   workspace: w,
   onOpen,
+  onChange,
+  disabled,
 }: {
   tasks: TaskItem[];
   workspace: Workspace;
   onOpen: (id: string) => void;
+  onChange: ChangeTaskStatus;
+  disabled: boolean;
 }) {
   const dated = tasks
     .filter((task) => task.dueDate)
@@ -47,34 +51,34 @@ export function TaskTimeline({
     task.dueDate < today &&
     !w.statuses.find((status) => status.id === task.statusId)?.isDone;
   const taskButton = (task: TaskItem) => (
-    <button
-      className="task-timeline-card"
-      aria-label={'Abrir pendiente: ' + task.title}
-      onClick={() => onOpen(task.id)}
-    >
-      <strong>{task.title}</strong>
-      <span>
-        <Badge color={w.statuses.find((status) => status.id === task.statusId)?.color}>
-          {w.statuses.find((status) => status.id === task.statusId)?.name}
-        </Badge>
-        <small>
-          {w.projects.find((project) => project.id === task.projectId)?.name} ·{' '}
-          {w.users.find((user) => user.id === task.assigneeId)?.name || 'Sin responsable'}
-        </small>
-      </span>
-      {task.dueDate && (
-        <span className={'task-timeline-date ' + (isOverdue(task) ? 'is-overdue' : '')}>
-          <CalendarDays size={14} />
-          {new Date(epoch(task.dueDate)).toLocaleDateString('es-MX', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-            timeZone: 'UTC',
-          })}
-          {isOverdue(task) && ' · Vencido'}
+    <div className="task-timeline-card">
+      <button
+        className="task-timeline-open"
+        aria-label={'Abrir pendiente: ' + task.title}
+        onClick={() => onOpen(task.id)}
+      >
+        <strong>{task.title}</strong>
+        <span>
+          <small>
+            {w.projects.find((project) => project.id === task.projectId)?.name} ·{' '}
+            {w.users.find((user) => user.id === task.assigneeId)?.name || 'Sin responsable'}
+          </small>
         </span>
-      )}
-    </button>
+        {task.dueDate && (
+          <span className={'task-timeline-date ' + (isOverdue(task) ? 'is-overdue' : '')}>
+            <CalendarDays size={14} />
+            {new Date(epoch(task.dueDate)).toLocaleDateString('es-MX', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              timeZone: 'UTC',
+            })}
+            {isOverdue(task) && ' · Vencido'}
+          </span>
+        )}
+      </button>
+      <TaskStatusButton task={task} workspace={w} onChange={onChange} disabled={disabled} />
+    </div>
   );
   return (
     <section className="task-timeline" aria-label="Cronología de pendientes">

@@ -28,6 +28,9 @@ import {
   type Workspace,
 } from './types';
 import './styles/planning-page.css';
+import { TaskBoard } from './TaskBoard';
+import { TaskStatusButton } from './TaskStatusButton';
+import { TaskCalendar, addCalendarFilter, currentMonth } from './TaskCalendar';
 
 import { ViewPicker, layouts, type Layout } from './ViewPicker';
 type Entry = { group: ProjectGroup; progress: PlanningProgress };
@@ -97,7 +100,9 @@ export function PlanningPage({
   const [layout, setLayout] = useState<Layout>(() => {
     try {
       const value = localStorage.getItem(preferenceKey);
-      return layouts.some((l) => l.id === value) ? (value as Layout) : 'gallery';
+      return layouts.some((l) => l.id === value && l.id !== 'calendar')
+        ? (value as Layout)
+        : 'gallery';
     } catch {
       return 'gallery';
     }
@@ -652,6 +657,8 @@ function GroupTasks({
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [layout, setLayout] = useState<Layout>('list');
+  const [calendarMonth, setCalendarMonth] = useState(currentMonth);
+  const [calendarUndated, setCalendarUndated] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -678,6 +685,7 @@ function GroupTasks({
       sort: 'priority',
     });
     if (status) params.set('status', status);
+    if (layout === 'calendar') addCalendarFilter(params, calendarMonth, calendarUndated);
     void api<TaskPage>(`/tasks?${params}`, 'GET', undefined, c.signal)
       .then((r) => {
         if (!c.signal.aborted) {
@@ -692,7 +700,19 @@ function GroupTasks({
         if (!c.signal.aborted) setLoading(false);
       });
     return () => c.abort();
-  }, [entry.group.id, entry.group.projectId, kind, page, query, status, revision, reload]);
+  }, [
+    entry.group.id,
+    entry.group.projectId,
+    kind,
+    page,
+    query,
+    status,
+    revision,
+    reload,
+    layout,
+    calendarMonth,
+    calendarUndated,
+  ]);
   useEffect(() => {
     if (
       result &&
@@ -703,6 +723,7 @@ function GroupTasks({
       setPage(Math.max(1, Math.ceil(result.total / result.pageSize)));
   }, [result, page]);
   async function mutate(task: TaskItem, statusId?: string) {
+    if (busy) return;
     setBusy(true);
     setActionError('');
     try {
@@ -731,21 +752,15 @@ function GroupTasks({
           {t.dueDate ? ` · ${dateLabel(t.dueDate)}` : ''}
         </span>
       </button>
-      <select
-        aria-label={`Estado de ${t.title}`}
-        value={t.statusId}
-        disabled={disabled || busy || loading}
-        onChange={(e) => void mutate(t, e.target.value)}
-      >
-        {statuses.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
+      <TaskStatusButton
+        task={t}
+        workspace={workspace}
+        disabled={disabled || busy}
+        onChange={mutate}
+      />
       <button
         className="btn-icon"
-        disabled={disabled || busy || loading}
+        disabled={disabled || busy}
         aria-label={`Quitar ${t.title} del ${kind === 'modules' ? 'módulo' : 'ciclo'}`}
         title="Quitar de la agrupación; conserva el pendiente"
         onClick={() => void mutate(t)}
@@ -786,7 +801,14 @@ function GroupTasks({
         <button className="btn btn-ghost" onClick={() => setFilters(true)}>
           <Filter size={17} /> Filtros{status && <span className="badge tone-purple">1</span>}
         </button>
-        <ViewPicker value={layout} onChange={setLayout} context="group-tasks" />
+        <ViewPicker
+          value={layout}
+          onChange={(value) => {
+            if (value === 'calendar' || layout === 'calendar') setPage(1);
+            setLayout(value);
+          }}
+          context="group-tasks"
+        />
       </div>
       <ErrorBox message={error} />
       <ErrorBox message={actionError} />
@@ -795,9 +817,14 @@ function GroupTasks({
           Reintentar
         </button>
       )}
-      {loading || result?.page !== page ? (
+      {loading && result && result.page === page && (
+        <p className="muted small" role="status">
+          Actualizando pendientes…
+        </p>
+      )}
+      {!result || result.page !== page ? (
         <p role="status">Cargando pendientes…</p>
-      ) : !result?.items.length ? (
+      ) : !result?.items.length && layout !== 'calendar' ? (
         <Empty title="No hay pendientes en esta vista" icon={<List size={28} />}>
           {status || query
             ? 'Prueba otros filtros.'
@@ -805,30 +832,41 @@ function GroupTasks({
         </Empty>
       ) : (
         <>
-          {layout === 'board' ? (
-            <div className="planning-task-board">
-              {statuses.map((s) => (
-                <section key={s.id} aria-label={`Estado ${s.name}`}>
-                  <h3>
-                    <Badge color={s.color}>{s.name}</Badge>
-                    <span className="muted small">
-                      {result.items.filter((t) => t.statusId === s.id).length}
-                    </span>
-                  </h3>
-                  {result.items.filter((t) => t.statusId === s.id).map(row)}
-                  {!result.items.some((t) => t.statusId === s.id) && (
-                    <p className="muted small">Sin pendientes en esta página.</p>
-                  )}
-                </section>
-              ))}
-            </div>
+          {layout === 'calendar' ? (
+            <TaskCalendar
+              tasks={result!.items}
+              total={result!.total}
+              workspace={workspace}
+              month={calendarMonth}
+              undated={calendarUndated}
+              onMonth={(value) => {
+                setCalendarMonth(value);
+                setPage(1);
+              }}
+              onUndated={(value) => {
+                setCalendarUndated(value);
+                setPage(1);
+              }}
+              onOpen={onOpen}
+              onChange={mutate}
+              disabled={disabled || busy}
+            />
+          ) : layout === 'board' ? (
+            <TaskBoard
+              tasks={result!.items}
+              workspace={workspace}
+              projectId={entry.group.projectId}
+              disabled={disabled || busy}
+              onChange={mutate}
+              renderTask={row}
+            />
           ) : (
-            <div className="planning-detail-list">{result.items.map(row)}</div>
+            <div className="planning-detail-list">{result!.items.map(row)}</div>
           )}
           <div className="planning-pagination">
             <span className="muted small">
-              {result.total} pendientes · página {page} de{' '}
-              {Math.max(1, Math.ceil(result.total / result.pageSize))}
+              {result!.total} pendientes · página {page} de{' '}
+              {Math.max(1, Math.ceil(result!.total / result!.pageSize))}
               {layout === 'board' && ' · tablero de esta página'}
             </span>
             <button
@@ -840,7 +878,7 @@ function GroupTasks({
             </button>
             <button
               className="btn btn-ghost"
-              disabled={page * result.pageSize >= result.total || busy}
+              disabled={page * result!.pageSize >= result!.total || busy}
               onClick={() => setPage(page + 1)}
             >
               Siguiente

@@ -1,3 +1,4 @@
+import { chooseTaskStatus } from './task-status-helpers.mjs';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { openTaskProperties, closeTaskProperties } from './task-property-test-helpers.mjs';
@@ -201,7 +202,7 @@ export async function testTaskHierarchy({
   dialog = page.getByRole('dialog', { name: 'Detalle del pendiente', exact: true });
   await dialog.getByRole('button', { name: `Padre: ${root.title}`, exact: true }).click();
   await dialog.getByRole('article', { name: `Subpendiente ${uiChild.title}` }).waitFor();
-  await dialog.getByLabel(`Estado del subpendiente ${uiChild.title}`).selectOption(done.id);
+  await chooseTaskStatus(dialog, uiChild.title, done);
   await page.waitForFunction(() =>
     document.querySelector('.task-relations h3')?.textContent.includes('1/1'),
   );
@@ -217,9 +218,16 @@ export async function testTaskHierarchy({
   await picker.getByRole('button', { name: `Seleccionar ${existing.title}`, exact: true }).click();
   await picker.waitFor({ state: 'hidden' });
   await dialog.getByRole('article', { name: `Subpendiente ${existing.title}` }).waitFor();
+  const unlinked = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/tasks/${existing.id}/parent` &&
+      response.request().method() === 'PUT' &&
+      response.status() === 200,
+  );
   await dialog
     .getByRole('button', { name: `Retirar ${existing.title} del padre`, exact: true })
     .click();
+  await unlinked;
   await dialog
     .getByRole('article', { name: `Subpendiente ${existing.title}` })
     .waitFor({ state: 'hidden' });

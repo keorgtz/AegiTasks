@@ -1,3 +1,4 @@
+import { chooseTaskStatus } from './task-status-helpers.mjs';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { testProjectNavigation } from './project-navigation-tests.mjs';
@@ -134,7 +135,7 @@ export async function testPlanningViews({ page, admin, support, fixtures, json, 
   let task = (await json(admin, 'GET', `/tasks/${fixtures.zero.id}`)).item;
   assert.equal(task.moduleId, mod.id);
   const otherCycle = task.cycleId;
-  await page.getByLabel(`Estado de ${task.title}`, { exact: true }).selectOption(fixtures.done.id);
+  await chooseTaskStatus(page, task.title, fixtures.done);
   await page.getByText('1 de 1 resueltos', { exact: true }).waitFor();
   assert.equal((await json(admin, 'GET', `/tasks/${task.id}`)).item.statusId, fixtures.done.id);
   await page
@@ -170,7 +171,9 @@ export async function testPlanningViews({ page, admin, support, fixtures, json, 
   await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
   await page.getByText('Todos los cambios están guardados.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
-  await page.getByLabel('Estado de Nuevo desde detalle del módulo', { exact: true }).waitFor();
+  await page
+    .getByRole('button', { name: 'Cambiar estado de Nuevo desde detalle del módulo', exact: true })
+    .waitFor();
   const newTask = (
     await json(admin, 'GET', `/tasks?project=${project.id}&q=Nuevo%20desde%20detalle&scope=all`)
   ).items[0];
@@ -186,15 +189,11 @@ export async function testPlanningViews({ page, admin, support, fixtures, json, 
     },
     { times: 1 },
   );
-  await page
-    .getByLabel(`Estado de ${newTask.title}`, { exact: true })
-    .selectOption(fixtures.done.id);
+  await chooseTaskStatus(page, newTask.title, fixtures.done);
   await page.getByRole('alert').filter({ hasText: 'El pendiente cambió' }).waitFor();
   await page.getByText('1 de 1 resueltos', { exact: true }).waitFor();
   assert.equal(await page.getByRole('alert').filter({ hasText: 'El pendiente cambió' }).count(), 1);
-  await page
-    .getByLabel(`Estado de ${newTask.title}`, { exact: true })
-    .selectOption(fixtures.open.id);
+  await chooseTaskStatus(page, newTask.title, fixtures.open);
   await page.getByText('0 de 1 resueltos', { exact: true }).waitFor();
   assert.equal(await page.getByRole('alert').count(), 0);
   pass(
@@ -315,7 +314,9 @@ export async function testPlanningViews({ page, admin, support, fixtures, json, 
     },
     204,
   );
-  await page.getByLabel(`Estado de ${latest.title}`, { exact: true }).waitFor();
+  await page
+    .getByRole('button', { name: `Cambiar estado de ${latest.title}`, exact: true })
+    .waitFor();
   await page.getByRole('button', { name: 'Editar ciclo', exact: true }).click();
   await page.getByLabel('Nombre del ciclo').fill('Ciclo renombrado desde gestión UI');
   await page.getByRole('button', { name: 'Guardar agrupación' }).click();

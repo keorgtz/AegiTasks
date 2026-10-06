@@ -1,5 +1,6 @@
 import { CheckCheck, CircleCheck } from 'lucide-react';
 import type { TaskItem, Workspace } from './types';
+import { TaskStatusButton } from './TaskStatusButton';
 
 export function FocusTaskSummary({
   tasks,
@@ -46,7 +47,7 @@ export function FocusTaskSummary({
                   {task.title}
                 </button>
                 <small>
-                  {project?.name} · {status?.name}
+                  {project?.name}
                   {task.archived ? ' · Archivado' : ''}
                 </small>
                 {task.description && <p className="focus-task-excerpt">{task.description}</p>}
@@ -59,25 +60,33 @@ export function FocusTaskSummary({
                   <small>Restaura el pendiente y su proyecto para completarlo.</small>
                 )}
               </div>
-              {status?.isDone ? (
-                <span className="focus-task-completed">
-                  <CheckCheck size={18} /> Completado
-                </span>
-              ) : (
-                active && (
-                  <button
-                    className="btn focus-secondary"
-                    aria-label={`Completar ${task.title}`}
-                    disabled={!!changingTask || unavailable || !target}
-                    onClick={() => {
-                      if (target) onComplete(task, target.id);
-                    }}
-                  >
-                    <CircleCheck size={18} />
-                    {changingTask === task.id ? 'Guardando…' : 'Completar'}
-                  </button>
-                )
-              )}
+              <div className="focus-session-task-actions">
+                <TaskStatusButton
+                  task={task}
+                  workspace={w}
+                  disabled={!!changingTask || unavailable}
+                  onChange={onComplete}
+                />
+                {status?.isDone ? (
+                  <span className="focus-task-completed">
+                    <CheckCheck size={18} /> Completado
+                  </span>
+                ) : (
+                  active && (
+                    <button
+                      className="btn focus-secondary"
+                      aria-label={`Completar ${task.title}`}
+                      disabled={!!changingTask || unavailable || !target}
+                      onClick={() => {
+                        if (target) onComplete(task, target.id);
+                      }}
+                    >
+                      <CircleCheck size={18} />
+                      {changingTask === task.id ? 'Guardando…' : 'Completar'}
+                    </button>
+                  )
+                )}
+              </div>
             </article>
           );
         })}

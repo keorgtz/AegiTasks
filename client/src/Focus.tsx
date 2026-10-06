@@ -152,6 +152,7 @@ export function FocusPage({
         version: task.version,
       });
       setSessionTasks((items) => items.map((t) => (t.id === task.id ? updated : t)));
+      setSelected((items) => items.map((t) => (t.id === task.id ? updated : t)));
       setTaskRevision((r) => r + 1);
     } catch (e) {
       setError(errorMessage(e));

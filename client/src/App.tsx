@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, lazy, Suspense, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, lazy, Suspense, type FormEvent } from 'react';
 import {
   Archive,
   ArrowDownToLine,
@@ -45,6 +45,9 @@ import { PlanningPage } from './PlanningPage';
 import { estimateLabel } from './estimates';
 import { ViewPicker, layouts, type Layout } from './ViewPicker';
 import { TaskGallery, TaskTimeline } from './TaskViews';
+import { TaskBoard } from './TaskBoard';
+import { TaskStatusButton, TaskStatusProvider, type ChangeTaskStatus } from './TaskStatusButton';
+import { TaskCalendar, addCalendarFilter, currentMonth } from './TaskCalendar';
 import {
   SettingsDisclosure,
   SettingsNavigation,
@@ -134,18 +137,20 @@ export default function App() {
   return user ? (
     <SpaceGate user={user}>
       {(session, active, switchSpace, reloadSpaces) => (
-        <WorkspaceApp
-          key={active.id}
-          spaceSession={session}
-          space={active}
-          switchSpace={switchSpace}
-          reloadSpaces={reloadSpaces}
-          user={user}
-          logout={() => void logout()}
-          theme={theme}
-          toggleTheme={toggleTheme}
-          globalError={authError}
-        />
+        <TaskStatusProvider key={active.id}>
+          <WorkspaceApp
+            key={active.id}
+            spaceSession={session}
+            space={active}
+            switchSpace={switchSpace}
+            reloadSpaces={reloadSpaces}
+            user={user}
+            logout={() => void logout()}
+            theme={theme}
+            toggleTheme={toggleTheme}
+            globalError={authError}
+          />
+        </TaskStatusProvider>
       )}
     </SpaceGate>
   ) : (
@@ -345,8 +350,14 @@ function WorkspaceApp({
     }
   };
   const [view, setView] = useState<Layout>(() => readView(viewKey));
+  const [calendarMonth, setCalendarMonth] = useState(currentMonth);
+  const [calendarUndated, setCalendarUndated] = useState(false);
+  const [changingTask, setChangingTask] = useState('');
+  const [statusError, setStatusError] = useState('');
+  const statusLock = useRef(false);
   useEffect(() => setView(readView(viewKey)), [viewKey]);
   const chooseView = (value: Layout) => {
+    if (value === 'calendar' || view === 'calendar') setPage(1);
     setView(value);
     try {
       localStorage.setItem(viewKey, value);
@@ -487,6 +498,22 @@ function WorkspaceApp({
   }, []);
   useChanges(['catalog'], () => void reload().catch((e) => setError(errorMessage(e))));
   useChanges(['tasks'], () => setRevision((r) => r + 1));
+  async function changeTaskStatus(task: TaskItem, statusId: string) {
+    if (statusLock.current || task.statusId === statusId || task.archived) return;
+    statusLock.current = true;
+    setChangingTask(task.id);
+    setStatusError('');
+    try {
+      await api(`/tasks/${task.id}/status`, 'PUT', { statusId, version: task.version });
+      setToast('Estado actualizado.');
+    } catch (e) {
+      setStatusError(errorMessage(e));
+    } finally {
+      statusLock.current = false;
+      setChangingTask('');
+      setRevision((value) => value + 1);
+    }
+  }
   useEffect(() => {
     if (
       !w ||
@@ -510,6 +537,7 @@ function WorkspaceApp({
     if (tag) params.set('tag', tag);
     if (priority) params.set('priority', priority);
     if (query) params.set('q', query);
+    if (view === 'calendar') addCalendarFilter(params, calendarMonth, calendarUndated);
     Promise.all([
       api<TaskPage>(`/tasks?${params}`, 'GET', undefined, controller.signal),
       api<Summary>(
@@ -550,6 +578,9 @@ function WorkspaceApp({
     online,
     permissions,
     planningKind,
+    view,
+    calendarMonth,
+    calendarUndated,
   ]);
   const navigate = (to: string) => {
     setMoreMenu(false);
@@ -1217,7 +1248,13 @@ function WorkspaceApp({
                       Actualizando pendientes…
                     </div>
                   )}
-                  {!result.items.length && !loading ? (
+                  <ErrorBox message={statusError} />
+                  {!!changingTask && (
+                    <p className="muted small" role="status">
+                      Guardando estado…
+                    </p>
+                  )}
+                  {!result.items.length && !loading && view !== 'calendar' ? (
                     <div className="card">
                       <Empty
                         icon={<CheckCheck size={36} />}
@@ -1238,80 +1275,72 @@ function WorkspaceApp({
                     <TaskGallery
                       tasks={result.items}
                       renderTask={(task) => (
-                        <TaskCard task={task} w={w} board onOpen={() => openTask(task.id)} />
+                        <TaskCard
+                          task={task}
+                          w={w}
+                          board
+                          onOpen={() => openTask(task.id)}
+                          onChange={changeTaskStatus}
+                          disabled={!!changingTask}
+                        />
                       )}
                     />
                   ) : view === 'timeline' ? (
-                    <TaskTimeline tasks={result.items} workspace={w} onOpen={openTask} />
+                    <TaskTimeline
+                      tasks={result.items}
+                      workspace={w}
+                      onOpen={openTask}
+                      onChange={changeTaskStatus}
+                      disabled={!!changingTask}
+                    />
+                  ) : view === 'calendar' ? (
+                    <TaskCalendar
+                      tasks={result.items}
+                      workspace={w}
+                      month={calendarMonth}
+                      undated={calendarUndated}
+                      onMonth={(month) => {
+                        setCalendarMonth(month);
+                        setPage(1);
+                      }}
+                      onUndated={(value) => {
+                        setCalendarUndated(value);
+                        setPage(1);
+                      }}
+                      total={result.total}
+                      onOpen={openTask}
+                      onChange={changeTaskStatus}
+                      disabled={!!changingTask}
+                    />
                   ) : view === 'board' ? (
-                    <div className="project-boards">
-                      {w.projects
-                        .filter((p) =>
-                          taskProjectId
-                            ? p.id === taskProjectId
-                            : result.items.some((t) => t.projectId === p.id),
-                        )
-                        .map((p) => (
-                          <section
-                            className="project-board"
-                            key={p.id}
-                            aria-label={`Tablero de ${p.name}`}
-                          >
-                            <h3 className="project-board-title">
-                              {p.name}
-                              <Badge color={p.color}>
-                                {result.items.filter((t) => t.projectId === p.id).length} en esta
-                                página
-                              </Badge>
-                            </h3>
-                            <div
-                              className="board"
-                              tabIndex={0}
-                              role="region"
-                              aria-label={`Columnas de ${p.name}`}
-                            >
-                              {w.statuses
-                                .filter((s) => s.projectId === p.id)
-                                .map((s) => (
-                                  <section className="board-column" key={s.id}>
-                                    <div className="board-heading">
-                                      <Badge color={s.color}>{s.name}</Badge>
-                                      <span>
-                                        {
-                                          result.items.filter(
-                                            (t) => t.projectId === p.id && t.statusId === s.id,
-                                          ).length
-                                        }
-                                      </span>
-                                    </div>
-                                    {result.items
-                                      .filter((t) => t.projectId === p.id && t.statusId === s.id)
-                                      .map((t) => (
-                                        <TaskCard
-                                          key={t.id}
-                                          task={t}
-                                          w={w}
-                                          board
-                                          onOpen={() => openTask(t.id)}
-                                        />
-                                      ))}
-                                    {!result.items.some(
-                                      (t) => t.projectId === p.id && t.statusId === s.id,
-                                    ) && (
-                                      <div className="column-empty">
-                                        Sin pendientes en esta página
-                                      </div>
-                                    )}
-                                  </section>
-                                ))}
-                            </div>
-                          </section>
-                        ))}
-                    </div>
+                    <TaskBoard
+                      tasks={result.items}
+                      workspace={w}
+                      projectId={taskProjectId}
+                      onChange={changeTaskStatus}
+                      disabled={!!changingTask}
+                      renderTask={(task) => (
+                        <TaskCard
+                          task={task}
+                          w={w}
+                          board
+                          onOpen={() => openTask(task.id)}
+                          onChange={changeTaskStatus}
+                          disabled={!!changingTask}
+                        />
+                      )}
+                    />
                   ) : (
                     <div className="task-list">
                       {result.items.map((t) => (
-                        <TaskCard key={t.id} task={t} w={w} onOpen={() => openTask(t.id)} />
+                        <TaskCard
+                          key={t.id}
+                          task={t}
+                          w={w}
+                          onOpen={() => openTask(t.id)}
+                          onChange={changeTaskStatus}
+                          disabled={!!changingTask}
+                        />
                       ))}
                     </div>
                   )}
@@ -1491,26 +1520,33 @@ function TaskCard({
   w,
   board,
   onOpen,
+  onChange,
+  disabled,
 }: {
   task: TaskItem;
   w: Workspace;
   board?: boolean;
   onOpen: () => void;
+  onChange: ChangeTaskStatus;
+  disabled: boolean;
 }) {
   const status = w.statuses.find((s) => s.id === t.statusId);
   const project = w.projects.find((p) => p.id === t.projectId);
   const assignee = w.users.find((u) => u.id === t.assigneeId);
   const overdue = t.dueDate && t.dueDate < localDate() && !status?.isDone;
   return (
-    <button
+    <article
       className={`task-card ${board ? 'board-task' : ''} ${status?.isDone ? 'task-done' : ''}`}
-      onClick={onOpen}
-      aria-label={`Abrir pendiente: ${t.title}`}
+      aria-label={`Pendiente ${t.title}`}
     >
       <span className={`task-state ${status?.isDone ? 'done' : ''}`}>
         {status?.isDone ? <CircleCheck size={23} /> : <Circle size={23} />}
       </span>
-      <div className="task-main">
+      <button
+        className="task-main task-card-open"
+        onClick={onOpen}
+        aria-label={`Abrir pendiente: ${t.title}`}
+      >
         <div className="task-context">
           <span className={`project-dot tone-${project?.color || 'purple'}`} />
           {project?.name}
@@ -1536,9 +1572,9 @@ function TaskCard({
             <Badge color={priorityColors[t.priority || 0]}>{priorities[t.priority || 0]}</Badge>
           )}
         </div>
-      </div>
+      </button>
       <div className="task-status">
-        <Badge color={status?.color}>{status?.name}</Badge>
+        <TaskStatusButton task={t} workspace={w} onChange={onChange} disabled={disabled} />
       </div>
       <div className="task-priority">
         <Badge color={priorityColors[t.priority || 0]}>{priorities[t.priority || 0]}</Badge>
@@ -1564,6 +1600,6 @@ function TaskCard({
         )}
         <span className="sr-only">{assignee?.name || 'Sin asignar'}</span>
       </div>
-    </button>
+    </article>
   );
 }

@@ -11,10 +11,15 @@ public static class TaskEndpoints
     public static void MapTasks(this WebApplication app)
     {
         var group = app.MapGroup("/api/tasks").RequireAuthorization("page:tasks");
-        group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page, string? assignee, string? module, string? cycle) =>
+        group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page, string? assignee, string? module, string? cycle, DateOnly? dueFrom, DateOnly? dueTo, bool? withoutDueDate) =>
         {
             var query = db.Tasks.AsNoTracking().Where(x => x.Archived == (scope == "archived") && db.Projects.Any(p => p.Id == x.ProjectId && !p.Archived));
             query = query.ForAssignee(assignee, user.UserId());
+            if (dueFrom > dueTo) throw new InputError("El inicio del calendario no puede ser posterior al final.");
+            if (withoutDueDate == true && (dueFrom != null || dueTo != null)) throw new InputError("Elige un periodo o pendientes sin fecha, no ambos.");
+            if (withoutDueDate == true) query = query.Where(x => x.DueDate == null);
+            if (dueFrom != null) query = query.Where(x => x.DueDate >= dueFrom);
+            if (dueTo != null) query = query.Where(x => x.DueDate <= dueTo);
             if (project != null) query = query.Where(x => x.ProjectId == project);
             if (folder != null) query = query.Where(x => x.FolderId == folder);
             if (module == "none") query = query.Where(x => x.ModuleId == null);

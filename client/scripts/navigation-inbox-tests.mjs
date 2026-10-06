@@ -275,7 +275,7 @@ export async function testNavigationInbox({
       assert.equal(
         await work()
           .getByRole('region', { name: 'Pendientes sin fecha límite', exact: true })
-          .getByRole('button')
+          .getByRole('button', { name: /^Abrir pendiente:/ })
           .count(),
         expected.items.filter((task) => !task.dueDate).length,
       );

@@ -1,12 +1,13 @@
-import { CalendarRange, Columns3, LayoutGrid, List } from 'lucide-react';
+import { CalendarDays, CalendarRange, Columns3, LayoutGrid, List } from 'lucide-react';
 import './styles/view-picker.css';
 
-export type Layout = 'gallery' | 'list' | 'board' | 'timeline';
+export type Layout = 'gallery' | 'list' | 'board' | 'timeline' | 'calendar';
 export const layouts = [
   { id: 'gallery', label: 'Tarjetas', icon: LayoutGrid },
   { id: 'list', label: 'Lista', icon: List },
   { id: 'board', label: 'Tablero', icon: Columns3 },
   { id: 'timeline', label: 'Cronología', icon: CalendarRange },
+  { id: 'calendar', label: 'Calendario', icon: CalendarDays },
 ] as const;
 
 export function ViewPicker({
@@ -31,7 +32,11 @@ export function ViewPicker({
       }
     >
       {layouts
-        .filter((item) => context !== 'group-tasks' || ['list', 'board'].includes(item.id))
+        .filter((item) =>
+          context === 'groups'
+            ? item.id !== 'calendar'
+            : context !== 'group-tasks' || ['list', 'board', 'calendar'].includes(item.id),
+        )
         .map(({ id, label, icon: Icon }) => (
           <button
             key={id}

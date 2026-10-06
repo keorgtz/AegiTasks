@@ -4,6 +4,7 @@ import { api, errorMessage } from './api';
 import { useChanges } from './changes';
 import { Badge, ErrorBox, Modal } from './components';
 import type { TaskDetail, TaskItem, TaskPage, Workspace } from './types';
+import { TaskStatusButton } from './TaskStatusButton';
 
 export function TaskRelationPicker({
   projectId,
@@ -313,20 +314,12 @@ export function TaskRelations({
                 {task.archived ? ' · Archivado' : ''}
               </small>
             </button>
-            <select
-              aria-label={`Estado del subpendiente ${task.title}`}
-              value={task.statusId}
-              disabled={disabled || busy || task.archived}
-              onChange={(e) => void mutate(task, e.target.value)}
-            >
-              {workspace.statuses
-                .filter((s) => s.projectId === task.projectId)
-                .map((s) => (
-                  <option value={s.id} key={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
+            <TaskStatusButton
+              task={task}
+              workspace={workspace}
+              disabled={disabled || busy}
+              onChange={mutate}
+            />
             <button
               type="button"
               className="btn-icon"

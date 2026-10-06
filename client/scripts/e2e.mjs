@@ -11,6 +11,7 @@ import { testSpaceAccounts, testSpaceAccountUi } from './space-account-tests.mjs
 import { testPlanningApi, testPlanningUi } from './planning-tests.mjs';
 import { testTaskHierarchy } from './task-hierarchy-tests.mjs';
 import { testNavigationInbox } from './navigation-inbox-tests.mjs';
+import { testTaskInteractions } from './task-interaction-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -91,19 +92,10 @@ try {
       },
     },
   );
-  run(
-    process.execPath,
-    [
-      path.join(root, 'client/node_modules/vite/bin/vite.js'),
-      'preview',
-      '--host',
-      '127.0.0.1',
-      // Node loads this TypeScript config directly; preview does not need a native config bundle.
-      '--configLoader',
-      'native',
-    ],
-    { cwd: path.join(root, 'client'), env: process.env },
-  );
+  run(process.execPath, [path.join(root, 'client/scripts/test-preview.mjs')], {
+    cwd: path.join(root, 'client'),
+    env: process.env,
+  });
   await ready('http://localhost:5213/api/health');
   await ready('http://localhost:4174');
   const anon = await request.newContext({ baseURL: apiBase });
@@ -404,182 +396,199 @@ try {
   });
   const browserErrors = [];
   page.on('pageerror', (e) => browserErrors.push(e.message));
-  await page.goto('http://localhost:4174');
-  await page.getByRole('heading', { name: 'Tu bandeja.' }).waitFor();
-  await page
-    .getByRole('button', { name: 'Abrir pendiente: No se guarda el cambio de habitación' })
-    .waitFor();
-  await page.screenshot({ path: path.join(artifacts, 'desktop-light.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Cambiar a modo oscuro' }).click();
-  await page.screenshot({ path: path.join(artifacts, 'desktop-dark.png'), fullPage: true });
-  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
-  await page.reload();
-  await page.getByRole('heading', { name: 'Tu bandeja.' }).waitFor();
-  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
-  pass('Desktop light/dark themes and persistence');
-  await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
-  await page.getByLabel('Título', { exact: true }).fill('Reporte de prueba desde navegador');
-  await page
-    .getByLabel('Descripción (opcional)')
-    .fill('Se conserva como borrador al cerrar el formulario.');
-  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
-  await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
-  assert.equal(
-    await page.getByLabel('Título', { exact: true }).inputValue(),
-    'Reporte de prueba desde navegador',
-  );
-  pass('New report draft survives closing and reopening');
-  await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
-  await page.getByRole('heading', { name: 'Detalle del pendiente' }).waitFor();
-  await page.getByText('Todos los cambios están guardados.').waitFor();
-  assert.equal(
+  if (process.env.AEGITASKS_TEST_ONLY === 'interactions') {
+    await testTaskInteractions({ page, admin, member, adminUser, json, pass, artifacts });
+  } else {
+    await page.goto('http://localhost:4174');
+    await page.getByRole('heading', { name: 'Tu bandeja.' }).waitFor();
     await page
-      .getByRole('tab', { name: 'Detalle general', exact: true })
-      .getAttribute('aria-selected'),
-    'true',
-  );
-  await page.getByRole('tab', { name: 'Conversación y actividad', exact: true }).click();
-  await page.getByLabel('Agregar comentario').fill('Comentario desde la interfaz.');
-  await page.getByRole('button', { name: 'Comentar', exact: true }).click();
-  await page.getByText('Comentario desde la interfaz.', { exact: true }).waitFor();
-  pass('Create and comment through actual UI');
-  await testTaskDetailTabs({ page, png, artifacts, pass });
-  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
-  await testInboxFilters({ page, admin, support, adminUser, json, artifacts, pass });
-  await page.goto(`http://localhost:4174/#project/${pms.id}`);
-  await page.getByRole('button', { name: 'Vista de tablero' }).click();
-  await page.locator('.board-heading').getByText('En revisión', { exact: true }).waitFor();
-  await page.screenshot({ path: path.join(artifacts, 'board-dark.png'), fullPage: true });
-  pass('Project board renders custom statuses');
-  await page.goto('http://localhost:4174/#inbox');
-  await page.getByRole('heading', { name: 'Tu bandeja.' }).waitFor();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('.toast').waitFor({ state: 'hidden' });
-  await page.screenshot({ path: path.join(artifacts, 'mobile-dark.png'), fullPage: true });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  pass('Phone layout has no horizontal overflow');
-  await page.getByRole('button', { name: 'Cambiar a modo claro' }).click();
-  await page.evaluate(
-    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-  );
-  await page.screenshot({ path: path.join(artifacts, 'mobile-light.png'), fullPage: true });
-  await page
-    .getByRole('button', { name: 'Abrir pendiente: Agregar filtro por fecha de llegada' })
-    .scrollIntoViewIfNeeded();
-  await page.screenshot({ path: path.join(artifacts, 'mobile-list-light.png') });
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
-  await page.getByLabel('Título', { exact: true }).fill('Borrador sin conexión');
-  await context.setOffline(true);
-  await page.getByLabel('Descripción (opcional)').fill('La app conserva este texto.');
-  await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '¿Qué encontraste?' })
-    .getByRole('alert')
-    .filter({ hasText: 'No hay conexión' })
-    .waitFor();
-  assert.equal(
-    await page.getByLabel('Título', { exact: true }).inputValue(),
-    'Borrador sin conexión',
-  );
-  await page.screenshot({ path: path.join(artifacts, 'mobile-offline.png'), fullPage: true });
-  await context.setOffline(false);
-  await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
-  await page.getByRole('heading', { name: 'Detalle del pendiente' }).waitFor();
-  pass('Offline submission keeps draft and succeeds after reconnect');
-  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
-  for (const width of [320, 768, 1024]) {
-    await page.setViewportSize({ width, height: 900 });
+      .getByRole('button', { name: 'Abrir pendiente: No se guarda el cambio de habitación' })
+      .waitFor();
+    await page.screenshot({ path: path.join(artifacts, 'desktop-light.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Cambiar a modo oscuro' }).click();
+    await page.screenshot({ path: path.join(artifacts, 'desktop-dark.png'), fullPage: true });
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    await page.reload();
+    await page.getByRole('heading', { name: 'Tu bandeja.' }).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    pass('Desktop light/dark themes and persistence');
+    await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
+    await page.getByLabel('Título', { exact: true }).fill('Reporte de prueba desde navegador');
+    await page
+      .getByLabel('Descripción (opcional)')
+      .fill('Se conserva como borrador al cerrar el formulario.');
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
+    assert.equal(
+      await page.getByLabel('Título', { exact: true }).inputValue(),
+      'Reporte de prueba desde navegador',
+    );
+    pass('New report draft survives closing and reopening');
+    await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
+    await page.getByRole('heading', { name: 'Detalle del pendiente' }).waitFor();
+    await page.getByText('Todos los cambios están guardados.').waitFor();
+    assert.equal(
+      await page
+        .getByRole('tab', { name: 'Detalle general', exact: true })
+        .getAttribute('aria-selected'),
+      'true',
+    );
+    await page.getByRole('tab', { name: 'Conversación y actividad', exact: true }).click();
+    await page.getByLabel('Agregar comentario').fill('Comentario desde la interfaz.');
+    await page.getByRole('button', { name: 'Comentar', exact: true }).click();
+    await page.getByText('Comentario desde la interfaz.', { exact: true }).waitFor();
+    pass('Create and comment through actual UI');
+    await testTaskDetailTabs({ page, png, artifacts, pass });
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await testInboxFilters({ page, admin, support, adminUser, json, artifacts, pass });
+    await page.goto(`http://localhost:4174/#project/${pms.id}`);
+    await page.getByRole('button', { name: 'Vista de tablero' }).click();
+    await page.locator('.board-heading').getByText('En revisión', { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(artifacts, 'board-dark.png'), fullPage: true });
+    pass('Project board renders custom statuses');
+    await page.goto('http://localhost:4174/#inbox');
+    await page.getByRole('heading', { name: 'Tu bandeja.' }).waitFor();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.toast').waitFor({ state: 'hidden' });
+    await page.screenshot({ path: path.join(artifacts, 'mobile-dark.png'), fullPage: true });
     assert.equal(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       true,
-      `Overflow at ${width}px`,
     );
+    pass('Phone layout has no horizontal overflow');
+    await page.getByRole('button', { name: 'Cambiar a modo claro' }).click();
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    await page.screenshot({ path: path.join(artifacts, 'mobile-light.png'), fullPage: true });
+    await page
+      .getByRole('button', { name: 'Abrir pendiente: Agregar filtro por fecha de llegada' })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(artifacts, 'mobile-list-light.png') });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.getByRole('button', { name: 'Nuevo pendiente', exact: true }).click();
+    await page.getByLabel('Título', { exact: true }).fill('Borrador sin conexión');
+    await context.setOffline(true);
+    await page.getByLabel('Descripción (opcional)').fill('La app conserva este texto.');
+    await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '¿Qué encontraste?' })
+      .getByRole('alert')
+      .filter({ hasText: 'No hay conexión' })
+      .waitFor();
+    assert.equal(
+      await page.getByLabel('Título', { exact: true }).inputValue(),
+      'Borrador sin conexión',
+    );
+    await page.screenshot({ path: path.join(artifacts, 'mobile-offline.png'), fullPage: true });
+    await context.setOffline(false);
+    await page.getByRole('button', { name: 'Crear pendiente', exact: true }).click();
+    await page.getByRole('heading', { name: 'Detalle del pendiente' }).waitFor();
+    pass('Offline submission keeps draft and succeeds after reconnect');
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    for (const width of [320, 768, 1024]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        true,
+        `Overflow at ${width}px`,
+      );
+    }
+    pass('320, 768 and 1024px layouts fit viewport');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .getByRole('navigation', { name: 'Navegación móvil' })
+      .getByRole('button', { name: 'Más', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Más opciones' })
+      .getByRole('button', { name: 'Ajustes', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Más opciones' })
+      .getByRole('button', { name: 'Usuarios y roles', exact: true })
+      .click();
+    await page.getByRole('heading', { name: 'Usuarios y roles', exact: true }).waitFor();
+    await page
+      .locator('.settings-row')
+      .filter({ hasText: member.email })
+      .getByText(member.name, { exact: true })
+      .waitFor();
+    pass('Mobile settings and team navigation');
+    assert.equal((await page.request.get('/manifest.webmanifest')).status(), 200);
+    const manifest = await (await page.request.get('/manifest.webmanifest')).json();
+    assert.equal(manifest.display, 'standalone');
+    for (const icon of manifest.icons)
+      assert.equal((await page.request.get(icon.src)).status(), 200);
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    pass('Installable manifest, actual PNG icons and registered service worker');
+    await testExpansionUi({
+      page,
+      context,
+      artifacts,
+      pass,
+      pms,
+      admin,
+      personalAdmin,
+      json,
+      spaceTests,
+      shared,
+    });
+    await testSpaceAccountUi({
+      browser,
+      page,
+      admin,
+      json,
+      fixtures: accountFixtures,
+      shared,
+      password,
+      pass,
+      artifacts,
+    });
+    const planningFixtures = await testPlanningApi({ admin, support, personalAdmin, json, pass });
+    await testPlanningUi({
+      page,
+      admin,
+      support,
+      fixtures: planningFixtures,
+      json,
+      pass,
+      artifacts,
+    });
+    await testTaskHierarchy({ page, admin, support, personalAdmin, member, json, pass, artifacts });
+    await testNavigationInbox({ page, admin, support, member, adminUser, json, pass, artifacts });
+    await testTaskInteractions({ page, admin, member, adminUser, json, pass, artifacts });
+    await testWorkflow({
+      page,
+      context,
+      admin,
+      personalAdmin,
+      support,
+      shared,
+      adminUser,
+      request,
+      json,
+      pass,
+      artifacts,
+      password,
+    });
+    await testAssignments({
+      page,
+      context,
+      admin,
+      support,
+      shared,
+      adminUser,
+      json,
+      pass,
+      artifacts,
+    });
+    await testFocusVisuals({ page, context, admin, support, json, pass, artifacts });
+    await testFocusLayout({ page, admin, json, pass, artifacts });
+    await testNoteEditor({ page, context, admin, json, pass, artifacts });
   }
-  pass('320, 768 and 1024px layouts fit viewport');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page
-    .getByRole('navigation', { name: 'Navegación móvil' })
-    .getByRole('button', { name: 'Más', exact: true })
-    .click();
-  await page
-    .getByRole('dialog', { name: 'Más opciones' })
-    .getByRole('button', { name: 'Ajustes', exact: true })
-    .click();
-  await page
-    .getByRole('dialog', { name: 'Más opciones' })
-    .getByRole('button', { name: 'Usuarios y roles', exact: true })
-    .click();
-  await page.getByRole('heading', { name: 'Usuarios y roles', exact: true }).waitFor();
-  await page
-    .locator('.settings-row')
-    .filter({ hasText: member.email })
-    .getByText(member.name, { exact: true })
-    .waitFor();
-  pass('Mobile settings and team navigation');
-  assert.equal((await page.request.get('/manifest.webmanifest')).status(), 200);
-  const manifest = await (await page.request.get('/manifest.webmanifest')).json();
-  assert.equal(manifest.display, 'standalone');
-  for (const icon of manifest.icons) assert.equal((await page.request.get(icon.src)).status(), 200);
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready;
-  });
-  pass('Installable manifest, actual PNG icons and registered service worker');
-  await testExpansionUi({
-    page,
-    context,
-    artifacts,
-    pass,
-    pms,
-    admin,
-    personalAdmin,
-    json,
-    spaceTests,
-    shared,
-  });
-  await testSpaceAccountUi({
-    browser,
-    page,
-    admin,
-    json,
-    fixtures: accountFixtures,
-    shared,
-    password,
-    pass,
-    artifacts,
-  });
-  const planningFixtures = await testPlanningApi({ admin, support, personalAdmin, json, pass });
-  await testPlanningUi({ page, admin, support, fixtures: planningFixtures, json, pass, artifacts });
-  await testTaskHierarchy({ page, admin, support, personalAdmin, member, json, pass, artifacts });
-  await testNavigationInbox({ page, admin, support, member, adminUser, json, pass, artifacts });
-  await testWorkflow({
-    page,
-    context,
-    admin,
-    personalAdmin,
-    support,
-    shared,
-    adminUser,
-    request,
-    json,
-    pass,
-    artifacts,
-    password,
-  });
-  await testAssignments({
-    page,
-    context,
-    admin,
-    support,
-    shared,
-    adminUser,
-    json,
-    pass,
-    artifacts,
-  });
-  await testFocusVisuals({ page, context, admin, support, json, pass, artifacts });
-  await testFocusLayout({ page, admin, json, pass, artifacts });
-  await testNoteEditor({ page, context, admin, json, pass, artifacts });
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));
   let clockSession = await json(support, 'POST', `/focus/${spaceTests.clockSession.id}/action`, {
@@ -627,6 +636,7 @@ try {
     JSON.stringify(
       {
         checks,
+        suite: process.env.AEGITASKS_TEST_ONLY || 'full',
         results,
         testedAt: new Date().toISOString(),
         database: process.env.AEGITASKS_TEST_POSTGRES
