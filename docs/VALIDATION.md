@@ -4,26 +4,36 @@ Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK
 
 ## Ejecutado correctamente
 
-| Verificación                                                                    | Resultado                                                                              |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `dotnet build`                                                                  | Sin errores ni advertencias                                                            |
-| `dotnet build -c Release`                                                       | Sin errores ni advertencias                                                            |
-| `dotnet ef migrations has-pending-model-changes --project server/AegiTasks.Api` | Modelo y migración PostgreSQL coinciden                                                |
-| `npm --prefix client run typecheck`                                             | Correcto                                                                               |
-| `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
-| `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **104 verificaciones aprobadas sobre SQLite**                                          |
-| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
+| Verificación                                                                    | Resultado                                                                                                                                       |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotnet build`                                                                  | Sin errores ni advertencias                                                                                                                     |
+| `dotnet build -c Release`                                                       | Sin errores ni advertencias                                                                                                                     |
+| `dotnet ef migrations has-pending-model-changes --project server/AegiTasks.Api` | Modelo y migración PostgreSQL coinciden                                                                                                         |
+| `npm --prefix client run typecheck`                                             | Correcto                                                                                                                                        |
+| `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                                                                                |
+| `npm --prefix client run build`                                                 | Build de producción y service worker generados                                                                                                  |
+| `npm --prefix client run test:e2e`                                              | **112 verificaciones aprobadas sobre SQLite**                                                                                                   |
+| `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa                     |
 | `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Actualización local anterior conserva cuentas, contraseñas, espacio personal, notas y estimaciones en minutos; módulos/ciclos nuevos operativos |
-| `node client/scripts/postgres-tests.mjs`                                        | **104 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre |
-| `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
-| `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
-| Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
-| `sh -n scripts/setup-env.sh` en Ubuntu/WSL                                      | Sintaxis correcta                                                                      |
+| `node client/scripts/postgres-tests.mjs`                                        | **112 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre                                        |
+| `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                                                                                |
+| `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                                                                             |
+| Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                                                                                      |
+| `sh -n scripts/setup-env.sh` en Ubuntu/WSL                                      | Sintaxis correcta                                                                                                                               |
 
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Páginas de gestión de módulos y ciclos (6 de octubre)
+
+La suite final pasó **112 verificaciones en SQLite y 112 en PostgreSQL 18.4**, incluyendo ocho comprobaciones nuevas de gestión y permisos. Pasaron typecheck, lint, build de producción y formato; la suite PWA pasó 12 verificaciones. Los resultados están en `sqlite-planning-views-results.json`, `postgres-test-results.json` y `pwa-test-results.json`. Una ejecución PostgreSQL intermedia quedó detenida en Focus mientras se regeneraba el build local; se interrumpió y se repitió completa con el build fijo, con resultado satisfactorio. Se conserva su registro en `planning-views-postgres-interrupted.log`.
+
+Se incorporaron páginas de gestión accesibles desde las tarjetas de Proyectos y las secciones de cada proyecto. La suite ejercita tarjetas, lista, tablero y cronología sobre los mismos datos, persistencia de la vista por contexto, búsqueda y filtros. Verifica ciclos actuales de un día, próximos, finalizados, sin fechas y con fecha parcial; los periodos no completan automáticamente sus pendientes y la cronología conserva los grupos sin programar.
+
+El detalle se prueba con creación, edición y eliminación, enlace directo y recarga, alta de pendientes con agrupación preseleccionada, incorporación de existentes, cambio de estado personalizado y retirada sin borrar el pendiente ni su otra agrupación. Una edición real concurrente provoca 409: el mensaje permanece visible, se recarga la versión y el siguiente intento funciona. Un conjunto de 51 pendientes verifica ambas páginas; durante el cambio de página no se presentan filas anteriores bajo el nuevo contador. El tablero indica que los recuentos corresponden a la página actual. Las rutas directas exigen permiso Proyectos y los usuarios sin Pendientes conservan acceso al resumen, sin acciones ni detalle de tareas.
+
+Las cuatro vistas y el detalle se recorren en 1440×900, 390×844, 320×740 y 844×390, con temas claro/oscuro y comprobación de desbordamiento horizontal. Las capturas incluyen `planning-views-cycles-Tablero-1440-dark.png`, `planning-views-cycles-Cronología-1440-dark.png`, `planning-views-modules-Tarjetas-390-light.png` y `planning-detail-390-dark.png` en `artifacts/`. Validación en Chromium local; no en dispositivos físicos. No se modificó el esquema de datos ni se desplegó al servidor de producción en esta iteración.
 
 ### Barra superior, módulos, ciclos y estimaciones (6 de octubre)
 

@@ -42,6 +42,7 @@ import { CatalogEditor, Settings } from './Settings';
 import { TaskEditor } from './TaskEditor';
 import { TaskFilters, type TaskFilterValues } from './TaskFilters';
 import { ProjectPlanning } from './ProjectPlanning';
+import { PlanningPage, ProjectSections } from './PlanningPage';
 import { estimateLabel } from './estimates';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
@@ -300,7 +301,9 @@ function WorkspaceApp({
     r.startsWith('notes/')
       ? 'notes'
       : r.startsWith('project/')
-        ? 'tasks'
+        ? ['modules', 'cycles'].includes(r.split('/')[2] || '')
+          ? 'projects'
+          : 'tasks'
         : ['inbox', 'mine', 'archived'].includes(r)
           ? 'tasks'
           : r === 'admin'
@@ -342,6 +345,10 @@ function WorkspaceApp({
   const [install, setInstall] = useState<InstallPrompt | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const projectId = route.startsWith('project/') ? route.split('/')[1] || '' : '';
+  const planningKind = ['modules', 'cycles'].includes(route.split('/')[2] || '')
+    ? (route.split('/')[2] as 'modules' | 'cycles')
+    : null;
+  const planningGroupId = planningKind ? route.split('/')[3] || '' : '';
   const taskProjectId = projectId || projectFilter;
   const project = w?.projects.find((p) => p.id === projectId);
   useEffect(() => {
@@ -435,7 +442,10 @@ function WorkspaceApp({
     if (
       !w ||
       !permissions.includes('tasks') ||
-      !(['inbox', 'mine', 'archived'].includes(route) || route.startsWith('project/'))
+      !(
+        ['inbox', 'mine', 'archived'].includes(route) ||
+        (route.startsWith('project/') && !planningKind)
+      )
     )
       return;
     const controller = new AbortController();
@@ -493,6 +503,7 @@ function WorkspaceApp({
     revision,
     online,
     permissions,
+    planningKind,
   ]);
   const navigate = (to: string) => {
     setMoreMenu(false);
@@ -789,35 +800,55 @@ function WorkspaceApp({
                   {w.projects
                     .filter((p) => !p.archived)
                     .map((p) => (
-                      <button
-                        key={p.id}
-                        className="card project-card"
-                        onClick={() => navigate(`project/${p.id}`)}
-                      >
-                        <div className={`project-symbol tone-${p.color}`}>
-                          <FolderKanban size={26} />
+                      <article key={p.id} className="card project-card">
+                        <button
+                          className="project-card-button"
+                          onClick={() =>
+                            navigate(
+                              `project/${p.id}${permissions.includes('tasks') ? '' : '/modules'}`,
+                            )
+                          }
+                        >
+                          <div className={`project-symbol tone-${p.color}`}>
+                            <FolderKanban size={26} />
+                          </div>
+                          <h2>{p.name}</h2>
+                          <div className="project-labels">
+                            {p.labels
+                              ?.split(',')
+                              .filter(Boolean)
+                              .map((label) => (
+                                <Badge key={label} color={p.color}>
+                                  {label.trim()}
+                                </Badge>
+                              ))}
+                          </div>
+                          <p>
+                            {p.description ||
+                              'Todo lo que necesita este proyecto, en un solo lugar.'}
+                          </p>
+                          <div className="project-card-foot">
+                            <span>
+                              {w.folders.filter((f) => f.projectId === p.id).length} carpetas
+                            </span>
+                            <ArrowRight size={19} />
+                          </div>
+                        </button>
+                        <div className="project-card-section-links">
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => navigate(`project/${p.id}/modules`)}
+                          >
+                            Módulos · {w.modules.filter((m) => m.projectId === p.id).length}
+                          </button>
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => navigate(`project/${p.id}/cycles`)}
+                          >
+                            Ciclos · {w.cycles.filter((c) => c.projectId === p.id).length}
+                          </button>
                         </div>
-                        <h2>{p.name}</h2>
-                        <div className="project-labels">
-                          {p.labels
-                            ?.split(',')
-                            .filter(Boolean)
-                            .map((label) => (
-                              <Badge key={label} color={p.color}>
-                                {label.trim()}
-                              </Badge>
-                            ))}
-                        </div>
-                        <p>
-                          {p.description || 'Todo lo que necesita este proyecto, en un solo lugar.'}
-                        </p>
-                        <div className="project-card-foot">
-                          <span>
-                            {w.folders.filter((f) => f.projectId === p.id).length} carpetas
-                          </span>
-                          <ArrowRight size={19} />
-                        </div>
-                      </button>
+                      </article>
                     ))}
                 </div>
                 {!w.projects.some((p) => !p.archived) && (
@@ -830,8 +861,37 @@ function WorkspaceApp({
                   </section>
                 )}
               </>
+            ) : planningKind && project ? (
+              <PlanningPage
+                key={`${project.id}-${planningKind}`}
+                project={project}
+                kind={planningKind}
+                groupId={planningGroupId}
+                workspace={w}
+                userId={user.id}
+                canTasks={permissions.includes('tasks')}
+                taskRevision={revision}
+                navigate={navigate}
+                onSaved={reload}
+                onOpenTask={openTask}
+                onNewTask={(kind, id) => {
+                  setModuleFilter(kind === 'modules' ? id : '');
+                  setCycleFilter(kind === 'cycles' ? id : '');
+                  setFolder('');
+                  setEditor('new');
+                }}
+              />
             ) : (
               <>
+                {project && (
+                  <ProjectSections
+                    project={project}
+                    section=""
+                    navigate={navigate}
+                    canTasks={permissions.includes('tasks')}
+                    canProjects={permissions.includes('projects')}
+                  />
+                )}
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
@@ -1224,8 +1284,20 @@ function WorkspaceApp({
                 id={editor === 'new' ? undefined : editor}
                 projectId={taskProjectId}
                 folderId={folder}
-                moduleId={moduleFilter === 'none' ? '' : moduleFilter}
-                cycleId={cycleFilter === 'none' ? '' : cycleFilter}
+                moduleId={
+                  planningKind === 'modules'
+                    ? planningGroupId
+                    : moduleFilter === 'none'
+                      ? ''
+                      : moduleFilter
+                }
+                cycleId={
+                  planningKind === 'cycles'
+                    ? planningGroupId
+                    : cycleFilter === 'none'
+                      ? ''
+                      : cycleFilter
+                }
                 workspace={w}
                 user={user}
                 onClose={closeTask}

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { testPlanningViews } from './planning-view-tests.mjs';
 
 export async function testPlanningApi({ admin, support, personalAdmin, json, pass }) {
   const project = await json(admin, 'POST', '/projects', {
@@ -319,7 +320,7 @@ export async function testPlanningApi({ admin, support, personalAdmin, json, pas
   };
 }
 
-export async function testPlanningUi({ page, admin, fixtures, json, pass, artifacts }) {
+export async function testPlanningUi({ page, admin, support, fixtures, json, pass, artifacts }) {
   for (const theme of ['light', 'dark'])
     for (const width of [1440, 390, 320, 844]) {
       await page.setViewportSize({ width, height: width === 844 ? 390 : 900 });
@@ -358,7 +359,10 @@ export async function testPlanningUi({ page, admin, fixtures, json, pass, artifa
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`http://localhost:4174/#project/${fixtures.project.id}`);
   await page.getByText('Planificación y avance', { exact: true }).click();
-  await page.getByRole('button', { name: 'Módulos', exact: true }).click();
+  await page
+    .locator('.project-planning')
+    .getByRole('button', { name: 'Módulos', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Crear módulo', exact: true }).click();
   await page.getByLabel('Nombre del módulo').fill('Nuevo módulo UI');
   await page.getByRole('button', { name: 'Guardar agrupación' }).click();
@@ -467,7 +471,10 @@ export async function testPlanningUi({ page, admin, fixtures, json, pass, artifa
   await page.getByLabel('Nombre del módulo').fill('Módulo renombrado UI');
   await page.getByRole('button', { name: 'Guardar agrupación' }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: 'Ciclos', exact: true }).click();
+  await page
+    .locator('.project-planning')
+    .getByRole('button', { name: 'Ciclos', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Crear ciclo', exact: true }).click();
   await page.getByLabel('Nombre del ciclo').fill('Ciclo móvil UI');
   await page.getByLabel('Fecha inicial (opcional)').fill('2026-10-08');
@@ -478,7 +485,10 @@ export async function testPlanningUi({ page, admin, fixtures, json, pass, artifa
   await page.getByRole('button', { name: 'Guardar agrupación' }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await page.getByRole('article', { name: 'ciclo Ciclo móvil UI' }).waitFor();
-  await page.getByRole('button', { name: 'Módulos', exact: true }).click();
+  await page
+    .locator('.project-planning')
+    .getByRole('button', { name: 'Módulos', exact: true })
+    .click();
   group = page.getByRole('article', { name: 'módulo Módulo renombrado UI' });
   await group.getByRole('button', { name: 'Agregar pendientes', exact: true }).click();
   picker = page.getByRole('dialog', { name: 'Agregar pendientes al módulo' });
@@ -500,6 +510,7 @@ export async function testPlanningUi({ page, admin, fixtures, json, pass, artifa
   pass(
     'Modules edit/delete safely, single-day cycle creation and paginated task dialog fit phones; deletion keeps tasks, estimates and cycle membership',
   );
+  await testPlanningViews({ page, admin, support, fixtures, json, pass, artifacts });
   await json(admin, 'DELETE', `/projects/${fixtures.project.id}`, undefined, 204);
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto('http://localhost:4174/#inbox');

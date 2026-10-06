@@ -17,10 +17,10 @@ import {
   type Workspace,
 } from './types';
 
-type GroupKind = 'modules' | 'cycles';
+export type GroupKind = 'modules' | 'cycles';
 const groupName = (kind: GroupKind) => (kind === 'modules' ? 'módulo' : 'ciclo');
 
-function Progress({ value, name }: { value: PlanningProgress; name: string }) {
+export function Progress({ value, name }: { value: PlanningProgress; name: string }) {
   return (
     <div>
       <strong>{value.percent}%</strong>{' '}
@@ -259,7 +259,7 @@ export function ProjectPlanning({
   );
 }
 
-function GroupEditor({
+export function GroupEditor({
   kind,
   group,
   project,
@@ -270,7 +270,7 @@ function GroupEditor({
   group?: ProjectGroup;
   project: Project;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (group: ProjectGroup) => Promise<void>;
 }) {
   const [name, setName] = useState(group?.name || '');
   const [description, setDescription] = useState(group?.description || '');
@@ -284,15 +284,19 @@ function GroupEditor({
     setBusy(true);
     setError('');
     try {
-      await api(`/${kind}${group ? `/${group.id}` : ''}`, group ? 'PUT' : 'POST', {
-        name,
-        description,
-        color,
-        projectId: project.id,
-        startsOn: startsOn || null,
-        endsOn: endsOn || null,
-      });
-      await onSaved();
+      const result = await api<ProjectGroup>(
+        `/${kind}${group ? `/${group.id}` : ''}`,
+        group ? 'PUT' : 'POST',
+        {
+          name,
+          description,
+          color,
+          projectId: project.id,
+          startsOn: startsOn || null,
+          endsOn: endsOn || null,
+        },
+      );
+      await onSaved(result);
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -361,7 +365,7 @@ function GroupEditor({
   );
 }
 
-function GroupTaskPicker({
+export function GroupTaskPicker({
   kind,
   group,
   workspace,

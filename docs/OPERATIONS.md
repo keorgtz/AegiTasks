@@ -138,13 +138,11 @@ Los fondos limitan partículas, resolución y frecuencia de dibujo; dejan de dib
 
 Las carpetas de notas se archivan indirectamente conservando sus notas; para eliminar una carpeta primero hay que mover sus notas y subcarpetas. Los espacios y las notas no se eliminan de forma destructiva desde la interfaz. Las notas pueden archivarse y restaurarse.
 
-
 ## Pestañas del detalle de pendientes
 
 Al abrir un pendiente existente se muestra «Detalle general», con los campos de edición, guardar, archivar/restaurar y eliminar. «Evidencias» reúne los adjuntos y su carga. «Conversación y actividad» contiene el historial y el formulario de comentarios. El reporte nuevo conserva su formulario simple; las pestañas aparecen después de crearlo.
 
 Cambiar de pestaña conserva los campos y comentarios sin publicar y no guarda automáticamente. Cerrar con cambios pendientes sigue solicitando confirmación. Los errores y avisos de cambios externos son comunes a las tres secciones. La cabecera y las pestañas permanecen visibles; solo se desplaza el contenido. Las flechas izquierda/derecha cambian de pestaña, Home/End seleccionan la primera/última y Tab entra al panel activo. No hay cambios de API ni migraciones de base de datos.
-
 
 ## Filtros y tableros de pendientes
 
@@ -166,7 +164,15 @@ La migración PostgreSQL `Usernames` agrega la columna e índice único y asigna
 
 ## Módulos, ciclos y estimaciones
 
-Desde Proyectos abre un proyecto y despliega **Planificación y avance**. Resumen muestra el avance completo; Módulos y Ciclos permiten crear agrupaciones, editar nombre, descripción, color y fechas opcionales, consultar avance y agregar pendientes existentes. Un ciclo puede abarcar un solo día, tener solo una fecha o quedar sin fechas; los periodos pueden coincidir con otros ciclos. La fecha final no puede preceder a la inicial. Módulos/ciclos son independientes de carpetas y etiquetas y no son obligatorios para crear pendientes.
+Desde **Proyectos**, cada tarjeta ofrece acceso a **Módulos** y **Ciclos**. Dentro del proyecto, las secciones Pendientes / Módulos / Ciclos abren páginas dedicadas. También se conserva el resumen plegable **Planificación y avance** en la bandeja del proyecto. Un ciclo puede abarcar un solo día, tener solo una fecha o quedar sin fechas; los periodos pueden coincidir con otros ciclos. La fecha final no puede preceder a la inicial. Módulos/ciclos son independientes de carpetas y etiquetas y no son obligatorios para crear pendientes.
+
+Las páginas de gestión ofrecen **Tarjetas, Lista, Tablero y Cronología**. La vista elegida se recuerda localmente por cuenta, Space, proyecto y tipo de agrupación. El buscador permanece visible; filtros y orden (nombre, fecha inicial o mayor avance) se abren en un diálogo. Las tarjetas y filas muestran fechas, proporción de pendientes resueltos y estimaciones por escala. La cronología representa las fechas disponibles y mantiene una sección Sin programar; una sola fecha se representa como un punto de un día. Abre el detalle pulsando el nombre de la agrupación.
+
+El tablero de módulos clasifica **Sin pendientes, Sin resolver, Avance parcial y Resueltos** según sus pendientes. No es un estado manual del módulo: los estados personalizados siguen perteneciendo a cada pendiente. Los ciclos se clasifican por la fecha local del dispositivo en **Sin periodo definido, Próximos, En curso y Periodo finalizado**. Un periodo que terminó puede conservar trabajo abierto; finalizar el calendario no completa tareas. Un intervalo parcial sin inicio futuro o final pasado queda sin periodo definido. La clasificación cambia al llegar la medianoche local sin consultar periódicamente la API.
+
+Cada agrupación tiene un enlace directo (`#project/{projectId}/modules/{moduleId}` o `#project/{projectId}/cycles/{cycleId}`), resumen de avance, edición y eliminación. Su detalle permite crear pendientes con la agrupación preseleccionada, agregar existentes mediante selección entre páginas, abrir el detalle habitual, cambiar cualquier estado del proyecto o retirar un pendiente sin borrarlo. Lista y tablero de pendientes comparten búsqueda y filtro de estado; muestran hasta 50 por página y el tablero indica que sus columnas cuentan la página actual. Las ediciones incluyen la versión del pendiente: ante otro cambio se informa el conflicto, se recarga la versión y se permite reintentar.
+
+Se revisaron la documentación y componentes públicos de [módulos](https://docs.plane.so/core-concepts/modules), [ciclos](https://docs.plane.so/core-concepts/cycles) y [vistas del repositorio Plane](https://github.com/makeplane/plane/blob/preview/apps/web/components/modules/modules-list-view.tsx) para organizar estas páginas. La implementación mantiene AegiPulse y los contratos de AegiTasks: un módulo y un ciclo opcionales por pendiente, periodos simultáneos y estados del pendiente. No implementa todos los servicios de Plane ni sus estados manuales de módulo, archivado de agrupaciones, cierre manual de ciclos o analítica histórica de burn-down.
 
 Cada pendiente admite un módulo y un ciclo del mismo proyecto. El diálogo para agregar reúne todos los responsables y estados no archivados del proyecto, mantiene selecciones al buscar/paginar y mueve únicamente la dimensión elegida. Sus filas tienen desplazamiento interno y sus acciones permanecen accesibles. La API admite hasta 5000 pendientes por operación; para conjuntos mayores usa varias operaciones. Cada lote incluye versiones de edición: si una cambió, se rechaza todo el lote, sin modificaciones parciales. El propietario de un pendiente no impide organizarlo dentro de su workspace; los permisos de página y la pertenencia al Space siguen vigentes.
 

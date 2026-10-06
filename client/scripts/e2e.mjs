@@ -535,7 +535,7 @@ try {
     artifacts,
   });
   const planningFixtures = await testPlanningApi({ admin, support, personalAdmin, json, pass });
-  await testPlanningUi({ page, admin, fixtures: planningFixtures, json, pass, artifacts });
+  await testPlanningUi({ page, admin, support, fixtures: planningFixtures, json, pass, artifacts });
   await testWorkflow({
     page,
     context,
