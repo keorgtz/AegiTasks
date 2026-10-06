@@ -15,6 +15,8 @@ public static class CatalogEndpoints
         {
             projects = await db.Projects.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
             folders = await db.Folders.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
+            modules = await db.Modules.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
+            cycles = await db.Cycles.AsNoTracking().OrderBy(x => x.StartsOn == null).ThenBy(x => x.StartsOn).ThenBy(x => x.Name).ToListAsync(),
             statuses = await db.Statuses.AsNoTracking().OrderBy(x => x.Position).ThenBy(x => x.Name).ToListAsync(),
             tags = await db.Tags.AsNoTracking().OrderBy(x => x.Name).ToListAsync(),
             users = await Access.Members(db, db.CurrentSpaceId).AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Username, x.Email, x.Role, x.Active }).ToListAsync()
@@ -24,6 +26,7 @@ public static class CatalogEndpoints
         {
             var project = new Project { SpaceId = db.CurrentSpaceId, Name = Rules.Text(input.Name, 80, "Nombre"), Description = Rules.Text(input.Description, 1000, "Descripción", false), Color = Rules.Color(input.Color) };
             project.Labels = Labels(input.Labels);
+            project.EstimateScheme = PlanningRules.Kind(input.EstimateScheme ?? "time");
             db.Projects.Add(project);
             db.Statuses.AddRange(
                 new TaskStatus { ProjectId = project.Id, Name = "Pendiente", Color = "blue", Position = 0 },
@@ -38,6 +41,7 @@ public static class CatalogEndpoints
             var p = await db.Projects.FindAsync(id); if (p == null) return Results.NotFound();
             p.Name = Rules.Text(input.Name, 80, "Nombre"); p.Description = Rules.Text(input.Description, 1000, "Descripción", false); p.Color = Rules.Color(input.Color); p.Archived = input.Archived;
             p.Labels = Labels(input.Labels);
+            if (input.EstimateScheme != null) p.EstimateScheme = PlanningRules.Kind(input.EstimateScheme);
             await db.SaveChangesAsync(); return Results.Ok(p);
         });
         group.MapDelete("/projects/{id:guid}", async (Guid id, AppDb db, IConfiguration config, ClaimsPrincipal user, ChangeFeed feed) =>
@@ -50,6 +54,8 @@ public static class CatalogEndpoints
             var files = await Deletion.RemoveTasks(db, tasks, id);
             db.Folders.RemoveRange(await db.Folders.Where(f => f.ProjectId == id).ToListAsync());
             db.Statuses.RemoveRange(await db.Statuses.Where(s => s.ProjectId == id).ToListAsync());
+            db.Modules.RemoveRange(await db.Modules.Where(s => s.ProjectId == id).ToListAsync());
+            db.Cycles.RemoveRange(await db.Cycles.Where(s => s.ProjectId == id).ToListAsync());
             await db.SaveChangesAsync();
             db.Projects.Remove(project); await db.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -115,7 +121,7 @@ public static class CatalogEndpoints
         if (labels.Length > 10) throw new InputError("Máximo 10 etiquetas por proyecto.");
         return string.Join(", ", labels.Select(label => Rules.Text(label, 30, "Etiqueta de proyecto")));
     }
-    public record ProjectInput(string Name, string? Description, string Color, bool Archived, string? Labels = null);
+    public record ProjectInput(string Name, string? Description, string Color, bool Archived, string? Labels = null, string? EstimateScheme = null);
     public record FolderInput(Guid ProjectId, string Name);
     public record StatusInput(Guid ProjectId, string Name, string Color, int Position, bool IsDone);
     public record TagInput(string Name, string Color);

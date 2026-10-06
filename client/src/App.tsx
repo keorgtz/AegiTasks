@@ -41,6 +41,8 @@ import { Badge, Brand, Empty, ErrorBox, Field, Modal } from './components';
 import { CatalogEditor, Settings } from './Settings';
 import { TaskEditor } from './TaskEditor';
 import { TaskFilters, type TaskFilterValues } from './TaskFilters';
+import { ProjectPlanning } from './ProjectPlanning';
+import { estimateLabel } from './estimates';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
 import { FocusPage } from './Focus';
@@ -307,6 +309,8 @@ function WorkspaceApp({
   const [w, setWorkspace] = useState<Workspace | null>(null);
   const [route, setRoute] = useState(location.hash.slice(1) || 'inbox');
   const [folder, setFolder] = useState('');
+  const [moduleFilter, setModuleFilter] = useState('');
+  const [cycleFilter, setCycleFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [settingsProject, setSettingsProject] = useState('');
@@ -348,12 +352,25 @@ function WorkspaceApp({
     if (w && projectFilter && !w.projects.some((p) => p.id === projectFilter)) {
       setProjectFilter('');
       setFolder('');
+      setModuleFilter('');
+      setCycleFilter('');
       setStatus('');
       setPage(1);
       setFiltersOpen(false);
     }
   }, [w, projectFilter]);
   const notify = (message: string) => setToast(message);
+  useEffect(() => {
+    if (
+      w &&
+      moduleFilter &&
+      moduleFilter !== 'none' &&
+      !w.modules.some((m) => m.id === moduleFilter)
+    )
+      setModuleFilter('');
+    if (w && cycleFilter && cycleFilter !== 'none' && !w.cycles.some((m) => m.id === cycleFilter))
+      setCycleFilter('');
+  }, [w, moduleFilter, cycleFilter]);
   const reload = useCallback(async () => {
     const workspace = await api<Workspace>('/workspace');
     setWorkspace(workspace);
@@ -380,6 +397,8 @@ function WorkspaceApp({
       setFiltersOpen(false);
       if (!location.hash.startsWith('#project/')) setView('list');
       setFolder('');
+      setModuleFilter('');
+      setCycleFilter('');
       setStatus('');
       setPage(1);
     };
@@ -429,6 +448,8 @@ function WorkspaceApp({
     });
     if (taskProjectId) params.set('project', taskProjectId);
     if (folder) params.set('folder', folder);
+    if (moduleFilter) params.set('module', moduleFilter);
+    if (cycleFilter) params.set('cycle', cycleFilter);
     if (status) params.set('status', status);
     if (tag) params.set('tag', tag);
     if (priority) params.set('priority', priority);
@@ -458,6 +479,8 @@ function WorkspaceApp({
     w,
     taskProjectId,
     folder,
+    moduleFilter,
+    cycleFilter,
     status,
     tag,
     priority,
@@ -480,6 +503,8 @@ function WorkspaceApp({
     location.hash = to;
     setPage(1);
     setFolder('');
+    setModuleFilter('');
+    setCycleFilter('');
     setStatus('');
     setSearch('');
     setQuery('');
@@ -513,6 +538,8 @@ function WorkspaceApp({
   const applyFilters = (values: TaskFilterValues) => {
     setProjectFilter(projectId ? '' : values.project);
     setFolder(values.folder);
+    setModuleFilter(values.module);
+    setCycleFilter(values.cycle);
     setStatus(values.status);
     setAssigneeFilter(values.assignee);
     setTag(values.tag);
@@ -525,6 +552,8 @@ function WorkspaceApp({
   const filterCount = [
     !projectId && projectFilter,
     folder,
+    moduleFilter,
+    cycleFilter,
     status,
     tag,
     priority,
@@ -570,7 +599,6 @@ function WorkspaceApp({
       </a>
       <aside className="sidebar">
         <Brand onInstall={() => setInstallHelp(true)} />
-        <SpaceSelector spaces={spaceSession.spaces} active={space} onChange={switchSpace} />
         <SidebarSections
           label={space.isPersonal ? 'MI ESPACIO' : 'WORKSPACE COMPARTIDO'}
           navigation={navigation()}
@@ -622,13 +650,15 @@ function WorkspaceApp({
         <div className="mobile-brand">
           <Brand onInstall={() => setInstallHelp(true)} />
         </div>
-        <div className="breadcrumb">
-          <span>{space.name}</span>
-          <ChevronRight size={15} />
-          <strong>
-            {nav.find((n) => n.id === (route.startsWith('notes/') ? 'notes' : route))?.name ||
-              (route === 'account' ? 'Mi cuenta' : title)}
-          </strong>
+        <div className="header-context">
+          <SpaceSelector spaces={spaceSession.spaces} active={space} onChange={switchSpace} />
+          <div className="breadcrumb">
+            <ChevronRight size={15} />
+            <strong>
+              {nav.find((n) => n.id === (route.startsWith('notes/') ? 'notes' : route))?.name ||
+                (route === 'account' ? 'Mi cuenta' : title)}
+            </strong>
+          </div>
         </div>
         <div className="header-actions">
           <span className="today-label">
@@ -651,9 +681,6 @@ function WorkspaceApp({
         </div>
       </header>
       <main id="main-content" className="app-content">
-        <div className="mobile-space">
-          <SpaceSelector spaces={spaceSession.spaces} active={space} onChange={switchSpace} />
-        </div>
         <ErrorBox message={globalError} />
         {!online && (
           <div className="offline-banner">
@@ -918,6 +945,30 @@ function WorkspaceApp({
                     </div>
                   </>
                 )}
+                {project && permissions.includes('projects') && (
+                  <ProjectPlanning
+                    key={project.id}
+                    project={project}
+                    workspace={w}
+                    onSaved={reload}
+                    onShowTasks={(kind, id) => {
+                      setModuleFilter(kind === 'modules' ? id : '');
+                      setCycleFilter(kind === 'cycles' ? id : '');
+                      setFolder('');
+                      setStatus('');
+                      setTag('');
+                      setPriority('');
+                      setSearch('');
+                      setQuery('');
+                      setAssigneeFilter('all');
+                      setScope('all');
+                      setPage(1);
+                      document
+                        .querySelector('.work-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  />
+                )}
                 {project && (
                   <div className="folder-tabs">
                     <button
@@ -1026,6 +1077,8 @@ function WorkspaceApp({
                       initial={{
                         project: taskProjectId,
                         folder,
+                        module: moduleFilter,
+                        cycle: cycleFilter,
                         status,
                         assignee,
                         tag,
@@ -1171,6 +1224,8 @@ function WorkspaceApp({
                 id={editor === 'new' ? undefined : editor}
                 projectId={taskProjectId}
                 folderId={folder}
+                moduleId={moduleFilter === 'none' ? '' : moduleFilter}
+                cycleId={cycleFilter === 'none' ? '' : cycleFilter}
                 workspace={w}
                 user={user}
                 onClose={closeTask}
@@ -1294,6 +1349,8 @@ function TaskCard({
               {tag.name}
             </Badge>
           ))}
+          {t.moduleId && <Badge>{w.modules.find((m) => m.id === t.moduleId)?.name}</Badge>}
+          {t.cycleId && <Badge>{w.cycles.find((m) => m.id === t.cycleId)?.name}</Badge>}
           {board && (
             <Badge color={priorityColors[t.priority || 0]}>{priorities[t.priority || 0]}</Badge>
           )}
@@ -1311,10 +1368,10 @@ function TaskCard({
           {t.dueDate ? dateLabel(t.dueDate) : 'Sin fecha'}
           {overdue && ' · Vencido'}
         </span>
-        {t.estimateMinutes && (
+        {estimateLabel(t) && (
           <small>
             <Clock3 size={12} />
-            {t.estimateMinutes} min
+            {estimateLabel(t)}
           </small>
         )}
       </div>

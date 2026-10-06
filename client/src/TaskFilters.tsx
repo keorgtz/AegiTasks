@@ -6,6 +6,8 @@ import './styles/task-filters.css';
 export type TaskFilterValues = {
   project: string;
   folder: string;
+  module: string;
+  cycle: string;
   status: string;
   assignee: string;
   tag: string;
@@ -54,6 +56,8 @@ export function TaskFilters({
                   ...previous,
                   project: e.target.value,
                   folder: '',
+                  module: '',
+                  cycle: '',
                   status: '',
                 }))
               }
@@ -105,6 +109,27 @@ export function TaskFilters({
                 ))}
             </select>
           </Field>
+          {(['module', 'cycle'] as const).map((key) => (
+            <Field key={key} label={key === 'module' ? 'Filtrar por módulo' : 'Filtrar por ciclo'}>
+              <select
+                value={values[key]}
+                disabled={!values.project}
+                onChange={(e) => change(key, e.target.value)}
+              >
+                <option value="">
+                  {key === 'module' ? 'Todos los módulos' : 'Todos los ciclos'}
+                </option>
+                <option value="none">{key === 'module' ? 'Sin módulo' : 'Sin ciclo'}</option>
+                {(key === 'module' ? w.modules : w.cycles)
+                  .filter((g) => g.projectId === values.project)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+          ))}
           {route !== 'mine' && (
             <Field label="Filtrar por responsable">
               <select value={values.assignee} onChange={(e) => change('assignee', e.target.value)}>
@@ -169,6 +194,8 @@ export function TaskFilters({
               setValues({
                 project: projectId,
                 folder: '',
+                module: '',
+                cycle: '',
                 status: '',
                 assignee:
                   route === 'inbox' ? 'mine-or-unassigned' : route === 'mine' ? 'mine' : 'all',

@@ -87,11 +87,42 @@ try {
     pinned: false,
     archived: false,
   });
+  const project = await api('/projects', 'POST', { name: 'Existing project', color: 'purple' });
+  const workspace = await api('/workspace');
+  const status = workspace.statuses.find((s) => s.projectId === project.id);
+  const task = await api('/tasks', 'POST', {
+    title: 'Existing timed task',
+    projectId: project.id,
+    statusId: status.id,
+    estimateMinutes: 90,
+    tagIds: [],
+  });
   await stop();
   const db = new DatabaseSync(database);
   const original = db.prepare('SELECT * FROM Users WHERE Email = ?').get(user.email);
   // Simulate the previous local schema and a collision in the email prefix.
   db.exec('DROP INDEX IX_Users_Username; ALTER TABLE Users DROP COLUMN Username;');
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN;
+    CREATE TABLE Tasks_old (
+      Id TEXT NOT NULL PRIMARY KEY, ProjectId TEXT NOT NULL, FolderId TEXT NULL, StatusId TEXT NOT NULL,
+      CreatedById TEXT NOT NULL, AssigneeId TEXT NULL, Title TEXT NOT NULL, Description TEXT NOT NULL,
+      Priority INTEGER NULL, DueDate TEXT NULL, EstimateMinutes INTEGER NULL, Archived INTEGER NOT NULL,
+      CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL, Version TEXT NOT NULL,
+      FOREIGN KEY (ProjectId) REFERENCES Projects (Id) ON DELETE RESTRICT,
+      FOREIGN KEY (FolderId, ProjectId) REFERENCES Folders (Id, ProjectId) ON DELETE RESTRICT,
+      FOREIGN KEY (StatusId, ProjectId) REFERENCES Statuses (Id, ProjectId) ON DELETE RESTRICT,
+      FOREIGN KEY (CreatedById) REFERENCES Users (Id) ON DELETE RESTRICT,
+      FOREIGN KEY (AssigneeId) REFERENCES Users (Id) ON DELETE RESTRICT
+    );
+    INSERT INTO Tasks_old SELECT Id, ProjectId, FolderId, StatusId, CreatedById, AssigneeId, Title, Description, Priority, DueDate, EstimateMinutes, Archived, CreatedAt, UpdatedAt, Version FROM Tasks;
+    DROP TABLE Tasks; ALTER TABLE Tasks_old RENAME TO Tasks;
+    DROP TABLE Modules; DROP TABLE Cycles;
+    ALTER TABLE Projects DROP COLUMN EstimateScheme;
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
   db.prepare(
     'INSERT INTO Users (Id, Email, Name, PasswordHash, Role, Active, SessionVersion) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).run(
@@ -111,6 +142,21 @@ try {
   assert.equal(upgraded.username, 'admin-2');
   assert.equal((await api('/spaces')).spaces.find((s) => s.isPersonal).id, personal.id);
   assert.equal((await api(`/notes/${note.id}`)).markdown, note.markdown);
+  const existingTask = (await api(`/tasks/${task.id}`)).item;
+  assert.equal(existingTask.estimateMinutes, 90);
+  assert.equal(existingTask.estimateKind, 'time');
+  assert.equal(existingTask.moduleId, null);
+  assert.equal(existingTask.cycleId, null);
+  const module = await api('/modules', 'POST', { projectId: project.id, name: 'Upgraded module' });
+  const cycle = await api('/cycles', 'POST', { projectId: project.id, name: 'Upgraded cycle' });
+  const assigned = await api(`/tasks/${task.id}`, 'PUT', {
+    ...existingTask,
+    tagIds: [],
+    planning: { moduleId: module.id, cycleId: cycle.id, estimateKind: 'time' },
+  });
+  assert.equal(assigned.moduleId, module.id);
+  assert.equal(assigned.estimateMinutes, 90);
+  assert.equal((await api(`/projects/${project.id}/planning`)).project.total, 1);
   assert.equal((await api('/auth/login', 'POST', { identifier: 'ADMIN-2', password })).id, user.id);
   assert.equal(
     (await api('/auth/login', 'POST', { identifier: 'admin', password })).email,
@@ -136,6 +182,8 @@ try {
         preservedPersonalSpace: true,
         preservedNotes: true,
         usernameLogin: true,
+        retainedTaskEstimates: true,
+        newPlanningWorks: true,
         testedAt: new Date().toISOString(),
       },
       null,

@@ -8,6 +8,7 @@ import { testNoteEditor } from './note-editor-tests.mjs';
 import { testTaskDetailTabs } from './task-detail-tests.mjs';
 import { testInboxFilters } from './inbox-filter-tests.mjs';
 import { testSpaceAccounts, testSpaceAccountUi } from './space-account-tests.mjs';
+import { testPlanningApi, testPlanningUi } from './planning-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -533,6 +534,8 @@ try {
     pass,
     artifacts,
   });
+  const planningFixtures = await testPlanningApi({ admin, support, personalAdmin, json, pass });
+  await testPlanningUi({ page, admin, fixtures: planningFixtures, json, pass, artifacts });
   await testWorkflow({
     page,
     context,

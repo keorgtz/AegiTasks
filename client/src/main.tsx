@@ -10,6 +10,7 @@ import './styles/app.css';
 import './styles/features.css';
 import './styles/focus-visuals.css';
 import './styles/focus-layout.css';
+import './styles/planning.css';
 import App from './App';
 import { startAppUpdates } from './pwaUpdates';
 

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { Badge, ErrorBox, Field, Modal } from './components';
+import { estimateKinds } from './estimates';
 import {
   colors,
   colorNames,
@@ -19,6 +20,7 @@ import {
   type Tag,
   type User,
   type Workspace,
+  type EstimateKind,
 } from './types';
 
 type Entity = Partial<Project & Folder & Status & Tag & User>;
@@ -46,6 +48,9 @@ export function CatalogEditor({
   const [name, setName] = useState(value.name || '');
   const [description, setDescription] = useState(value.description || '');
   const [labels, setLabels] = useState(value.labels || '');
+  const [estimateScheme, setEstimateScheme] = useState<EstimateKind>(
+    value.estimateScheme || 'time',
+  );
   const [color, setColor] = useState(value.color || 'purple');
   const [isDone, setDone] = useState(value.isDone || false);
   const [position, setPosition] = useState(value.position || 0);
@@ -66,6 +71,7 @@ export function CatalogEditor({
         name,
         description,
         labels,
+        ...(kind === 'projects' ? { estimateScheme } : {}),
         color,
         isDone,
         position,
@@ -126,6 +132,21 @@ export function CatalogEditor({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="¿Qué organiza este proyecto?"
                 />
+              </Field>
+              <Field
+                label="Estimación predeterminada"
+                hint="Sugiere una escala en los nuevos pendientes. Cada pendiente puede cambiarla o quedar sin estimación; los existentes se conservan."
+              >
+                <select
+                  value={estimateScheme}
+                  onChange={(e) => setEstimateScheme(e.target.value as EstimateKind)}
+                >
+                  {Object.entries(estimateKinds).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </Field>
               {value.id && (
                 <label className="checkbox-field">

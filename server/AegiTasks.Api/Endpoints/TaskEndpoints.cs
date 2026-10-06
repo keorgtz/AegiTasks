@@ -11,12 +11,16 @@ public static class TaskEndpoints
     public static void MapTasks(this WebApplication app)
     {
         var group = app.MapGroup("/api/tasks").RequireAuthorization("page:tasks");
-        group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page, string? assignee) =>
+        group.MapGet("/", async (AppDb db, ClaimsPrincipal user, Guid? project, Guid? folder, Guid? status, Guid? tag, int? priority, string? q, string? scope, string? sort, int? page, string? assignee, string? module, string? cycle) =>
         {
             var query = db.Tasks.AsNoTracking().Where(x => x.Archived == (scope == "archived") && db.Projects.Any(p => p.Id == x.ProjectId && !p.Archived));
             query = query.ForAssignee(assignee, user.UserId());
             if (project != null) query = query.Where(x => x.ProjectId == project);
             if (folder != null) query = query.Where(x => x.FolderId == folder);
+            if (module == "none") query = query.Where(x => x.ModuleId == null);
+            else if (!string.IsNullOrEmpty(module)) { if (!Guid.TryParse(module, out var moduleId)) throw new InputError("Módulo no válido."); query = query.Where(x => x.ModuleId == moduleId); }
+            if (cycle == "none") query = query.Where(x => x.CycleId == null);
+            else if (!string.IsNullOrEmpty(cycle)) { if (!Guid.TryParse(cycle, out var cycleId)) throw new InputError("Ciclo no válido."); query = query.Where(x => x.CycleId == cycleId); }
             if (status != null) query = query.Where(x => x.StatusId == status);
             if (tag != null) query = query.Where(x => x.Tags.Any(t => t.Id == tag));
             if (priority != null) query = priority == 0 ? query.Where(x => x.Priority == null) : query.Where(x => x.Priority == priority);

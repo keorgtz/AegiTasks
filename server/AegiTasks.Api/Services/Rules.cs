@@ -42,6 +42,7 @@ public static class Rules
     public static void Log(AppDb db, Guid item, Guid user, string body, string kind = "system") => db.Activities.Add(new Activity { WorkItemId = item, UserId = user, Body = body, Kind = kind });
     public static async Task ApplyTask(AppDb db, WorkItem item, TaskInput input)
     {
+        var projectChanged = item.ProjectId != input.ProjectId;
         item.Title = Text(input.Title, 200, "Título");
         item.Description = Text(input.Description, 12000, "Descripción", false);
         if (!await db.Projects.AnyAsync(x => x.Id == input.ProjectId && !x.Archived)) throw new InputError("Selecciona un proyecto activo.");
@@ -50,12 +51,14 @@ public static class Rules
         if (input.AssigneeId != null && !await Access.Members(db, db.CurrentSpaceId).AnyAsync(x => x.Id == input.AssigneeId && x.Active)) throw new InputError("El responsable no pertenece al espacio o no está activo.");
         if (input.Priority is < 1 or > 4) throw new InputError("Prioridad no válida.");
         if (input.EstimateMinutes is < 1 or > 600000) throw new InputError("La estimación debe ser de 1 a 600000 minutos.");
+        await PlanningRules.Apply(db, item, input.Planning, input.ProjectId, input.EstimateMinutes, projectChanged);
         var ids = (input.TagIds ?? []).Distinct().ToArray();
         var tags = await db.Tags.Where(x => ids.Contains(x.Id)).ToListAsync();
         if (tags.Count != ids.Length || ids.Length > 20) throw new InputError("Etiquetas no válidas (máximo 20).");
         item.ProjectId = input.ProjectId; item.FolderId = input.FolderId; item.StatusId = input.StatusId;
-        item.AssigneeId = input.AssigneeId; item.Priority = input.Priority; item.DueDate = input.DueDate; item.EstimateMinutes = input.EstimateMinutes;
+        item.AssigneeId = input.AssigneeId; item.Priority = input.Priority; item.DueDate = input.DueDate;
         item.Tags = tags;
     }
 }
-public record TaskInput(string Title, string? Description, Guid ProjectId, Guid StatusId, Guid? FolderId, Guid? AssigneeId, int? Priority, DateOnly? DueDate, int? EstimateMinutes, Guid[]? TagIds, Guid? Version);
+public record TaskInput(string Title, string? Description, Guid ProjectId, Guid StatusId, Guid? FolderId, Guid? AssigneeId, int? Priority, DateOnly? DueDate, int? EstimateMinutes, Guid[]? TagIds, Guid? Version, TaskPlanningInput? Planning = null);
+public record TaskPlanningInput(Guid? ModuleId, Guid? CycleId, string EstimateKind, int? EstimatePoints, string? EstimateCategory);

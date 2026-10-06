@@ -11,8 +11,39 @@ export interface Project {
   name: string;
   description: string;
   labels: string;
+  estimateScheme: EstimateKind;
   color: string;
   archived: boolean;
+}
+export type EstimateKind = 'none' | 'time' | 'points' | 'fibonacci' | 'linear' | 'categories';
+export interface ProjectGroup {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string;
+  color: string;
+  startsOn: string | null;
+  endsOn: string | null;
+}
+export interface PlanningProgress {
+  total: number;
+  done: number;
+  percent: number;
+  unestimated: number;
+  estimates: {
+    kind: EstimateKind;
+    total: number;
+    completed: number;
+    estimatedTasks: number;
+    percent: number | null;
+  }[];
+  categories: { category: string; total: number; done: number }[];
+}
+export interface ProjectPlanningData {
+  project: PlanningProgress;
+  ungrouped: PlanningProgress;
+  modules: { group: ProjectGroup; progress: PlanningProgress }[];
+  cycles: { group: ProjectGroup; progress: PlanningProgress }[];
 }
 export interface Folder {
   id: string;
@@ -35,6 +66,8 @@ export interface Tag {
 export interface Workspace {
   projects: Project[];
   folders: Folder[];
+  modules: ProjectGroup[];
+  cycles: ProjectGroup[];
   statuses: Status[];
   tags: Tag[];
   users: User[];
@@ -76,12 +109,17 @@ export interface TaskItem {
   description: string;
   projectId: string;
   folderId: string | null;
+  moduleId: string | null;
+  cycleId: string | null;
   statusId: string;
   assigneeId: string | null;
   createdById: string;
   priority: number | null;
   dueDate: string | null;
   estimateMinutes: number | null;
+  estimateKind: EstimateKind;
+  estimatePoints: number | null;
+  estimateCategory: string | null;
   archived: boolean;
   version: string;
   tags: Tag[];

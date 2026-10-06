@@ -14,6 +14,7 @@ import { api, errorMessage, getActiveSpace } from './api';
 import { useChanges } from './changes';
 import './styles/task-editor.css';
 import { Badge, ErrorBox, Field, Modal } from './components';
+import { estimateKinds, fibonacciPoints, linearPoints, estimateCategories } from './estimates';
 import {
   dateLabel,
   priorities,
@@ -21,6 +22,7 @@ import {
   type TaskItem,
   type User,
   type Workspace,
+  type EstimateKind,
 } from './types';
 
 const detailTabs = [
@@ -35,17 +37,24 @@ type Draft = {
   description: string;
   projectId: string;
   folderId: string;
+  moduleId: string;
+  cycleId: string;
   statusId: string;
   assigneeId: string;
   priority: string;
   dueDate: string;
   estimateMinutes: string;
+  estimateKind: EstimateKind;
+  estimatePoints: string;
+  estimateCategory: string;
   tagIds: string[];
 };
 export function TaskEditor({
   id,
   projectId,
   folderId,
+  moduleId = '',
+  cycleId = '',
   workspace: w,
   user,
   onClose,
@@ -56,6 +65,8 @@ export function TaskEditor({
   id?: string;
   projectId: string;
   folderId: string;
+  moduleId?: string;
+  cycleId?: string;
   workspace: Workspace;
   user: User;
   onClose: () => void;
@@ -77,7 +88,14 @@ export function TaskEditor({
       try {
         const stored = JSON.parse(localStorage.getItem(draftKey) || 'null') as Draft | null;
         if (stored && w.projects.some((p) => p.id === stored.projectId && !p.archived))
-          return stored;
+          return {
+            ...stored,
+            moduleId: stored.moduleId || '',
+            cycleId: stored.cycleId || '',
+            estimateKind: stored.estimateKind || 'time',
+            estimatePoints: stored.estimatePoints || '',
+            estimateCategory: stored.estimateCategory || '',
+          };
       } catch {
         /* Ignore a corrupt local draft. */
       }
@@ -88,11 +106,16 @@ export function TaskEditor({
       description: '',
       projectId: p,
       folderId,
+      moduleId,
+      cycleId,
       statusId: w.statuses.find((s) => s.projectId === p && !s.isDone)?.id || '',
       assigneeId: '',
       priority: '',
       dueDate: '',
       estimateMinutes: '',
+      estimateKind: w.projects.find((project) => project.id === p)?.estimateScheme || 'time',
+      estimatePoints: '',
+      estimateCategory: '',
       tagIds: [],
     };
   });
@@ -135,11 +158,16 @@ export function TaskEditor({
           description: t.description,
           projectId: t.projectId,
           folderId: t.folderId || '',
+          moduleId: t.moduleId || '',
+          cycleId: t.cycleId || '',
           statusId: t.statusId,
           assigneeId: t.assigneeId || '',
           priority: t.priority?.toString() || '',
           dueDate: t.dueDate || '',
           estimateMinutes: t.estimateMinutes?.toString() || '',
+          estimateKind: t.estimateKind || 'time',
+          estimatePoints: t.estimatePoints?.toString() || '',
+          estimateCategory: t.estimateCategory || '',
           tagIds: t.tags.map((t) => t.id),
         });
       })
@@ -175,6 +203,13 @@ export function TaskEditor({
         priority: draft.priority ? Number(draft.priority) : null,
         dueDate: draft.dueDate || null,
         estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null,
+        planning: {
+          moduleId: draft.moduleId || null,
+          cycleId: draft.cycleId || null,
+          estimateKind: draft.estimateKind,
+          estimatePoints: draft.estimatePoints !== '' ? Number(draft.estimatePoints) : null,
+          estimateCategory: draft.estimateCategory || null,
+        },
         version: detail?.item.version,
       });
       setDirty(false);
@@ -359,6 +394,14 @@ export function TaskEditor({
                           ...d,
                           projectId: p,
                           folderId: '',
+                          moduleId: '',
+                          cycleId: '',
+                          estimateKind:
+                            w.projects.find((project) => project.id === p)?.estimateScheme ||
+                            'time',
+                          estimateMinutes: '',
+                          estimatePoints: '',
+                          estimateCategory: '',
                           statusId:
                             w.statuses.find((s) => s.projectId === p && !s.isDone)?.id || '',
                         }));
@@ -473,6 +516,36 @@ export function TaskEditor({
                             ))}
                         </select>
                       </Field>
+                      <Field label="Módulo (opcional)">
+                        <select
+                          value={draft.moduleId}
+                          onChange={(e) => update('moduleId', e.target.value)}
+                        >
+                          <option value="">Sin módulo</option>
+                          {w.modules
+                            .filter((m) => m.projectId === draft.projectId)
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Field label="Ciclo (opcional)">
+                        <select
+                          value={draft.cycleId}
+                          onChange={(e) => update('cycleId', e.target.value)}
+                        >
+                          <option value="">Sin ciclo</option>
+                          {w.cycles
+                            .filter((m) => m.projectId === draft.projectId)
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
                       <Field label="Prioridad">
                         <select
                           value={draft.priority}
@@ -495,19 +568,91 @@ export function TaskEditor({
                           />
                         </div>
                       </Field>
-                      <Field label="Estimación en minutos (opcional)">
-                        <div className="input-icon">
-                          <Clock3 size={18} />
+                      <Field
+                        label="Tipo de estimación"
+                        hint="Opcional. Los puntos representan esfuerzo relativo; no se convierten a horas."
+                      >
+                        <select
+                          value={draft.estimateKind}
+                          onChange={(e) => {
+                            setDraft((d) => ({
+                              ...d,
+                              estimateKind: e.target.value as EstimateKind,
+                              estimateMinutes: '',
+                              estimatePoints: '',
+                              estimateCategory: '',
+                            }));
+                            setDirty(true);
+                          }}
+                        >
+                          {Object.entries(estimateKinds).map(([key, label]) => (
+                            <option key={key} value={key}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      {draft.estimateKind === 'time' && (
+                        <Field label="Estimación en minutos (opcional)">
+                          <div className="input-icon">
+                            <Clock3 size={18} />
+                            <input
+                              type="number"
+                              min="1"
+                              max="600000"
+                              value={draft.estimateMinutes}
+                              onChange={(e) => update('estimateMinutes', e.target.value)}
+                              placeholder="Sin estimación"
+                            />
+                          </div>
+                        </Field>
+                      )}
+                      {draft.estimateKind === 'points' && (
+                        <Field label="Story points (opcional)">
                           <input
                             type="number"
-                            min="1"
-                            max="600000"
-                            value={draft.estimateMinutes}
-                            onChange={(e) => update('estimateMinutes', e.target.value)}
+                            min={0}
+                            max={1000}
+                            step={1}
+                            value={draft.estimatePoints}
+                            onChange={(e) => update('estimatePoints', e.target.value)}
                             placeholder="Sin estimación"
                           />
-                        </div>
-                      </Field>
+                        </Field>
+                      )}
+                      {['fibonacci', 'linear'].includes(draft.estimateKind) && (
+                        <Field label="Puntos (opcional)">
+                          <select
+                            value={draft.estimatePoints}
+                            onChange={(e) => update('estimatePoints', e.target.value)}
+                          >
+                            <option value="">Sin estimación</option>
+                            {(draft.estimateKind === 'fibonacci'
+                              ? fibonacciPoints
+                              : linearPoints
+                            ).map((n) => (
+                              <option key={n} value={n}>
+                                {n} puntos
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      )}
+                      {draft.estimateKind === 'categories' && (
+                        <Field label="Categoría (opcional)">
+                          <select
+                            value={draft.estimateCategory}
+                            onChange={(e) => update('estimateCategory', e.target.value)}
+                          >
+                            <option value="">Sin estimación</option>
+                            {estimateCategories.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      )}
                     </div>
                   </details>
                   <div className="form-actions">

@@ -1,0 +1,226 @@
+/* One titlebar selector on every device; native options use the active theme. */
+select option,
+select optgroup {
+  background: var(--surface-1);
+  color: var(--text);
+}
+.header-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.header-context .space-selector {
+  margin: 0;
+  padding: 2px 8px;
+  width: min(260px, 35vw);
+  flex-shrink: 1;
+  background: var(--field-bg);
+}
+.header-context .space-selector select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  color: var(--text);
+  color-scheme: inherit;
+  text-overflow: ellipsis;
+}
+.header-actions {
+  flex-shrink: 0;
+}
+.header-actions > .avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 44px;
+  max-height: 44px;
+  padding: 0;
+  flex: 0 0 44px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.project-planning {
+  margin: 0 0 24px;
+}
+.planning-summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.planning-summary > div:first-child {
+  flex: 1;
+  min-width: 160px;
+}
+.planning-progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 10px 0;
+  appearance: none;
+  background: var(--track);
+}
+.planning-progress::-webkit-progress-bar {
+  background: var(--track);
+}
+.planning-progress::-webkit-progress-value {
+  background: var(--primary);
+  border-radius: 8px;
+}
+.planning-progress::-moz-progress-bar {
+  background: var(--primary);
+  border-radius: 8px;
+}
+.planning-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.planning-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.planning-tabs button[aria-pressed='true'] {
+  color: var(--readable-primary);
+  background: var(--primary-bg);
+}
+.planning-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+.planning-group {
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  padding: 18px;
+  min-width: 0;
+  background: var(--surface-2);
+}
+.planning-group h3,
+.planning-group p {
+  overflow-wrap: anywhere;
+}
+.planning-group h3 .badge {
+  font-size: 14px;
+  white-space: normal;
+}
+.work-section {
+  scroll-margin-top: 90px;
+}
+.planning-group .section-heading {
+  margin-bottom: 10px;
+}
+.planning-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.planning-estimates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+.planning-task-picker {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.planning-picker-dialog .planning-task-picker {
+  max-height: min(40dvh, 360px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.planning-picker-dialog > .form-actions {
+  position: sticky;
+  bottom: -24px;
+  padding: 12px 0;
+  background: var(--surface-1);
+  z-index: 1;
+}
+.planning-task-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.planning-task-option input {
+  width: 20px;
+  min-height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.planning-task-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.planning-task-option small {
+  display: block;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+@media (max-width: 1200px) {
+  .header-actions .today-label {
+    display: none;
+  }
+}
+@media (max-width: 1023px) {
+  .header-context .space-selector {
+    width: min(300px, 100%);
+  }
+}
+@media (max-width: 640px) {
+  .app-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .mobile-brand .brand > div {
+    display: none;
+  }
+  .mobile-brand .brand {
+    gap: 0;
+  }
+  .header-context {
+    gap: 0;
+  }
+  .header-context .space-selector {
+    width: 100%;
+    padding: 0 6px;
+    gap: 4px;
+  }
+  .header-context .space-selector svg {
+    display: none;
+  }
+  .header-context .space-selector select {
+    font-size: 12px;
+  }
+  .header-actions {
+    gap: 4px;
+  }
+  .header-actions > .avatar {
+    display: grid;
+  }
+  .planning-actions .btn {
+    flex: 1;
+    padding: 10px 12px;
+  }
+}

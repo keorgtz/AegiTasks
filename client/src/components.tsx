@@ -1,4 +1,5 @@
 import {
+  Children,
   cloneElement,
   isValidElement,
   useEffect,
@@ -6,6 +7,7 @@ import {
   useRef,
   type ReactNode,
   type HTMLAttributes,
+  type ReactElement,
 } from 'react';
 import { X } from 'lucide-react';
 export function Brand({ onInstall }: { onInstall?: () => void }) {
@@ -81,15 +83,22 @@ export function Field({
   hint?: string;
 }) {
   const id = useId();
-  const control =
-    isValidElement<HTMLAttributes<HTMLElement>>(children) &&
-    ['input', 'select', 'textarea'].includes(children.type as string)
-      ? cloneElement(children, {
-          id,
-          'aria-labelledby': `${id}-label`,
-          'aria-describedby': hint ? `${id}-hint` : undefined,
-        })
-      : children;
+  let linked = false;
+  const associate = (node: ReactNode): ReactNode => {
+    if (!isValidElement<{ children?: ReactNode }>(node)) return node;
+    if (!linked && ['input', 'select', 'textarea'].includes(node.type as string)) {
+      linked = true;
+      return cloneElement(node as ReactElement<HTMLAttributes<HTMLElement>>, {
+        id,
+        'aria-labelledby': `${id}-label`,
+        'aria-describedby': hint ? `${id}-hint` : undefined,
+      });
+    }
+    return node.props.children
+      ? cloneElement(node, undefined, Children.map(node.props.children, associate))
+      : node;
+  };
+  const control = associate(children);
   return (
     <div className="field">
       <label htmlFor={id}>

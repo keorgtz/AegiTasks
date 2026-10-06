@@ -18,6 +18,7 @@ public class Project
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
     public string Labels { get; set; } = "";
+    public string EstimateScheme { get; set; } = "time";
     public string Color { get; set; } = "purple";
     public bool Archived { get; set; }
 }
@@ -26,6 +27,36 @@ public class Folder
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ProjectId { get; set; }
     public string Name { get; set; } = "";
+}
+public interface IProjectGroup
+{
+    Guid Id { get; }
+    Guid ProjectId { get; set; }
+    string Name { get; set; }
+    string Description { get; set; }
+    string Color { get; set; }
+    DateOnly? StartsOn { get; set; }
+    DateOnly? EndsOn { get; set; }
+}
+public class ProjectModule : IProjectGroup
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ProjectId { get; set; }
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Color { get; set; } = "purple";
+    public DateOnly? StartsOn { get; set; }
+    public DateOnly? EndsOn { get; set; }
+}
+public class ProjectCycle : IProjectGroup
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ProjectId { get; set; }
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Color { get; set; } = "purple";
+    public DateOnly? StartsOn { get; set; }
+    public DateOnly? EndsOn { get; set; }
 }
 public class TaskStatus
 {
@@ -131,6 +162,8 @@ public class WorkItem
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ProjectId { get; set; }
     public Guid? FolderId { get; set; }
+    public Guid? ModuleId { get; set; }
+    public Guid? CycleId { get; set; }
     public Guid StatusId { get; set; }
     public Guid CreatedById { get; set; }
     public Guid? AssigneeId { get; set; }
@@ -139,6 +172,9 @@ public class WorkItem
     public int? Priority { get; set; }
     public DateOnly? DueDate { get; set; }
     public int? EstimateMinutes { get; set; }
+    public string EstimateKind { get; set; } = "time";
+    public int? EstimatePoints { get; set; }
+    public string? EstimateCategory { get; set; }
     public bool Archived { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

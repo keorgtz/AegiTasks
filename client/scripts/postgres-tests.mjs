@@ -161,6 +161,29 @@ try {
     path.join(artifact, 'migration-usernames.sql'),
   ]);
   sql('legacy', await readFile(path.join(artifact, 'migration-usernames.sql'), 'utf8'));
+  sql('legacy', 'UPDATE "Tasks" SET "EstimateMinutes" = 90;');
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'Usernames',
+    'ProjectPlanning',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-planning.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-planning.sql'), 'utf8'));
+  assert.equal(
+    sql('legacy', 'SELECT "EstimateKind" || \':\' || "EstimateMinutes" FROM "Tasks";').trim(),
+    'time:90',
+  );
+  assert.equal(sql('legacy', 'SELECT "EstimateScheme" FROM "Projects";').trim(), 'time');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "Modules";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "Cycles";').trim(), '0');
+  console.log(
+    'PASS PostgreSQL planning upgrade preserves existing time estimates, task identities and history; optional groups start empty',
+  );
   assert.equal(sql('legacy', 'SELECT count(DISTINCT "Username") FROM "Users";').trim(), '5');
   assert.equal(
     sql('legacy', 'SELECT "Username" FROM "Users" WHERE "Email" = \'same@one.example\';').trim(),
@@ -232,6 +255,7 @@ try {
         retainedFocusPreferences: true,
         uniqueUsernames: true,
         retainedPasswordHashes: true,
+        retainedTaskEstimates: true,
         testedAt: new Date().toISOString(),
       },
       null,

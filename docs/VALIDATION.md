@@ -12,10 +12,10 @@ Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK
 | `npm --prefix client run typecheck`                                             | Correcto                                                                               |
 | `npm --prefix client run lint`                                                  | Sin diagnósticos                                                                       |
 | `npm --prefix client run build`                                                 | Build de producción y service worker generados                                         |
-| `npm --prefix client run test:e2e`                                              | **94 verificaciones aprobadas sobre SQLite**                                           |
+| `npm --prefix client run test:e2e`                                              | **104 verificaciones aprobadas sobre SQLite**                                          |
 | `npm --prefix client run test:pwa`                                              | **12 verificaciones aprobadas** el 6 de octubre; migración opcional del worker anterior documentada en la validación previa |
-| `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Actualización local anterior conserva cuentas, contraseñas, espacio personal y notas; usuarios únicos y ambos logins correctos |
-| `node client/scripts/postgres-tests.mjs`                                        | **94 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre |
+| `node client/scripts/sqlite-upgrade-tests.mjs`                                  | Actualización local anterior conserva cuentas, contraseñas, espacio personal, notas y estimaciones en minutos; módulos/ciclos nuevos operativos |
+| `node client/scripts/postgres-tests.mjs`                                        | **104 verificaciones aprobadas** y migración con datos anteriores sobre PostgreSQL 18.4, el 6 de octubre |
 | `npm --prefix client audit --omit=dev`                                          | Cero vulnerabilidades reportadas                                                       |
 | `dotnet list server/AegiTasks.Api package --vulnerable --include-transitive`    | Sin paquetes vulnerables reportados                                                    |
 | Parseo de YAML con Prettier                                                     | Compose y workflow válidos sintácticamente                                             |
@@ -24,6 +24,20 @@ Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK
 La auditoría de dependencias corresponde a la fecha indicada; no garantiza ausencia de vulnerabilidades futuras.
 
 ## Pruebas funcionales
+
+### Barra superior, módulos, ciclos y estimaciones (6 de octubre)
+
+La suite completa pasó 104 verificaciones en SQLite y 104 en PostgreSQL 18.4. Se repitieron build Debug/Release, comprobación del modelo EF, build de producción del cliente (con typecheck), lint y formato de los archivos modificados. La suite de actualizaciones PWA pasó sus 12 verificaciones en esta iteración. Las comprobaciones anteriores de Focus, notas, permisos, evidencias, filtros, paginación y edición simultánea siguen dentro de la suite completa.
+
+Diez grupos nuevos verifican CRUD de módulos/ciclos opcionales, fechas nulas o de un día, ciclos paralelos, rechazo de fechas/nombres inválidos y duplicados, avance del proyecto y agrupaciones con estados resueltos, todos los responsables y tareas sin agrupar. Se contrastan totales por escala numérica y recuentos XS–XL, sin mezclar tiempo y puntos. Se prueban los seis tipos de estimación, valores opcionales/cero, escalas inválidas y conservación de estimaciones existentes al cambiar la sugerida del proyecto o guardar desde un cliente anterior.
+
+Las asignaciones por lote incluyen versiones y se rechazan completas ante una versión antigua o una referencia de otro proyecto/Space. La eliminación de una agrupación conserva los pendientes, su otra agrupación y estimación, con nueva versión de edición. La eliminación de un proyecto limpia sus agrupaciones; los permisos de página bloquean operaciones no autorizadas. El diálogo real selecciona entre páginas con más de 50 pendientes, conserva elecciones, evita usar filas anteriores mientras carga y se compara con la API. «Ver pendientes» aplica el mismo conjunto a lista/tablero, y crear desde ese contexto toma su agrupación.
+
+La interfaz se verifica en 1440, 390, 320 y 844 px, en claro/oscuro, con una sola instancia del selector en la barra superior. El botón del perfil mide exactamente 44×44 px y conserva radio 50%; las opciones nativas tienen colores de superficie/texto del tema. Se corrigió la asociación de etiquetas con inputs envueltos en iconos y se prueban todos los controles de estimación mediante guardado real. Las capturas revisadas incluyen `titlebar-1440-light.png`, `titlebar-320-dark.png`, `planning-desktop-dark.png`, `planning-cycle-mobile.png` y `planning-picker-mobile.png`. La lista del diálogo tiene desplazamiento interno y acciones accesibles. Pruebas en Chromium local, sin dispositivos físicos.
+
+La migración PostgreSQL con datos previos conserva IDs, comentarios y una estimación de 90 minutos como `time:90`; los módulos/ciclos empiezan vacíos. La prueba SQLite recrea el esquema de tareas anterior sin las nuevas columnas/tablas, conserva contenido y estimación, reinicia la API y crea/asigna módulos/ciclos correctamente. Los archivos nuevos incluyen restricciones de pertenencia al proyecto; en archivos SQLite extendidos se validan las referencias desde la API. El despliegue de producción no se ejecutó aquí.
+
+Una ejecución PostgreSQL inicial se interrumpió porque el proceso local `vite preview` se cerró con código 3221226505 y produjo reconexiones. Los registros se conservaron en `planning-postgres-preview-failure.log` y `planning-preview-failure.log`; la repetición completa terminó con 104 aprobadas, incluida la prueba de ausencia de consultas periódicas durante 31,5 segundos.
 
 ### Edición de Spaces, incorporación directa y login con usuario (6 de octubre)
 
@@ -166,7 +180,7 @@ El script genera `artifacts/test-results.json` y capturas locales. También se c
 
 La prueba de migración crea una base con el esquema anterior, usuarios Admin/Member, proyecto, etiqueta personalizada, pendiente, comentario y relación de etiqueta. Aplica la migración de Spaces y comprueba que conserva esos datos, crea el workspace compartido y dos espacios Personal, migra Member a User e inicializa permisos. Una segunda base vacía se levanta mediante la API y sus migraciones automáticas para ejecutar la suite completa.
 
-El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal ocupa aproximadamente 345 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
+El build Vite conserva advertencias de tamaño: notas pesa aproximadamente 572 KB sin comprimir (182 KB gzip) y el mayor módulo de Mermaid 662 KB (143 KB gzip), ambos cargados bajo demanda; el módulo principal ocupa aproximadamente 361 KB. El precache PWA contiene aproximadamente 4,8 MB de recursos sin comprimir, incluidos diagramas y fuentes locales para su disponibilidad sin conexión. La actualización entre versiones con estos recursos pasó la suite PWA. La herramienta EF instalada localmente es 10.0.8 y avisa que el runtime es 10.0.10; la generación y comprobación del modelo finalizaron correctamente.
 
 En ejecuciones intermedias aparecieron cortes `ECONNRESET` en peticiones del cliente de pruebas a Vite, antes de llegar a la API. Las pruebas HTTP se dirigen directamente a la API (5213); las pruebas de navegador siguen pasando por el proxy Vite (4174). No se añadieron reintentos automáticos de mutaciones. No se atribuye este fallo al servidor de producción, cuyo proxy es Nginx.
 
