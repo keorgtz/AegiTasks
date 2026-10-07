@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/server/">
     <Project Path="server/AegiTasks.Api/AegiTasks.Api.csproj" />
+    <Project Path="server/AegiTasks.NotificationTests/AegiTasks.NotificationTests.csproj" />
   </Folder>
 </Solution>

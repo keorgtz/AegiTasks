@@ -12,6 +12,7 @@ import { testPlanningApi, testPlanningUi } from './planning-tests.mjs';
 import { testTaskHierarchy } from './task-hierarchy-tests.mjs';
 import { testNavigationInbox } from './navigation-inbox-tests.mjs';
 import { testTaskInteractions } from './task-interaction-tests.mjs';
+import { testNotifications } from './notification-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -89,6 +90,7 @@ try {
         DataProtectionPath: path.join(data, 'keys'),
         SEED_ADMIN_EMAIL: 'admin@example.com',
         SEED_ADMIN_PASSWORD: password,
+        Notifications__DeliveryEnabled: 'false',
       },
     },
   );
@@ -396,7 +398,9 @@ try {
   });
   const browserErrors = [];
   page.on('pageerror', (e) => browserErrors.push(e.message));
-  if (process.env.AEGITASKS_TEST_ONLY === 'interactions') {
+  if (process.env.AEGITASKS_TEST_ONLY === 'notifications') {
+    await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
+  } else if (process.env.AEGITASKS_TEST_ONLY === 'interactions') {
     await testTaskInteractions({ page, admin, member, adminUser, json, pass, artifacts });
   } else {
     await page.goto('http://localhost:4174');
@@ -588,6 +592,7 @@ try {
     await testFocusVisuals({ page, context, admin, support, json, pass, artifacts });
     await testFocusLayout({ page, admin, json, pass, artifacts });
     await testNoteEditor({ page, context, admin, json, pass, artifacts });
+    await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
   }
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));

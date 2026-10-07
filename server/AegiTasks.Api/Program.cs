@@ -12,6 +12,11 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<SpaceScope>();
 builder.Services.AddSingleton<ChangeFeed>();
+builder.Services.AddSingleton<PushKeys>();
+builder.Services.AddHttpClient<IPushTransport, WebPushTransport>(http => http.Timeout = TimeSpan.FromSeconds(15))
+    .RemoveAllLoggers()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+if (builder.Configuration["Notifications:DeliveryEnabled"] != "false") builder.Services.AddHostedService<PushSender>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new UtcDateTimeConverter()));
 builder.Services.AddDbContext<AppDb>(o =>
 {
@@ -90,6 +95,8 @@ app.Use(async (c, next) => {
     if (c.Request.Method is "GET" or "HEAD" or "OPTIONS" || c.Response.StatusCode >= 300 || c.User.Identity?.IsAuthenticated != true) return;
     var feed = c.RequestServices.GetRequiredService<ChangeFeed>();
     var space = c.RequestServices.GetRequiredService<SpaceScope>().SpaceId;
+    foreach (var recipient in c.RequestServices.GetRequiredService<SpaceScope>().NotificationUsers)
+        feed.Publish(null, recipient, "notifications");
     var area = c.Request.Path.Value?.Split('/').ElementAtOrDefault(2);
     switch (area) {
         case "projects":
@@ -112,7 +119,7 @@ app.Use(async (c, next) => {
 });
 app.MapGet("/api/events", (HttpContext c, Guid space, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(c, space, scopes)).RequireAuthorization();
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
-app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning();
+app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
@@ -142,6 +149,7 @@ if (!app.Environment.IsEnvironment("Testing"))
                 while (await columns.ReadAsync()) hasUsername |= columns.GetString(1) == "Username";
             if (!hasUsername) await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users ADD COLUMN Username TEXT NOT NULL DEFAULT ''");
             await SqlitePlanningUpgrade.Apply(db);
+            await SqliteNotificationUpgrade.Apply(db);
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }
@@ -149,5 +157,6 @@ if (!app.Environment.IsEnvironment("Testing"))
     await Bootstrap.Seed(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>(), app.Configuration);
     if (app.Configuration["DatabaseProvider"] == "Sqlite") await db.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS IX_Users_Username ON Users (Username)");
 }
+app.Services.GetRequiredService<PushKeys>().Initialize();
 app.Run();
 public partial class Program;

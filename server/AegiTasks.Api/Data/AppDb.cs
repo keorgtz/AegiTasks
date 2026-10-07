@@ -26,9 +26,34 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
     public DbSet<WorkItem> Tasks => Set<WorkItem>();
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<TaskNotification> Notifications => Set<TaskNotification>();
+    public DbSet<PushDevice> PushDevices => Set<PushDevice>();
+    public DbSet<PushDelivery> PushDeliveries => Set<PushDelivery>();
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        await NotificationEvents.Stage(this, scope, cancellationToken);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<TaskNotification>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<TaskNotification>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<TaskNotification>().HasOne<WorkItem>().WithMany().HasForeignKey(x => x.WorkItemId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<TaskNotification>().Property(x => x.Kind).HasMaxLength(20);
+        b.Entity<TaskNotification>().Property(x => x.Message).HasMaxLength(200);
+        b.Entity<TaskNotification>().HasIndex(x => new { x.UserId, x.CreatedAt });
+        b.Entity<PushDevice>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<PushDevice>().Property(x => x.Endpoint).HasMaxLength(2048);
+        b.Entity<PushDevice>().Property(x => x.EndpointHash).HasMaxLength(64);
+        b.Entity<PushDevice>().Property(x => x.P256dh).HasMaxLength(100);
+        b.Entity<PushDevice>().Property(x => x.Auth).HasMaxLength(32);
+        b.Entity<PushDevice>().HasIndex(x => x.EndpointHash).IsUnique();
+        b.Entity<PushDelivery>().HasOne<TaskNotification>().WithMany().HasForeignKey(x => x.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<PushDelivery>().HasOne<PushDevice>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<PushDelivery>().HasIndex(x => new { x.NotificationId, x.DeviceId }).IsUnique();
+        b.Entity<PushDelivery>().HasIndex(x => new { x.FinishedAt, x.NextAttemptAt });
         b.Entity<Space>().Property(x => x.Name).HasMaxLength(80);
         b.Entity<Space>().HasIndex(x => x.OwnerId).IsUnique().HasFilter("\"IsPersonal\" = TRUE");
         b.Entity<Space>().HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);

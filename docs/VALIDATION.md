@@ -1,5 +1,21 @@
 # Evidencia de validación
 
+## Notificaciones — 7 de octubre de 2026
+
+Se agregaron historial personal, Web Push por dispositivo y la migración `TaskNotifications`. La suite completa pasó **157 verificaciones en SQLite y 157 en PostgreSQL 18.4**, incluyendo creación/asignación, ediciones, comentarios, evidencias, pendientes sin responsable, permisos y revocación. PostgreSQL también pasó la migración desde datos anteriores con las nuevas tablas vacías y sus pendientes conservados.
+
+La revisión final repitió **50 comprobaciones enfocadas en SQLite**, con el registro de dispositivos transaccional y el contador de avisos con contraste reforzado. Evidencia: `notifications-sqlite-focused-results.json` y `notifications-sqlite-focused-final.log`.
+
+El ejecutable `server/AegiTasks.NotificationTests` pasó **17 comprobaciones** sobre claves protegidas y reutilizadas, entrega, reintentos, suscripciones vencidas, revocación, cifrado/VAPID del transporte HTTP simulado, rollback de avisos y actualización SQLite idempotente. `push-worker-tests.mjs` pasó **4 comprobaciones** de autorización, errores, identificadores y navegación del service worker. Las **12 comprobaciones PWA** siguen pasando con el nuevo script importado.
+
+Build/typecheck de producción, lint, formato, builds .NET Debug/Release y modelo EF sin cambios pendientes aprobados. La auditoría .NET con dependencias transitivas del 7 de octubre no reportó paquetes vulnerables. Las claves privadas y endpoints no se escriben a logs; se desactivaron los loggers automáticos del cliente HTTP push.
+
+Las capturas `notifications-1440-light.png`, `notifications-390-dark.png` y `notifications-320-dark.png` se revisaron visualmente. La UI también valida registro/desactivación contra la API y recepción de eventos reales; permisos y PushManager se simulan porque Chromium headless mantiene bloqueado el permiso de notificaciones del sistema. **No se probó recepción desde proveedores push reales ni en PC/Android/iPhone físicos y no se desplegó en producción.** La guía de comprobación después del despliegue está en [NOTIFICATIONS.md](NOTIFICATIONS.md).
+
+Evidencias locales: `notifications-sqlite-results.json`, `notifications-postgres-results.json`, `notifications-delivery-tests.log`, `notifications-worker-tests.log`, `notifications-pwa.log` y `postgres-migration-results.json`, dentro de `artifacts/` (excluido de Git). El workflow ahora ejecuta las pruebas de entrega y del worker además de la suite completa; no se verificó su ejecución remota.
+
+## Evidencia de la iteración anterior
+
 Actualización funcional: 6 de octubre de 2026. Entorno local: Windows, .NET SDK 10.0.400, Node 24.15.0, Chromium de Playwright y PostgreSQL 18.4. La auditoría de npm se repitió el 6 de octubre; las auditorías de .NET y comprobaciones de YAML/shell siguen correspondiendo al 23 de septiembre.
 
 La iteración de Kanban, estado rápido y calendario modifica frontend, filtros opcionales de consultas de pendientes en la API, pruebas y documentación. Se repiten build/typecheck, lint, formato, builds Debug/Release de API, comprobación del modelo, suites SQLite/PostgreSQL y PWA. No cambia el esquema ni se agrega una migración. Las pruebas utilizan datos temporales aislados y no modifican la base de desarrollo ni el servidor de producción.

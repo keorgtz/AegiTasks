@@ -56,6 +56,7 @@ import {
   settingsSections,
 } from './SettingsNavigation';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
+import { NotificationCenter } from './Notifications';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
 import { FocusPage } from './Focus';
 import { AdminAccess } from './AdminAccess';
@@ -747,6 +748,12 @@ function WorkspaceApp({
           </div>
         </div>
         <div className="header-actions">
+          <NotificationCenter
+            onOpen={(notice) => {
+              if (notice.spaceId === space.id) openTask(notice.workItemId);
+              else location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+            }}
+          />
           <span className="today-label">
             {new Date().toLocaleDateString('es-MX', {
               weekday: 'long',

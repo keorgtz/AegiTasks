@@ -9,6 +9,7 @@ public sealed class SpaceScope
 {
     public Guid SpaceId { get; set; }
     public Guid UserId { get; set; }
+    public HashSet<Guid> NotificationUsers { get; } = [];
 }
 public static class Access
 {

@@ -186,6 +186,24 @@ try {
     path.join(artifact, 'migration-hierarchy.sql'),
   ]);
   sql('legacy', await readFile(path.join(artifact, 'migration-hierarchy.sql'), 'utf8'));
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'TaskHierarchy',
+    'TaskNotifications',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-notifications.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-notifications.sql'), 'utf8'));
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "Notifications";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "PushDevices";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "PushDeliveries";').trim(), '0');
+  console.log(
+    'PASS PostgreSQL notification migration adds empty history/devices/outbox and preserves existing task data',
+  );
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "Tasks" WHERE "ParentTaskId" IS NOT NULL;').trim(),
     '0',
@@ -276,6 +294,7 @@ try {
         retainedPasswordHashes: true,
         retainedTaskEstimates: true,
         hierarchyMigration: true,
+        notificationsMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

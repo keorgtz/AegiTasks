@@ -26,7 +26,10 @@ public static class AuthEndpoints
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
             return Results.Ok(Rules.PublicUser(user));
         }).RequireRateLimiting("login");
-        app.MapPost("/api/auth/logout", async (HttpContext c) => { await c.SignOutAsync(); return Results.NoContent(); });
+        app.MapPost("/api/auth/logout", async (HttpContext c, AppDb db) => {
+            if (c.User.Identity?.IsAuthenticated == true) await NotificationEndpoints.RemoveDevice(c, db, c.User.UserId());
+            await c.SignOutAsync(); return Results.NoContent();
+        });
         app.MapGet("/api/auth/me", async (AppDb db, ClaimsPrincipal principal) => Rules.PublicUser(await db.Users.SingleAsync(x => x.Id == principal.UserId()))).RequireAuthorization();
         app.MapPost("/api/auth/password", async (PasswordInput input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal, HttpContext context) =>
         {

@@ -24,7 +24,9 @@ export function SpaceGate({
   const current = useRef('');
   const reload = useCallback(async () => {
     const result = await api<SpaceSession>('/spaces');
-    const saved = localStorage.getItem(`aegitasks-space-${user.id}`);
+    const saved =
+      new URLSearchParams(location.search).get('space') ||
+      localStorage.getItem(`aegitasks-space-${user.id}`);
     const id =
       result.spaces.find((s) => s.id === (current.current || saved))?.id ||
       result.spaces[0]?.id ||
