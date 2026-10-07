@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import {
   ChevronDown,
+  Bell,
   Globe2,
   LockKeyhole,
   Settings,
@@ -13,6 +14,7 @@ export function normalizeRoute(route: string) {
   if (route === 'admin') return 'settings/users';
   if (route === 'spaces') return 'settings/workspace';
   if (route === 'settings') return 'settings/organization';
+  if (route === 'account') return 'settings/account';
   return route || 'inbox';
 }
 
@@ -28,6 +30,7 @@ export function pageForRoute(route: string) {
         'settings/workspace': 'spaces',
         'settings/users': 'users',
         'settings/account': 'account',
+        'settings/notifications': 'account',
       } as Record<string, string>
     )[route] || route
   );
@@ -39,10 +42,41 @@ export const settingsSections = [
     name: 'Organización',
     permission: 'settings',
     icon: SlidersHorizontal,
+    description: 'Proyectos, carpetas, estados y etiquetas.',
+    group: 'Equipo',
   },
-  { id: 'settings/workspace', name: 'Workspace', permission: 'spaces', icon: Globe2 },
-  { id: 'settings/users', name: 'Usuarios y roles', permission: 'users', icon: ShieldCheck },
-  { id: 'settings/account', name: 'Mi cuenta', permission: 'account', icon: LockKeyhole },
+  {
+    id: 'settings/workspace',
+    name: 'Workspace',
+    permission: 'spaces',
+    icon: Globe2,
+    description: 'Espacios, miembros e invitaciones.',
+    group: 'Equipo',
+  },
+  {
+    id: 'settings/users',
+    name: 'Usuarios y roles',
+    permission: 'users',
+    icon: ShieldCheck,
+    description: 'Cuentas y acceso a las páginas.',
+    group: 'Administración',
+  },
+  {
+    id: 'settings/account',
+    name: 'Mi cuenta',
+    permission: 'account',
+    icon: LockKeyhole,
+    description: 'Tu identidad y seguridad.',
+    group: 'Personales',
+  },
+  {
+    id: 'settings/notifications',
+    name: 'Notificaciones',
+    permission: 'account',
+    icon: Bell,
+    description: 'Avisos en esta computadora o teléfono.',
+    group: 'Personales',
+  },
 ];
 export const allowedSettings = (permissions: string[]) =>
   settingsSections.filter(
@@ -107,19 +141,56 @@ export function SettingsNavigation({
   permissions: string[];
   navigate: (route: string) => void;
 }) {
+  const sections = allowedSettings(permissions);
+  const groups = ['Personales', 'Equipo', 'Administración'];
   return (
     <nav className="settings-navigation" aria-label="Secciones de ajustes">
-      {allowedSettings(permissions).map((item) => (
-        <button
-          key={item.id}
-          className="btn btn-ghost"
-          aria-current={route === item.id ? 'page' : undefined}
-          onClick={() => navigate(item.id)}
+      <label className="settings-mobile-picker">
+        Sección de ajustes
+        <select
+          aria-label="Sección de ajustes"
+          value={route}
+          onChange={(e) => navigate(e.target.value)}
         >
-          <item.icon size={17} />
-          {item.name}
-        </button>
-      ))}
+          {groups.map((group) => (
+            <optgroup key={group} label={group}>
+              {sections
+                .filter((item) => item.group === group)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <div className="settings-desktop-sections">
+        {groups
+          .filter((group) => sections.some((item) => item.group === group))
+          .map((group) => (
+            <div key={group} className="settings-nav-group">
+              <p>{group}</p>
+              {sections
+                .filter((item) => item.group === group)
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    className="settings-section-link"
+                    aria-label={item.name}
+                    aria-current={route === item.id ? 'page' : undefined}
+                    onClick={() => navigate(item.id)}
+                  >
+                    <item.icon size={17} />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>{item.description}</small>
+                    </span>
+                  </button>
+                ))}
+            </div>
+          ))}
+      </div>
     </nav>
   );
 }

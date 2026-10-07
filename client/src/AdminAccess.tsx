@@ -69,6 +69,15 @@ export function AdminAccess() {
         </p>
       )}
       <section className="card">
+        <div className="section-heading">
+          <div>
+            <h2>Usuarios del equipo</h2>
+            <p className="muted">
+              {users.filter((u) => u.active).length} activos · {users.length} cuentas en total.
+              Edita una cuenta para cambiar su rol o acceso.
+            </p>
+          </div>
+        </div>
         {users.map((u) => (
           <div className="settings-row" key={u.id}>
             <div className="avatar">{initials(u.name)}</div>

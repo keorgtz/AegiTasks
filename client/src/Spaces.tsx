@@ -214,6 +214,14 @@ export function SpacesPage({
         </div>
       </div>
       <ErrorBox message={error} />
+      <div className="section-heading">
+        <div>
+          <h2>Mis espacios</h2>
+          <p className="muted">
+            Elige dónde trabajar. Solo el espacio personal mantiene tus notas y pendientes privados.
+          </p>
+        </div>
+      </div>
       <div className="project-grid">
         {session.spaces.map((s) => (
           <button

@@ -818,7 +818,7 @@ function GroupTasks({
         </button>
       )}
       {loading && result && result.page === page && (
-        <p className="muted small" role="status">
+        <p className="sr-only" role="status">
           Actualizando pendientes…
         </p>
       )}

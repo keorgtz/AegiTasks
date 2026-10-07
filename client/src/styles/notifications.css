@@ -22,25 +22,14 @@
 .notification-center {
   padding: 0 24px 24px;
 }
-.notification-device {
-  padding: 16px;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  display: grid;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.notification-device strong {
-  font-size: 14px;
-}
-.notification-device p {
-  color: var(--text-muted);
+.notification-settings-link {
+  margin: 0 0 16px;
   font-size: 13px;
-  margin: 6px 0 0;
-  line-height: 1.5;
 }
-.notification-device .btn {
-  justify-self: start;
+.notification-settings-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .notification-toolbar {
   display: flex;

@@ -1,5 +1,17 @@
 # Evidencia de validación
 
+## Configuración e invitación del dispositivo — 7 de octubre de 2026
+
+La activación/desactivación se trasladó a **Ajustes → Notificaciones**; la campanita conserva el historial y un enlace a esa página. Los ajustes separan opciones personales, organización del equipo y administración, con descripción y alcance de cada sección, navegación lateral en escritorio y selector compacto en móvil. Mi cuenta distingue identidad y seguridad; organización distingue proyecto, carpetas, estados y etiquetas compartidas. Se conservaron permisos y rutas anteriores.
+
+La primera apertura instalada muestra una invitación sin solicitar automáticamente el permiso nativo. La decisión se recuerda por usuario y almacenamiento del navegador; un dispositivo ya activado no vuelve a preguntar. La invitación espera si hay un diálogo, una nota en edición o Focus inmersivo. La página del dispositivo muestra permiso bloqueado, errores, carga y reintento. Activar/desactivar bloquea la actualización automática de la PWA durante la operación.
+
+Pasaron **165 comprobaciones de la suite completa en SQLite**, incluyendo los ocho grupos nuevos de ajustes/invitación y la regresión de tableros, tareas, notas, Focus, permisos y notificaciones. Una ejecución enfocada previa pasó 58 comprobaciones. Durante la regresión se corrigió el movimiento del tablero de módulos/ciclos causado por insertar el aviso de actualización en segundo plano: el aviso conserva su anuncio accesible sin desplazar las tarjetas.
+
+Build/typecheck de producción, lint y formato aprobados. Las **12 comprobaciones PWA** se repitieron sobre el código final con dos builds reales y pasaron: actualización entre despliegues, conservación de formularios, modo offline y ausencia de bucles. Se revisaron capturas de escritorio claro/oscuro, móvil de 390/320 px y la invitación instalada. Las pruebas también cubren orientación horizontal de 844 × 450 px, creación real de carpetas/estados/etiquetas, acceso de User sin administración, decisiones separadas por usuario, registro/desactivación y protección durante una suscripción pendiente. Evidencia local: `settings-sqlite-results.json`, `settings-sqlite-full.log`, `settings-focused-results.json`, `settings-pwa-final.log`, `pwa-test-results.json` y capturas `settings-*.png`, dentro de `artifacts/`.
+
+El modo instalado, el permiso y PushManager se simulan en Chromium; la API y el registro del dispositivo son reales. **No se verificó una instalación física, el diálogo nativo de permisos ni la recepción de proveedores push reales.** No cambia backend ni esquema; PostgreSQL conserva la validación anterior de 157 comprobaciones y no se repitió para esta iteración de interfaz. No se desplegó en producción.
+
 ## Notificaciones — 7 de octubre de 2026
 
 Se agregaron historial personal, Web Push por dispositivo y la migración `TaskNotifications`. La suite completa pasó **157 verificaciones en SQLite y 157 en PostgreSQL 18.4**, incluyendo creación/asignación, ediciones, comentarios, evidencias, pendientes sin responsable, permisos y revocación. PostgreSQL también pasó la migración desde datos anteriores con las nuevas tablas vacías y sus pendientes conservados.

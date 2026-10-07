@@ -17,9 +17,13 @@ Los cambios rechazados no generan avisos. Al eliminar un pendiente se eliminan s
 
 ## Activación en cada dispositivo
 
-1. Abrir la campanita y seleccionar **Activar en este dispositivo**.
+1. Abrir **Ajustes → Notificaciones** y seleccionar **Activar en este dispositivo**. La campanita conserva el historial y un enlace a esta configuración.
 2. Aceptar el permiso del navegador/sistema operativo.
 3. Repetir en las computadoras y celulares que deban recibir avisos. Instalar la PWA facilita su uso; en iPhone/iPad se requiere agregarla a la pantalla de inicio y abrirla desde allí, con iOS/iPadOS 16.4 o posterior.
+
+Al abrir por primera vez la app instalada con una cuenta autenticada, se muestra una invitación para activar las notificaciones si el dispositivo admite Web Push. El permiso nativo solo se solicita al pulsar **Activar notificaciones**. **Ahora no** cierra la invitación; la decisión se recuerda por usuario en el almacenamiento local de ese navegador y no se repite al recargar o cambiar de Space. Borrar ese almacenamiento permite que aparezca de nuevo. Los dispositivos ya activados no reciben la invitación y abrir la web en una pestaña normal no la dispara. Si hay un diálogo, una nota en edición o Focus inmersivo, la invitación espera a que se cierre esa vista.
+
+La página de notificaciones muestra el estado del dispositivo, la acción de activación/desactivación y orientación si el navegador bloqueó el permiso o no admite push. Está disponible para todas las cuentas; no requiere permiso para administrar el workspace, usuarios ni roles. Los ajustes separan opciones personales, equipo y administración, con navegación lateral en escritorio y un selector compacto en móvil.
 
 El historial permite ver solo sin leer, marcar un aviso o todos como leídos y abrir el pendiente en su Space. El botón de desactivación afecta solo al dispositivo actual. Cerrar sesión elimina su registro en el servidor; el navegador puede conservar el permiso pero no recibe nuevos envíos para esa cuenta. Cambiar contraseña, desactivar la cuenta o renovar su versión de sesión invalida los registros anteriores. Para reactivarlos se debe iniciar sesión y volver a activar los avisos. Límite: 20 dispositivos por cuenta.
 
@@ -46,6 +50,7 @@ La cola tiene un único procesador, coherente con la instancia API del Compose a
 - `dotnet run --project server/AegiTasks.NotificationTests`: base SQLite real, persistencia/protección de claves, cola, reintentos, límite, revocación, rollback, actualización local y transporte WebPush con cifrado/VAPID sobre HTTP simulado.
 - `node client/scripts/push-worker-tests.mjs`: autorización antes de mostrar, errores, identificadores, clics y origen de navegación.
 - `AEGITASKS_TEST_ONLY=notifications node client/scripts/e2e.mjs`: reglas de destinatarios, historial, permisos, registro/desactivación, apertura y UI responsive. La suite completa también los incluye. Se simulan los permisos y PushManager de Chromium headless; no se contacta a proveedores reales.
+- `AEGITASKS_TEST_ONLY=settings node client/scripts/e2e.mjs`: configuración, catálogos, navegación responsive e invitación al abrir la app instalada por primera vez. Verifica aceptar, posponer, permiso bloqueado, dispositivo ya activado y separación por usuario; el modo instalado y el permiso nativo se simulan.
 - `node client/scripts/postgres-tests.mjs`: migraciones nuevas y de datos anteriores, seguido de la suite de API/navegador.
 
 Estas pruebas no sustituyen la recepción en un dispositivo físico. Después de desplegar, activar avisos en PC, Android y iPhone; desde otra cuenta crear/editar/comentar/adjuntar evidencia a un pendiente asignado y uno sin responsable, con la app cerrada o en segundo plano. Comprobar recepción, clic, Space correcto y ausencia de avisos después de cerrar sesión o retirar acceso.

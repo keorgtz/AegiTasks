@@ -221,15 +221,31 @@ export async function testNotifications({ page, request, admin, json, pass, arti
   pass('Deleting a task removes its notices without breaking existing deletion behavior');
 
   await page.goto(`/?space=${shared.id}#inbox`);
-  await page.getByRole('button', { name: /^Notificaciones/ }).waitFor();
-  await page.getByRole('button', { name: /^Notificaciones/ }).click();
+  await page
+    .locator('.header-actions')
+    .getByRole('button', { name: /^Notificaciones/ })
+    .waitFor();
+  await page
+    .locator('.header-actions')
+    .getByRole('button', { name: /^Notificaciones/ })
+    .click();
   const dialog = page.getByRole('dialog', { name: 'Notificaciones', exact: true });
   await dialog.getByText('Unassigned notification', { exact: true }).first().waitFor();
   await dialog.getByRole('button', { name: 'Marcar todas leídas' }).click();
-  await page.getByRole('button', { name: 'Notificaciones', exact: true }).waitFor();
+  await page
+    .locator('.header-actions')
+    .getByRole('button', { name: 'Notificaciones', exact: true })
+    .waitFor();
   await json(other, 'POST', `/tasks/${publicTask.id}/comments`, { body: 'Live comment' }, 204);
   await page.getByRole('button', { name: 'Notificaciones: 1 sin leer', exact: true }).waitFor();
   pass('Notification bell receives live workspace events and read-all updates its unread count');
+  assert.equal(
+    await dialog.getByRole('button', { name: 'Activar en este dispositivo' }).count(),
+    0,
+  );
+  await dialog.getByRole('link', { name: 'Configurar notificaciones del dispositivo' }).click();
+  await page.getByRole('heading', { name: 'Notificaciones', exact: true }).waitFor();
+  const deviceSettings = page.locator('.device-settings-card');
   // Chromium headless denies OS notifications even after permission overrides.
   // Simulate only browser permission/subscription APIs; registration and device removal remain real HTTP.
   await page.evaluate(() => {
@@ -245,13 +261,31 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     },
     { ...subscription, endpoint: subscription.endpoint + '-browser' },
   );
-  await dialog.getByRole('button', { name: 'Activar en este dispositivo' }).click();
-  await dialog.getByText('Avisos activados en este dispositivo').waitFor();
-  await dialog.getByRole('button', { name: 'Desactivar', exact: true }).click();
-  await dialog.getByText('Recibe avisos aunque no tengas la app abierta').waitFor();
+  let finishRegistration;
+  const registrationGate = new Promise((resolve) => (finishRegistration = resolve));
+  const holdRegistration = async (route) => {
+    await registrationGate;
+    await route.continue();
+  };
+  await page.route('**/api/notifications/devices', holdRegistration);
+  await deviceSettings.getByRole('button', { name: 'Activar en este dispositivo' }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.device-settings-card')?.getAttribute('data-update-blocked') ===
+      'true',
+  );
+  finishRegistration();
+  await deviceSettings.getByText('Avisos activados en este dispositivo').waitFor();
+  await page.unroute('**/api/notifications/devices', holdRegistration);
+  await deviceSettings.getByRole('button', { name: 'Desactivar', exact: true }).click();
+  await deviceSettings.getByText('Recibe avisos aunque no tengas la app abierta').waitFor();
   pass(
     'Device activation/deactivation controls persist via API (PushManager simulated, no real provider delivery)',
   );
+  await page
+    .locator('.header-actions')
+    .getByRole('button', { name: /^Notificaciones/ })
+    .click();
   for (const [width, height, theme] of [
     [1440, 900, 'light'],
     [390, 844, 'dark'],

@@ -57,6 +57,8 @@ import {
 } from './SettingsNavigation';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 import { NotificationCenter } from './Notifications';
+import { DeviceNotificationsProvider, DeviceNotificationSettings } from './DeviceNotifications';
+import './styles/settings.css';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
 import { FocusPage } from './Focus';
 import { AdminAccess } from './AdminAccess';
@@ -136,24 +138,26 @@ export default function App() {
       </div>
     );
   return user ? (
-    <SpaceGate user={user}>
-      {(session, active, switchSpace, reloadSpaces) => (
-        <TaskStatusProvider key={active.id}>
-          <WorkspaceApp
-            key={active.id}
-            spaceSession={session}
-            space={active}
-            switchSpace={switchSpace}
-            reloadSpaces={reloadSpaces}
-            user={user}
-            logout={() => void logout()}
-            theme={theme}
-            toggleTheme={toggleTheme}
-            globalError={authError}
-          />
-        </TaskStatusProvider>
-      )}
-    </SpaceGate>
+    <DeviceNotificationsProvider key={user.id} userId={user.id}>
+      <SpaceGate user={user}>
+        {(session, active, switchSpace, reloadSpaces) => (
+          <TaskStatusProvider key={active.id}>
+            <WorkspaceApp
+              key={active.id}
+              spaceSession={session}
+              space={active}
+              switchSpace={switchSpace}
+              reloadSpaces={reloadSpaces}
+              user={user}
+              logout={() => void logout()}
+              theme={theme}
+              toggleTheme={toggleTheme}
+              globalError={authError}
+            />
+          </TaskStatusProvider>
+        )}
+      </SpaceGate>
+    </DeviceNotificationsProvider>
   ) : (
     <Login
       onLogin={setUser}
@@ -684,7 +688,10 @@ function WorkspaceApp({
   );
   const title = project?.name || (route === 'archived' ? 'Archivados' : 'Tu bandeja');
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-device-prompt-ready={!!w && !editor && !route.startsWith('notes/')}
+    >
       <a href="#main-content" className="skip-link">
         Ir al contenido
       </a>
@@ -842,45 +849,50 @@ function WorkspaceApp({
                 openTask={openTask}
               />
             ) : route.startsWith('settings/') || route === 'account' ? (
-              <>
+              <div className="settings-workbench">
                 {route !== 'account' && (
                   <SettingsNavigation route={route} permissions={permissions} navigate={navigate} />
                 )}
-                {route === 'settings/workspace' ? (
-                  <SpacesPage
-                    user={user}
-                    active={space}
-                    session={spaceSession}
-                    reload={reloadSpaces}
-                    switchSpace={switchSpace}
-                  />
-                ) : route === 'settings/users' ? (
-                  <AdminAccess />
-                ) : (
-                  <Settings
-                    key={route}
-                    workspace={w}
-                    user={user}
-                    reload={reload}
-                    notify={notify}
-                    logout={logout}
-                    initialProject={settingsProject}
-                    canOrganize={permissions.includes('projects')}
-                    mode={routePage(route) === 'account' ? 'account' : 'organization'}
-                  />
-                )}
-                <section className="card mobile-tools">
-                  <h2>La app, siempre a mano</h2>
-                  {permissions.includes('tasks') && (
-                    <button className="btn btn-ghost" onClick={() => navigate('archived')}>
-                      <Archive size={17} /> Ver archivados
-                    </button>
+                <div className="settings-main">
+                  {route === 'settings/notifications' ? (
+                    <DeviceNotificationSettings />
+                  ) : route === 'settings/workspace' ? (
+                    <SpacesPage
+                      user={user}
+                      active={space}
+                      session={spaceSession}
+                      reload={reloadSpaces}
+                      switchSpace={switchSpace}
+                    />
+                  ) : route === 'settings/users' ? (
+                    <AdminAccess />
+                  ) : (
+                    <Settings
+                      key={route}
+                      workspace={w}
+                      user={user}
+                      reload={reload}
+                      notify={notify}
+                      logout={logout}
+                      initialProject={settingsProject}
+                      spaceName={space.name}
+                      canOrganize={permissions.includes('projects')}
+                      mode={routePage(route) === 'account' ? 'account' : 'organization'}
+                    />
                   )}
-                  <button className="btn btn-ghost" onClick={logout}>
-                    <LogOut size={17} /> Cerrar sesión
-                  </button>
-                </section>
-              </>
+                  <section className="card mobile-tools">
+                    <h2>La app, siempre a mano</h2>
+                    {permissions.includes('tasks') && (
+                      <button className="btn btn-ghost" onClick={() => navigate('archived')}>
+                        <Archive size={17} /> Ver archivados
+                      </button>
+                    )}
+                    <button className="btn btn-ghost" onClick={logout}>
+                      <LogOut size={17} /> Cerrar sesión
+                    </button>
+                  </section>
+                </div>
+              </div>
             ) : route === 'projects' ? (
               <>
                 <div className="page-heading">

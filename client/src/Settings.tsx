@@ -293,6 +293,7 @@ export function Settings({
   notify,
   logout,
   initialProject,
+  spaceName = 'este espacio',
   canOrganize = true,
   mode,
 }: {
@@ -302,6 +303,7 @@ export function Settings({
   notify: (s: string) => void;
   logout: () => void;
   initialProject: string;
+  spaceName?: string;
   canOrganize?: boolean;
   mode?: 'organization' | 'account';
 }) {
@@ -353,9 +355,15 @@ export function Settings({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">A TU MANERA</div>
+          <div className="eyebrow">
+            {mode === 'account' ? 'PREFERENCIAS PERSONALES' : 'ORGANIZACIÓN DEL EQUIPO'}
+          </div>
           <h1>{mode === 'account' ? 'Mi cuenta' : 'Ajustes'}</h1>
-          <p>Un espacio simple, con la organización que tu equipo necesita.</p>
+          <p>
+            {mode === 'account'
+              ? 'Consulta tu cuenta y protege el acceso a tu información.'
+              : `Configura proyectos y pendientes de ${spaceName}.`}
+          </p>
         </div>
       </div>
       {!mode && (
@@ -382,53 +390,71 @@ export function Settings({
       )}
       <ErrorBox message={error} />
       {tab === 'organization' && canOrganize && (
-        <div className="settings-grid">
-          <section className="card">
-            <div className="section-heading">
-              <h2>Proyectos y carpetas</h2>
-              <button
-                className="btn-icon"
-                aria-label="Crear proyecto"
-                onClick={() => setEditor({ kind: 'projects', value: {} })}
-              >
-                <Plus size={18} />
-              </button>
+        <div className="settings-organization">
+          <section className="card settings-project-context">
+            <div className="settings-panel-heading">
+              <span className="settings-panel-icon">
+                <SlidersHorizontal size={23} />
+              </span>
+              <div>
+                <h2>Proyecto a configurar</h2>
+                <p>Carpetas y estados pertenecen al proyecto que selecciones.</p>
+              </div>
             </div>
-            <Field label="Proyecto a configurar">
-              <select value={project} onChange={(e) => setProject(e.target.value)}>
-                <option value="">Selecciona un proyecto</option>
-                {w.projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.archived ? ' (archivado)' : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {project && (
-              <>
+            <div className="settings-project-picker">
+              <Field label="Proyecto a configurar">
+                <select value={project} onChange={(e) => setProject(e.target.value)}>
+                  <option value="">Selecciona un proyecto</option>
+                  {w.projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.archived ? ' (archivado)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="settings-inline-actions">
+                {project && (
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() =>
+                      setEditor({
+                        kind: 'projects',
+                        value: w.projects.find((p) => p.id === project)!,
+                      })
+                    }
+                  >
+                    <Pencil size={16} /> Editar proyecto
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary"
+                  aria-label="Crear proyecto"
+                  onClick={() => setEditor({ kind: 'projects', value: {} })}
+                >
+                  <Plus size={17} /> Nuevo proyecto
+                </button>
+              </div>
+            </div>
+          </section>
+          <div className="settings-grid settings-catalogs">
+            <section className="card">
+              <div className="section-heading">
+                <div>
+                  <h2>Carpetas</h2>
+                  <p className="muted">Agrupaciones simples dentro del proyecto.</p>
+                </div>
                 <button
                   className="btn btn-ghost"
-                  onClick={() =>
-                    setEditor({
-                      kind: 'projects',
-                      value: w.projects.find((p) => p.id === project)!,
-                    })
-                  }
+                  disabled={!project}
+                  aria-label="Crear carpeta"
+                  onClick={() => setEditor({ kind: 'folders', value: {} })}
                 >
-                  <Pencil size={16} /> Editar proyecto
+                  <FolderPlus size={17} /> Agregar
                 </button>
-                <div className="section-heading subsection">
-                  <h3>Carpetas</h3>
-                  <button
-                    className="btn-icon"
-                    aria-label="Crear carpeta"
-                    onClick={() => setEditor({ kind: 'folders', value: {} })}
-                  >
-                    <FolderPlus size={18} />
-                  </button>
-                </div>
-                {w.folders
+              </div>
+              {project ? (
+                w.folders
                   .filter((f) => f.projectId === project)
                   .map((f) => (
                     <div className="settings-row" key={f.id}>
@@ -438,148 +464,190 @@ export function Settings({
                         aria-label={`Editar carpeta ${f.name}`}
                         onClick={() => setEditor({ kind: 'folders', value: f })}
                       >
-                        <Pencil size={15} />
+                        <Pencil size={16} />
                       </button>
                       <button
                         className="btn-icon"
                         aria-label={`Eliminar carpeta ${f.name}`}
                         onClick={() => void remove('folders', f.id)}
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
-                  ))}
-                {!w.folders.some((f) => f.projectId === project) && (
-                  <p className="muted small">Agrupa pendientes por módulo, cliente o área.</p>
-                )}
-              </>
-            )}
-          </section>
-          <section className="card">
-            <div className="section-heading">
-              <h2>Estados de los pendientes</h2>
-              <button
-                className="btn-icon"
-                disabled={!project}
-                aria-label="Crear estado"
-                onClick={() =>
-                  setEditor({
-                    kind: 'statuses',
-                    value: { position: w.statuses.filter((s) => s.projectId === project).length },
-                  })
-                }
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-            <p className="muted small">
-              Define el recorrido de cada pendiente. Marca los estados que cuentan como resueltos.
-            </p>
-            {w.statuses
-              .filter((s) => s.projectId === project)
-              .map((s) => (
-                <div className="settings-row" key={s.id}>
-                  <span>
-                    <Badge color={s.color}>{s.name}</Badge>
-                    {s.isDone && <small>Resuelto</small>}
-                  </span>
-                  <button
-                    className="btn-icon"
-                    aria-label={`Editar estado ${s.name}`}
-                    onClick={() => setEditor({ kind: 'statuses', value: s })}
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    className="btn-icon"
-                    aria-label={`Eliminar estado ${s.name}`}
-                    onClick={() => void remove('statuses', s.id)}
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  ))
+              ) : (
+                <p className="settings-empty">
+                  Selecciona un proyecto para gestionar sus carpetas.
+                </p>
+              )}
+              {project && !w.folders.some((f) => f.projectId === project) && (
+                <p className="settings-empty">
+                  Este proyecto todavía no tiene carpetas. Puedes agregar la primera cuando la
+                  necesites.
+                </p>
+              )}
+            </section>
+            <section className="card">
+              <div className="section-heading">
+                <div>
+                  <h2>Estados de los pendientes</h2>
+                  <p className="muted">Define su recorrido y qué cuenta como resuelto.</p>
                 </div>
-              ))}
-          </section>
-          <section className="card">
+                <button
+                  className="btn btn-ghost"
+                  disabled={!project}
+                  aria-label="Crear estado"
+                  onClick={() =>
+                    setEditor({
+                      kind: 'statuses',
+                      value: { position: w.statuses.filter((s) => s.projectId === project).length },
+                    })
+                  }
+                >
+                  <Plus size={17} /> Agregar
+                </button>
+              </div>
+              {project ? (
+                w.statuses
+                  .filter((s) => s.projectId === project)
+                  .sort((a, b) => a.position - b.position)
+                  .map((s) => (
+                    <div className="settings-row" key={s.id}>
+                      <span>
+                        <Badge color={s.color}>{s.name}</Badge>
+                        {s.isDone && <small>Cuenta como resuelto</small>}
+                      </span>
+                      <button
+                        className="btn-icon"
+                        aria-label={`Editar estado ${s.name}`}
+                        onClick={() => setEditor({ kind: 'statuses', value: s })}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        aria-label={`Eliminar estado ${s.name}`}
+                        onClick={() => void remove('statuses', s.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))
+              ) : (
+                <p className="settings-empty">Selecciona un proyecto para gestionar sus estados.</p>
+              )}
+            </section>
+          </div>
+          <section className="card settings-team-labels">
             <div className="section-heading">
-              <h2>
-                <Tags size={19} /> Etiquetas del equipo
-              </h2>
+              <div>
+                <h2>
+                  <Tags size={20} /> Etiquetas del equipo
+                </h2>
+                <p className="muted">Se comparten entre todos los proyectos de {spaceName}.</p>
+              </div>
               <button
-                className="btn-icon"
+                className="btn btn-ghost"
                 aria-label="Crear etiqueta"
                 onClick={() => setEditor({ kind: 'tags', value: {} })}
               >
-                <Plus size={18} />
+                <Plus size={17} /> Agregar
               </button>
             </div>
-            <p className="muted small">
-              Úsalas en cualquier proyecto para identificar bugs, mejoras o tipos de trabajo.
-            </p>
-            {w.tags.map((t) => (
-              <div className="settings-row" key={t.id}>
-                <span>
-                  <Badge color={t.color}>{t.name}</Badge>
-                </span>
-                <button
-                  className="btn-icon"
-                  aria-label={`Editar etiqueta ${t.name}`}
-                  onClick={() => setEditor({ kind: 'tags', value: t })}
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  className="btn-icon"
-                  aria-label={`Eliminar etiqueta ${t.name}`}
-                  onClick={() => void remove('tags', t.id)}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
+            <div className="settings-label-grid">
+              {w.tags.map((t) => (
+                <div className="settings-row" key={t.id}>
+                  <span>
+                    <Badge color={t.color}>{t.name}</Badge>
+                  </span>
+                  <button
+                    className="btn-icon"
+                    aria-label={`Editar etiqueta ${t.name}`}
+                    onClick={() => setEditor({ kind: 'tags', value: t })}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    aria-label={`Eliminar etiqueta ${t.name}`}
+                    onClick={() => void remove('tags', t.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {!w.tags.length && (
+              <p className="settings-empty">
+                Agrega etiquetas para identificar bugs, mejoras o tipos de trabajo.
+              </p>
+            )}
           </section>
         </div>
       )}
       {tab === 'account' && (
-        <section className="card account-card">
-          <h2>{user.name}</h2>
-          <p className="muted">{user.email}</p>
-          <p className="muted">Usuario: {user.username}</p>
-          <h3 className="subsection">Cambiar contraseña</h3>
-          <form
-            onSubmit={password}
-            data-update-blocked={!!currentPassword || !!newPassword || busy}
-          >
-            <fieldset disabled={busy}>
-              <Field label="Contraseña actual">
-                <input
-                  required
-                  type="password"
-                  autoComplete="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrent(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="Nueva contraseña"
-                hint="Al menos 12 caracteres. Se cerrarán tus sesiones abiertas."
-              >
-                <input
-                  required
-                  minLength={12}
-                  maxLength={128}
-                  type="password"
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNew(e.target.value)}
-                />
-              </Field>
-              <button className="btn btn-primary">
-                {busy ? 'Guardando…' : 'Cambiar contraseña'}
-              </button>
-            </fieldset>
-          </form>
-        </section>
+        <div className="settings-account-grid">
+          <section className="card settings-identity">
+            <h2>Datos de tu cuenta</h2>
+            <p className="muted">Tu identidad dentro del equipo.</p>
+            <dl>
+              <div>
+                <dt>Nombre</dt>
+                <dd>{user.name}</dd>
+              </div>
+              <div>
+                <dt>Usuario</dt>
+                <dd>{user.username}</dd>
+              </div>
+              <div>
+                <dt>Correo electrónico</dt>
+                <dd>{user.email}</dd>
+              </div>
+              <div>
+                <dt>Rol</dt>
+                <dd>{user.role === 'Admin' ? 'Administrador' : user.role}</dd>
+              </div>
+            </dl>
+          </section>
+          <section className="card account-card">
+            <h2>Seguridad</h2>
+            <p className="muted">Cambia tu contraseña para proteger tus sesiones.</p>
+            <h3 className="subsection">Cambiar contraseña</h3>
+            <form
+              onSubmit={password}
+              data-update-blocked={!!currentPassword || !!newPassword || busy}
+            >
+              <fieldset disabled={busy}>
+                <Field label="Contraseña actual">
+                  <input
+                    required
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrent(e.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="Nueva contraseña"
+                  hint="Al menos 12 caracteres. Se cerrarán tus sesiones abiertas."
+                >
+                  <input
+                    required
+                    minLength={12}
+                    maxLength={128}
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNew(e.target.value)}
+                  />
+                </Field>
+                <button className="btn btn-primary">
+                  {busy ? 'Guardando…' : 'Cambiar contraseña'}
+                </button>
+              </fieldset>
+            </form>
+          </section>
+        </div>
       )}
       {editor && (
         <CatalogEditor

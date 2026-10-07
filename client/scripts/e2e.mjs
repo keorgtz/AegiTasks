@@ -13,6 +13,7 @@ import { testTaskHierarchy } from './task-hierarchy-tests.mjs';
 import { testNavigationInbox } from './navigation-inbox-tests.mjs';
 import { testTaskInteractions } from './task-interaction-tests.mjs';
 import { testNotifications } from './notification-tests.mjs';
+import { testSettings } from './settings-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -398,7 +399,10 @@ try {
   });
   const browserErrors = [];
   page.on('pageerror', (e) => browserErrors.push(e.message));
-  if (process.env.AEGITASKS_TEST_ONLY === 'notifications') {
+  if (process.env.AEGITASKS_TEST_ONLY === 'settings') {
+    await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
+    await testSettings({ page, admin, adminUser, shared, json, pass, artifacts, password });
+  } else if (process.env.AEGITASKS_TEST_ONLY === 'notifications') {
     await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
   } else if (process.env.AEGITASKS_TEST_ONLY === 'interactions') {
     await testTaskInteractions({ page, admin, member, adminUser, json, pass, artifacts });
@@ -593,6 +597,7 @@ try {
     await testFocusLayout({ page, admin, json, pass, artifacts });
     await testNoteEditor({ page, context, admin, json, pass, artifacts });
     await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
+    await testSettings({ page, admin, adminUser, shared, json, pass, artifacts, password });
   }
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));

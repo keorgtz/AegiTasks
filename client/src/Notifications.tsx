@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, BellOff, CheckCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bell, CheckCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { useChanges } from './changes';
 import { ErrorBox, Modal } from './components';
@@ -23,17 +23,6 @@ interface Notices {
   pageSize: number;
 }
 const empty: Notices = { items: [], unreadCount: 0, total: 0, page: 1, pageSize: 30 };
-const supported = () =>
-  window.isSecureContext &&
-  'Notification' in window &&
-  'serviceWorker' in navigator &&
-  'PushManager' in window;
-function decodeKey(key: string) {
-  const text = atob(
-    key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (key.length % 4)) % 4),
-  );
-  return Uint8Array.from(text, (c) => c.charCodeAt(0));
-}
 export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => void }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState(empty);
@@ -41,36 +30,8 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
   const [unread, setUnread] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [enabled, setEnabled] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermission>(() =>
-    supported() ? Notification.permission : 'default',
-  );
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const requestNumber = useRef(0);
-  useEffect(() => {
-    if (!supported()) return;
-    let alive = true;
-    let status: PermissionStatus | undefined;
-    const update = () => {
-      if (alive) setPermission(Notification.permission);
-    };
-    update();
-    void navigator.permissions
-      ?.query({ name: 'notifications' })
-      .then((result) => {
-        if (!alive) return;
-        status = result;
-        status.addEventListener('change', update);
-      })
-      .catch(() => {
-        /* Some mobile browsers expose Notification permission without Permissions API. */
-      });
-    return () => {
-      alive = false;
-      status?.removeEventListener('change', update);
-    };
-  }, [open]);
   const load = useCallback(
     async (signal?: AbortSignal) => {
       const request = ++requestNumber.current;
@@ -106,35 +67,13 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
   );
   useEffect(() => {
     const controller = new AbortController();
-    async function refreshDevice() {
-      if (!supported()) return;
-      setPermission(Notification.permission);
-      const status = await api<{ enabled: boolean }>(
-        '/notifications/device',
-        'GET',
-        undefined,
-        controller.signal,
-      );
-      const registration = await navigator.serviceWorker.getRegistration();
-      const subscription = await registration?.pushManager.getSubscription();
-      if (status.enabled && subscription && Notification.permission === 'granted')
-        await api('/notifications/devices', 'POST', subscription.toJSON(), controller.signal);
-      if (!controller.signal.aborted)
-        setEnabled(status.enabled && !!subscription && Notification.permission === 'granted');
-    }
     const refresh = () => {
       if (document.visibilityState === 'visible') {
         void load(controller.signal).catch((e) => {
           if (!controller.signal.aborted) setError(errorMessage(e));
         });
-        void refreshDevice().catch((e) => {
-          if (!controller.signal.aborted) setError(errorMessage(e));
-        });
       }
     };
-    void refreshDevice().catch((e) => {
-      if (!controller.signal.aborted) setError(errorMessage(e));
-    });
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('online', refresh);
     return () => {
@@ -152,65 +91,6 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
     navigator.serviceWorker.addEventListener('message', received);
     return () => navigator.serviceWorker.removeEventListener('message', received);
   }, [load]);
-  async function togglePush() {
-    setBusy(true);
-    setError('');
-    setMessage('');
-    try {
-      if (enabled) {
-        await api('/notifications/device', 'DELETE');
-        setEnabled(false);
-        const registration = await navigator.serviceWorker.getRegistration();
-        await (await registration?.pushManager.getSubscription())?.unsubscribe();
-        setMessage(
-          'Notificaciones desactivadas en este dispositivo. El historial sigue disponible.',
-        );
-      } else {
-        // Request permission directly from the click, before network or worker waits.
-        const next = await Notification.requestPermission();
-        setPermission(next);
-        if (next !== 'granted') {
-          setMessage('Puedes habilitar el permiso desde los ajustes de tu navegador.');
-          return;
-        }
-        const config = await api<{ publicKey: string }>('/notifications/push-config');
-        const registration = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    'La app todavía se está preparando. Intenta de nuevo en unos segundos.',
-                  ),
-                ),
-              10000,
-            ),
-          ),
-        ]);
-        let subscription = await registration.pushManager.getSubscription();
-        const key = decodeKey(config.publicKey);
-        if (
-          subscription?.options.applicationServerKey &&
-          new Uint8Array(subscription.options.applicationServerKey).some((b, i) => b !== key[i])
-        ) {
-          await subscription.unsubscribe();
-          subscription = null;
-        }
-        subscription ??= await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: key,
-        });
-        await api('/notifications/devices', 'POST', subscription.toJSON());
-        setEnabled(true);
-        setMessage('Listo. Este dispositivo recibirá tus notificaciones.');
-      }
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError('');
@@ -223,9 +103,6 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
       setBusy(false);
     }
   }
-  const iosNeedsInstall =
-    /iPhone|iPad|iPod/.test(navigator.userAgent) &&
-    !matchMedia('(display-mode: standalone)').matches;
   return (
     <>
       <button
@@ -244,34 +121,11 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
       {open && (
         <Modal title="Notificaciones" onClose={() => setOpen(false)}>
           <div className="notification-center">
-            <div className="notification-device">
-              <div>
-                <strong>
-                  {enabled
-                    ? 'Avisos activados en este dispositivo'
-                    : 'Recibe avisos aunque no tengas la app abierta'}
-                </strong>
-                <p>
-                  {iosNeedsInstall
-                    ? 'En iPhone o iPad, agrega AegiTasks a la pantalla de inicio y abre la app para activar los avisos.'
-                    : !supported()
-                      ? 'Este navegador no permite notificaciones push. Puedes consultar aquí tu historial.'
-                      : permission === 'denied'
-                        ? 'El permiso está bloqueado. Habilítalo desde los ajustes del navegador para activar los avisos.'
-                        : 'Asignaciones, cambios, comentarios y nuevas evidencias de tus pendientes.'}
-                </p>
-              </div>
-              {supported() && !iosNeedsInstall && (
-                <button
-                  className={`btn ${enabled ? 'btn-ghost' : 'btn-primary'}`}
-                  disabled={busy || permission === 'denied'}
-                  onClick={() => void togglePush()}
-                >
-                  {enabled ? <BellOff size={17} /> : <Bell size={17} />}
-                  {enabled ? 'Desactivar' : 'Activar en este dispositivo'}
-                </button>
-              )}
-            </div>
+            <p className="notification-settings-link">
+              <a href="#settings/notifications" onClick={() => setOpen(false)}>
+                Configurar notificaciones del dispositivo
+              </a>
+            </p>
             <ErrorBox message={error} />
             {error && (
               <button
@@ -285,11 +139,6 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
               >
                 Reintentar
               </button>
-            )}
-            {message && (
-              <p role="status" className="muted">
-                {message}
-              </p>
             )}
             <div className="notification-toolbar">
               <label>
