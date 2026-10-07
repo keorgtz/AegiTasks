@@ -178,21 +178,13 @@
 .settings-workbench .account-card {
   max-width: none;
 }
-.settings-identity dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin: 20px 0 0;
+.settings-identity form {
+  margin-top: 20px;
 }
-.settings-identity dt {
-  font-size: 12px;
+.settings-account-role {
   color: var(--text-muted);
-  margin-bottom: 6px;
-}
-.settings-identity dd {
-  margin: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
+  font-size: 13px;
+  margin: 0 0 20px;
 }
 .settings-workbench .account-card form {
   max-width: 480px;
@@ -318,8 +310,7 @@
     padding: 20px 16px;
   }
   .settings-workbench .settings-grid,
-  .settings-label-grid,
-  .settings-identity dl {
+  .settings-label-grid {
     grid-template-columns: 1fr;
   }
   .settings-workbench .section-heading {

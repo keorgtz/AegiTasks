@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, CheckCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bell, CheckCheck, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { useChanges } from './changes';
 import { ErrorBox, Modal } from './components';
@@ -163,6 +163,23 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
               >
                 <CheckCheck size={17} /> Marcar todas leídas
               </button>
+              <button
+                className="btn btn-ghost"
+                disabled={busy || loading || (!data.total && !unread)}
+                onClick={() => {
+                  if (
+                    !confirm(
+                      '¿Eliminar todas tus notificaciones, leídas y sin leer, de todos tus Spaces? Los pendientes se conservan y seguirás recibiendo nuevos avisos.',
+                    )
+                  )
+                    return;
+                  void run(async () => {
+                    await api('/notifications', 'DELETE');
+                  });
+                }}
+              >
+                <Trash2 size={17} /> Limpiar historial
+              </button>
             </div>
             {loading ? (
               <p role="status">Cargando notificaciones…</p>
@@ -203,20 +220,34 @@ export function NotificationCenter({ onOpen }: { onOpen: (notice: Notice) => voi
                         </small>
                       </span>
                     </button>
-                    {!n.readAt && (
+                    <div className="notification-item-actions">
+                      {!n.readAt && (
+                        <button
+                          className="btn-icon"
+                          aria-label={`Marcar leída: ${n.title}`}
+                          disabled={busy}
+                          onClick={() =>
+                            void run(async () => {
+                              await api(`/notifications/${n.id}/read`, 'PUT');
+                            })
+                          }
+                        >
+                          <CheckCheck size={18} />
+                        </button>
+                      )}
                       <button
                         className="btn-icon"
-                        aria-label={`Marcar leída: ${n.title}`}
+                        aria-label={`Eliminar notificación: ${n.title}`}
                         disabled={busy}
                         onClick={() =>
                           void run(async () => {
-                            await api(`/notifications/${n.id}/read`, 'PUT');
+                            await api(`/notifications/${n.id}`, 'DELETE');
                           })
                         }
                       >
-                        <CheckCheck size={18} />
+                        <Trash2 size={17} />
                       </button>
-                    )}
+                    </div>
                   </li>
                 ))}
               </ul>

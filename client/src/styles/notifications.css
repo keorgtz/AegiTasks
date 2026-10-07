@@ -72,6 +72,13 @@
 .notification-list li.unread {
   background: var(--surface-2);
 }
+.notification-item-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  padding-block: 6px;
+}
 .notification-open {
   flex: 1;
   min-width: 0;

@@ -79,6 +79,15 @@ using (var scope = provider.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<AppDb>(); Assert((await db.PushDeliveries.SingleAsync(d => d.Id == limit.Delivery)).FinishedAt != null, "Retries stop after eight attempts");
 }
 
+var cleared = await Queue();
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    await db.Notifications.Where(n => n.Id == cleared.Notice && n.UserId == user.Id).ExecuteDeleteAsync();
+    Assert(!await db.PushDeliveries.AnyAsync(d => d.Id == cleared.Delivery) && await db.PushDevices.AnyAsync(d => d.Id == cleared.Device), "Deleting a notice cascades queued deliveries while preserving its device");
+}
+calls = fake.Calls; await sender.Dispatch(default);
+Assert(fake.Calls == calls, "Cleared notices never dispatch queued push messages");
+
 using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
 var point = ecdh.ExportParameters(false).Q;
 string Url64(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

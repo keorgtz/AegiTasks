@@ -89,6 +89,14 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
   const [theme, setTheme] = useState(document.documentElement.dataset.theme || 'light');
+  useChanges(['access'], () => {
+    if (!user) return;
+    void api<User>('/auth/me')
+      .then((updated) => {
+        setUser((current) => (current?.id === updated.id ? updated : current));
+      })
+      .catch((e) => setAuthError(errorMessage(e)));
+  });
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
@@ -153,6 +161,7 @@ export default function App() {
                 switchSpace={switchSpace}
                 reloadSpaces={reloadSpaces}
                 user={user}
+                onUserUpdated={setUser}
                 logout={() => void logout()}
                 theme={theme}
                 toggleTheme={toggleTheme}
@@ -299,6 +308,7 @@ function Login({
 }
 function WorkspaceApp({
   user,
+  onUserUpdated,
   logout,
   theme,
   toggleTheme,
@@ -309,6 +319,7 @@ function WorkspaceApp({
   reloadSpaces,
 }: {
   user: User;
+  onUserUpdated: (user: User) => void;
   logout: () => void;
   theme: string;
   toggleTheme: () => void;
@@ -902,6 +913,7 @@ function WorkspaceApp({
                       key={route}
                       workspace={w}
                       user={user}
+                      onUserUpdated={onUserUpdated}
                       reload={reload}
                       notify={notify}
                       logout={logout}

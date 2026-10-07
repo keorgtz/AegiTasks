@@ -11,6 +11,7 @@ import {
 import { api, errorMessage } from './api';
 import { Badge, ColorSwatches, ErrorBox, Field, Modal } from './components';
 import { estimateKinds } from './estimates';
+import { AccountProfile } from './AccountProfile';
 import {
   type Folder,
   type Project,
@@ -205,7 +206,6 @@ export function CatalogEditor({
                   type="email"
                   required
                   maxLength={200}
-                  disabled={!!value.id}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -296,6 +296,7 @@ export function Settings({
   spaceName = 'este espacio',
   canOrganize = true,
   mode,
+  onUserUpdated,
 }: {
   workspace: Workspace;
   user: User;
@@ -306,6 +307,7 @@ export function Settings({
   spaceName?: string;
   canOrganize?: boolean;
   mode?: 'organization' | 'account';
+  onUserUpdated: (user: User) => void;
 }) {
   const [selectedTab, setTab] = useState(canOrganize ? 'organization' : 'account');
   const tab = mode || selectedTab;
@@ -361,7 +363,7 @@ export function Settings({
           <h1>{mode === 'account' ? 'Mi cuenta' : 'Ajustes'}</h1>
           <p>
             {mode === 'account'
-              ? 'Consulta tu cuenta y protege el acceso a tu información.'
+              ? 'Actualiza tu cuenta y protege el acceso a tu información.'
               : `Configura proyectos y pendientes de ${spaceName}.`}
           </p>
         </div>
@@ -587,28 +589,7 @@ export function Settings({
       )}
       {tab === 'account' && (
         <div className="settings-account-grid">
-          <section className="card settings-identity">
-            <h2>Datos de tu cuenta</h2>
-            <p className="muted">Tu identidad dentro del equipo.</p>
-            <dl>
-              <div>
-                <dt>Nombre</dt>
-                <dd>{user.name}</dd>
-              </div>
-              <div>
-                <dt>Usuario</dt>
-                <dd>{user.username}</dd>
-              </div>
-              <div>
-                <dt>Correo electrónico</dt>
-                <dd>{user.email}</dd>
-              </div>
-              <div>
-                <dt>Rol</dt>
-                <dd>{user.role === 'Admin' ? 'Administrador' : user.role}</dd>
-              </div>
-            </dl>
-          </section>
+          <AccountProfile user={user} onSaved={onUserUpdated} notify={notify} />
           <section className="card account-card">
             <h2>Seguridad</h2>
             <p className="muted">Cambia tu contraseña para proteger tus sesiones.</p>

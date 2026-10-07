@@ -35,6 +35,17 @@ public static class NotificationEndpoints
             await NotificationEvents.Visible(db, user.UserId()).Where(n => n.ReadAt == null).ExecuteUpdateAsync(p => p.SetProperty(n => n.ReadAt, DateTime.UtcNow));
             feed.Publish(null, user.UserId(), "notifications"); return Results.NoContent();
         });
+        group.MapDelete("/{id:guid}", async (Guid id, AppDb db, ClaimsPrincipal user, ChangeFeed feed) => {
+            var removed = await db.Notifications.Where(n => n.Id == id && n.UserId == user.UserId()).ExecuteDeleteAsync();
+            if (removed == 0) return Results.NotFound();
+            feed.Publish(null, user.UserId(), "notifications"); return Results.NoContent();
+        });
+        group.MapDelete("/", async (AppDb db, ClaimsPrincipal user, ChangeFeed feed) => {
+            // Clear the owner's history across all Spaces, including notices no longer visible.
+            // Cascading foreign keys also remove queued push deliveries, but keep devices enabled.
+            await db.Notifications.Where(n => n.UserId == user.UserId()).ExecuteDeleteAsync();
+            feed.Publish(null, user.UserId(), "notifications"); return Results.NoContent();
+        });
         group.MapGet("/push-config", (PushKeys keys) => Results.Ok(new { publicKey = keys.Details.PublicKey }));
         group.MapPost("/devices", async (DeviceInput input, AppDb db, ClaimsPrincipal user, HttpContext http) => {
             Validate(input);

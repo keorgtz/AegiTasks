@@ -31,6 +31,28 @@ public static class AuthEndpoints
             await c.SignOutAsync(); return Results.NoContent();
         });
         app.MapGet("/api/auth/me", async (AppDb db, ClaimsPrincipal principal) => Rules.PublicUser(await db.Users.SingleAsync(x => x.Id == principal.UserId()))).RequireAuthorization();
+        app.MapPut("/api/auth/profile", async (ProfileInput input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal, ChangeFeed feed) =>
+        {
+            var user = await db.Users.AsNoTracking().SingleAsync(x => x.Id == principal.UserId());
+            if (input.Original != null && (input.Original.Name != user.Name || input.Original.Username != user.Username || input.Original.Email != user.Email))
+                return Results.Conflict(new { error = "Tu cuenta cambió en otra sesión. Recarga los datos antes de guardar." });
+            var name = Rules.Text(input.Name, 80, "Nombre");
+            var username = Rules.Username(input.Username);
+            var email = Email(input.Email);
+            if (username != user.Username || email != user.Email) {
+                if (string.IsNullOrEmpty(input.CurrentPassword) || input.CurrentPassword.Length > 128 || hash.VerifyHashedPassword(user, user.PasswordHash, input.CurrentPassword) == PasswordVerificationResult.Failed)
+                    throw new InputError("Confirma tu contraseña actual para cambiar el usuario o correo.");
+            }
+            await UniqueIdentity(db, user.Id, username, email);
+            // Compare and update atomically; concurrent profile or security changes cannot be overwritten.
+            var changed = await db.Users.Where(u => u.Id == user.Id && u.Active && u.Name == user.Name && u.Username == user.Username && u.Email == user.Email && u.SessionVersion == user.SessionVersion && u.PasswordHash == user.PasswordHash)
+                .ExecuteUpdateAsync(p => p.SetProperty(u => u.Name, name).SetProperty(u => u.Username, username).SetProperty(u => u.Email, email));
+            if (changed == 0) return Results.Conflict(new { error = "Tu cuenta cambió en otra sesión. Recarga los datos antes de guardar." });
+            // Profile changes never grant roles, reactivate accounts or invalidate device subscriptions.
+            user.Name = name; user.Username = username; user.Email = email;
+            feed.Publish(null, null, "access", "catalog");
+            return Results.Ok(Rules.PublicUser(user));
+        }).RequireAuthorization().RequireRateLimiting("profile");
         app.MapPost("/api/auth/password", async (PasswordInput input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal, HttpContext context) =>
         {
             var user = await db.Users.SingleAsync(x => x.Id == principal.UserId());
@@ -41,15 +63,14 @@ public static class AuthEndpoints
         var admin = app.MapGroup("/api/users").RequireAuthorization("Admin");
         admin.MapPost("/", async (UserInput input, AppDb db, IPasswordHasher<User> hash) =>
         {
-            var email = Rules.Text(input.Email, 200, "Correo").ToLowerInvariant();
-            if (!MailAddress.TryCreate(email, out var parsed) || parsed.Address != email) throw new InputError("Correo no válido.");
+            var email = Email(input.Email);
             Rules.Password(input.Password ?? "");
             if (!await db.Roles.AnyAsync(r => r.Name == input.Role)) throw new InputError("Rol no válido.");
             var user = new User { Email = email, Name = Rules.Text(input.Name, 80, "Nombre"), Role = input.Role };
             user.Username = input.Username == null
                 ? Rules.DefaultUsername(email, (await db.Users.Select(u => u.Username).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase))
                 : Rules.Username(input.Username);
-            if (await db.Users.AnyAsync(u => u.Username == user.Username)) throw new InputError("Ese nombre de usuario ya está en uso.");
+            await UniqueIdentity(db, user.Id, user.Username, user.Email);
             user.PasswordHash = hash.HashPassword(user, input.Password!); db.Users.Add(user); Access.AddPersonal(db, user); await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
         admin.MapPut("/{id:guid}", async (Guid id, UserUpdate input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal) =>
@@ -59,16 +80,30 @@ public static class AuthEndpoints
             if (!await db.Roles.AnyAsync(r => r.Name == input.Role)) throw new InputError("Rol no válido.");
             if (input.Username != null) {
                 var username = Rules.Username(input.Username);
-                if (await db.Users.AnyAsync(u => u.Id != id && u.Username == username)) throw new InputError("Ese nombre de usuario ya está en uso.");
                 user.Username = username;
             }
+            if (input.Email != null) user.Email = Email(input.Email);
+            await UniqueIdentity(db, id, user.Username, user.Email);
             user.Name = Rules.Text(input.Name, 80, "Nombre"); user.Active = input.Active; user.Role = input.Role; user.SessionVersion++;
             if (!string.IsNullOrWhiteSpace(input.Password)) { Rules.Password(input.Password); user.PasswordHash = hash.HashPassword(user, input.Password); }
             await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
     }
+    private static string Email(string value)
+    {
+        var email = Rules.Text(value, 200, "Correo").ToLowerInvariant();
+        if (!MailAddress.TryCreate(email, out var parsed) || parsed.Address != email) throw new InputError("Correo no válido.");
+        return email;
+    }
+    private static async Task UniqueIdentity(AppDb db, Guid id, string username, string email)
+    {
+        if (await db.Users.AnyAsync(u => u.Id != id && u.Username == username)) throw new InputError("Ese nombre de usuario ya está en uso.");
+        if (await db.Users.AnyAsync(u => u.Id != id && u.Email == email)) throw new InputError("Ese correo ya está en uso.");
+    }
     public record LoginInput(string? Email, string Password, string? Identifier = null);
+    public record ProfileInput(string Name, string Username, string Email, string? CurrentPassword = null, ProfileSnapshot? Original = null);
+    public record ProfileSnapshot(string Name, string Username, string Email);
     public record PasswordInput(string CurrentPassword, string NewPassword);
     public record UserInput(string Email, string Name, string Role, string? Password, string? Username = null);
-    public record UserUpdate(string Name, string Role, bool Active, string? Password, string? Username = null);
+    public record UserUpdate(string Name, string Role, bool Active, string? Password, string? Username = null, string? Email = null);
 }

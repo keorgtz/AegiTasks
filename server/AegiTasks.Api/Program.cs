@@ -52,6 +52,7 @@ builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
     o.AddPolicy("login", c => RateLimitPartition.GetFixedWindowLimiter(c.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
+    o.AddPolicy("profile", c => RateLimitPartition.GetFixedWindowLimiter(c.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? c.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
 });
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = 26 * 1024 * 1024);
 var app = builder.Build();
@@ -69,7 +70,7 @@ app.Use(async (c, next) =>
     catch (DbUpdateConcurrencyException) { c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "Otra persona actualizó este pendiente. Cierra y vuelve a abrirlo antes de guardar." }); }
     catch (DbUpdateException e) { app.Logger.LogWarning(e, "Database rejected a mutation"); c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "No se pudo guardar: el nombre ya existe o el elemento está en uso." }); }
 });
-app.UseRateLimiter(); app.UseAuthentication();
+app.UseAuthentication(); app.UseRateLimiter();
 app.Use(async (c, next) => {
     if (c.User.Identity?.IsAuthenticated == true) {
         var scope = c.RequestServices.GetRequiredService<SpaceScope>();

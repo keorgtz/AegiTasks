@@ -484,6 +484,7 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
     await page.screenshot({
       path: path.join(artifacts, `notifications-${width}-${theme}.png`),
+      animations: 'disabled',
       fullPage: true,
     });
     assert.ok(
@@ -502,6 +503,7 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     await dialog.getByText(detailed.title, { exact: true }).first().scrollIntoViewIfNeeded();
     await page.screenshot({
       path: path.join(artifacts, `notification-details-${width}-${theme}.png`),
+      animations: 'disabled',
     });
   }
   pass(
@@ -530,6 +532,108 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     .getByRole('button', { name: 'Cerrar', exact: true })
     .click();
   pass('Opening a notification opens the correct task detail');
+  const ownNotices = (await json(owner, 'GET', '/notifications')).items;
+  const foreignNotice = (await notices(target))[0];
+  assert.ok(ownNotices.length > 0 && foreignNotice);
+  await json(owner, 'DELETE', `/notifications/${foreignNotice.id}`, undefined, 404);
+  await json(outsider, 'DELETE', `/notifications/${ownNotices[0].id}`, undefined, 404);
+  await json(owner, 'DELETE', `/notifications/${ownNotices[0].id}`, undefined, 204);
+  await json(owner, 'DELETE', `/notifications/${ownNotices[0].id}`, undefined, 404);
+  assert.ok(
+    !(await json(owner, 'GET', '/notifications')).items.some((n) => n.id === ownNotices[0].id),
+  );
+  assert.ok((await notices(target)).some((n) => n.id === foreignNotice.id));
+  pass(
+    'Individual deletion is scoped to the authenticated owner, including Admin; foreign notices stay intact',
+  );
+  await page.reload();
+  await page
+    .locator('.header-actions')
+    .getByRole('button', { name: /^Notificaciones/ })
+    .click();
+  await dialog
+    .getByRole('button', { name: /^Eliminar notificación:/ })
+    .first()
+    .waitFor();
+  const beforeDelete = (await json(owner, 'GET', '/notifications')).total;
+  const deleted = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'DELETE' &&
+      /\/api\/notifications\/[\w-]+$/.test(r.url()) &&
+      r.status() === 204,
+  );
+  await dialog
+    .getByRole('button', { name: /^Eliminar notificación:/ })
+    .first()
+    .click();
+  await deleted;
+  assert.equal((await json(owner, 'GET', '/notifications')).total, beforeDelete - 1);
+  // Clearing the history always includes read notices and other pages, irrespective of the filter.
+  await dialog.getByRole('checkbox', { name: 'Solo sin leer' }).check();
+  await dialog.getByText('No tienes notificaciones sin leer.', { exact: true }).waitFor();
+  page.once('dialog', (prompt) => prompt.dismiss());
+  await dialog.getByRole('button', { name: 'Limpiar historial', exact: true }).click();
+  assert.equal((await json(owner, 'GET', '/notifications')).total, beforeDelete - 1);
+  const sibling = await page.context().newPage();
+  try {
+    await sibling.goto(`/?space=${shared.id}#inbox`);
+    await sibling
+      .locator('.header-actions')
+      .getByRole('button', { name: /^Notificaciones/ })
+      .click();
+    const siblingDialog = sibling.getByRole('dialog', { name: 'Notificaciones', exact: true });
+    await siblingDialog.locator('.notification-list li').first().waitFor();
+    page.once('dialog', (prompt) => prompt.accept());
+    const cleared = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'DELETE' &&
+        r.url().endsWith('/api/notifications') &&
+        r.status() === 204,
+    );
+    await dialog.getByRole('button', { name: 'Limpiar historial', exact: true }).click();
+    await cleared;
+    assert.equal((await json(owner, 'GET', '/notifications')).total, 0);
+    assert.ok((await notices(target)).length > 0);
+    await siblingDialog
+      .getByText('Aquí aparecerán los avisos de tus pendientes y Spaces.', { exact: true })
+      .waitFor();
+    await json(
+      other,
+      'POST',
+      `/tasks/${publicTask.id}/comments`,
+      { body: 'After clearing history' },
+      204,
+    );
+    await page
+      .locator('.header-actions')
+      .getByRole('button', { name: 'Notificaciones: 1 sin leer', exact: true })
+      .waitFor();
+    await dialog.locator('.notification-list li').waitFor();
+  } finally {
+    await sibling.close();
+  }
+  pass(
+    'Mobile deletes a notice and confirms clearing all history even under unread filter; cancellation, live tabs and future notices work',
+  );
+  await json(target, 'POST', '/notifications/devices', subscription);
+  const pushNotice = (await notices(target)).find((n) => !n.readAt);
+  assert.ok(pushNotice);
+  await json(target, 'DELETE', '/notifications', undefined, 204);
+  assert.equal((await json(target, 'GET', '/notifications/device')).enabled, true);
+  await json(
+    target,
+    'GET',
+    `/notifications/${pushNotice.id}/push?device=${device.id}`,
+    undefined,
+    404,
+  );
+  assert.equal((await json(target, 'GET', '/notifications')).total, 0);
+  await json(target, 'DELETE', '/notifications', undefined, 204);
+  assert.ok((await json(owner, 'GET', '/tasks')).items.some((t) => t.id === publicTask.id));
+  pass(
+    'Clearing is idempotent, removes push authorizations and preserves enabled devices, task data and other recipients',
+  );
+  await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto('/#inbox');
   await Promise.all([owner, ...users.map((u) => u.client)].map((c) => c.dispose()));
