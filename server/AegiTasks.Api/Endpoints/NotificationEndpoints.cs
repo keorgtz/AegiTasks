@@ -21,7 +21,7 @@ public static class NotificationEndpoints
             var currentPage = Math.Clamp(page ?? 1, 1, 100000);
             var items = await query.OrderByDescending(n => n.CreatedAt).ThenBy(n => n.Id).Skip((currentPage - 1) * 30).Take(30)
                 .Select(n => new { n.Id, n.SpaceId, n.WorkItemId, n.Kind, n.Message, n.CreatedAt, n.ReadAt,
-                    title = db.Tasks.IgnoreQueryFilters().Where(t => t.Id == n.WorkItemId).Select(t => t.Title).First(),
+                    title = n.TaskTitle != "" ? n.TaskTitle : db.Tasks.IgnoreQueryFilters().Where(t => t.Id == n.WorkItemId).Select(t => t.Title).First(),
                     spaceName = db.Spaces.Where(s => s.Id == n.SpaceId).Select(s => s.Name).First() }).ToListAsync();
             return Results.Ok(new { items, unreadCount, total = await query.CountAsync(), page = currentPage, pageSize = 30 });
         });
@@ -67,7 +67,8 @@ public static class NotificationEndpoints
             if (http.Request.Cookies[DeviceCookie] != device.ToString() || !await db.PushDevices.AnyAsync(d => d.Id == device && d.UserId == uid && d.SessionVersion == version)) return Results.NotFound();
             var n = await NotificationEvents.Visible(db, uid).SingleOrDefaultAsync(n => n.Id == id && n.ReadAt == null);
             if (n == null) return Results.NotFound();
-            return Results.Ok(new { title = "AegiTasks", body = n.Message, url = $"/?space={n.SpaceId}&task={n.WorkItemId}#inbox", tag = n.Id.ToString() });
+            var title = n.TaskTitle.Length > 0 ? n.TaskTitle : await db.Tasks.IgnoreQueryFilters().Where(t => t.Id == n.WorkItemId).Select(t => t.Title).SingleAsync();
+            return Results.Ok(new { title, body = n.Message, url = $"/?space={n.SpaceId}&task={n.WorkItemId}#inbox", tag = n.Id.ToString() });
         });
     }
     public static async Task RemoveDevice(HttpContext http, AppDb db, Guid userId)

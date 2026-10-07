@@ -29,8 +29,8 @@ vm.runInNewContext(source, {
     return {
       ok: status === 200,
       json: async () => ({
-        title: 'AegiTasks',
-        body: 'A new task',
+        title: 'Corregir cierre del POS',
+        body: 'María cambió el estado a «Resuelto».',
         tag: 'unique-notice',
         url: '/?space=abc&task=def#inbox',
       }),
@@ -50,6 +50,8 @@ await dispatch('push', { data: { json: () => data } });
 assert.equal(displays.length, 1);
 assert.equal(messages.length, 1);
 assert.equal(displays[0].options.tag, 'unique-notice');
+assert.equal(displays[0].title, 'Corregir cierre del POS');
+assert.equal(displays[0].options.body, 'María cambió el estado a «Resuelto».');
 console.log(
   'PASS Push worker rechecks authenticated access, displays the notice and updates the open app',
 );

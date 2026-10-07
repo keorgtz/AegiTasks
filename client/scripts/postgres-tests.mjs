@@ -204,6 +204,33 @@ try {
   console.log(
     'PASS PostgreSQL notification migration adds empty history/devices/outbox and preserves existing task data',
   );
+  sql(
+    'legacy',
+    `INSERT INTO "Notifications" ("Id", "UserId", "SpaceId", "WorkItemId", "Kind", "Message", "CreatedAt")
+    SELECT '99999999-1111-4111-8111-111111111111', t."CreatedById", p."SpaceId", t."Id", 'created', 'Legacy notice', CURRENT_TIMESTAMP
+    FROM "Tasks" t JOIN "Projects" p ON p."Id" = t."ProjectId";`,
+  );
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'TaskNotifications',
+    'NotificationDetails',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-notification-details.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-notification-details.sql'), 'utf8'));
+  assert.equal(
+    sql('legacy', 'SELECT "TaskTitle" || \':\' || "Message" FROM "Notifications";').trim(),
+    'Existing bug:Legacy notice',
+  );
+  sql('legacy', `UPDATE "Notifications" SET "Message" = repeat('x', 600);`);
+  assert.equal(sql('legacy', 'SELECT length("Message") FROM "Notifications";').trim(), '600');
+  console.log(
+    'PASS PostgreSQL detailed-notice migration preserves existing history, backfills titles and accepts complete change summaries',
+  );
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "Tasks" WHERE "ParentTaskId" IS NOT NULL;').trim(),
     '0',
@@ -295,6 +322,7 @@ try {
         retainedTaskEstimates: true,
         hierarchyMigration: true,
         notificationsMigration: true,
+        notificationDetailsMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

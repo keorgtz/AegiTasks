@@ -42,7 +42,8 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
         b.Entity<TaskNotification>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<TaskNotification>().HasOne<WorkItem>().WithMany().HasForeignKey(x => x.WorkItemId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<TaskNotification>().Property(x => x.Kind).HasMaxLength(20);
-        b.Entity<TaskNotification>().Property(x => x.Message).HasMaxLength(200);
+        b.Entity<TaskNotification>().Property(x => x.Message).HasMaxLength(2000);
+        b.Entity<TaskNotification>().Property(x => x.TaskTitle).HasMaxLength(200);
         b.Entity<TaskNotification>().HasIndex(x => new { x.UserId, x.CreatedAt });
         b.Entity<PushDevice>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<PushDevice>().Property(x => x.Endpoint).HasMaxLength(2048);

@@ -103,6 +103,13 @@ using (var scope = provider.CreateScope()) {
 }
 using (var scope = provider.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    var retained = new TaskNotification { UserId = user.Id, SpaceId = space.Id, WorkItemId = task.Id, Message = "Legacy event" };
+    db.Notifications.Add(retained); await db.SaveChangesAsync();
+    await db.Database.ExecuteSqlRawAsync("ALTER TABLE Notifications DROP COLUMN TaskTitle;");
+    await SqliteNotificationUpgrade.Apply(db); await SqliteNotificationUpgrade.Apply(db);
+    db.ChangeTracker.Clear();
+    var upgraded = await db.Notifications.SingleAsync(n => n.Id == retained.Id);
+    Assert(upgraded.TaskTitle == task.Title && upgraded.Message == "Legacy event", "SQLite detailed-notice upgrade preserves history and backfills titles idempotently");
     await db.Database.ExecuteSqlRawAsync("DROP TABLE PushDeliveries; DROP TABLE Notifications; DROP TABLE PushDevices;");
     await SqliteNotificationUpgrade.Apply(db); await SqliteNotificationUpgrade.Apply(db);
     Assert(await db.Tasks.IgnoreQueryFilters().AnyAsync(t => t.Id == task.Id) && await db.Notifications.CountAsync() == 0, "SQLite local upgrade is idempotent and preserves existing tasks");

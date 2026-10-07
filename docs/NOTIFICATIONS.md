@@ -15,6 +15,18 @@ El propietario también es integrante. Se exige permiso para la página de pendi
 
 Los cambios rechazados no generan avisos. Al eliminar un pendiente se eliminan sus avisos y envíos asociados. No se crea un aviso adicional de eliminación. Al consultar o enviar se vuelve a verificar cuenta activa, permisos y membresía: nadie puede consultar el historial de otro usuario o de un Space al que ya no pertenece.
 
+## Contenido del aviso
+
+El historial y la notificación del sistema muestran el título del pendiente. Los avisos nuevos conservan el título que tenía al producirse el evento; renombrarlo después no reescribe los avisos anteriores.
+
+- Creación: «María creó un pendiente asignado a ti» o «sin responsable».
+- Asignación: «María te asignó el pendiente»; al quitarla, «dejó el pendiente sin responsable».
+- Estado: «María cambió el estado a «Resuelto y revisado»», usando el nombre personalizado del estado.
+- Propiedades: «María actualizó: descripción, prioridad, fecha límite», enumerando solo los campos modificados. Incluye título, proyecto, carpeta, módulo, ciclo, padre, estimación y etiquetas cuando corresponda.
+- Comentarios, evidencias, archivo y restauración tienen acciones diferenciadas. El contenido completo del comentario, descripción o archivo se consulta al abrir el pendiente.
+
+Una edición que modifica varias propiedades produce un solo aviso con todas sus acciones. Guardar sin cambios, incluido volver a seleccionar el estado actual, no genera un aviso por cambiar únicamente la versión o fecha interna de actualización.
+
 ## Activación en cada dispositivo
 
 1. Abrir **Ajustes → Notificaciones** y seleccionar **Activar en este dispositivo**. La campanita conserva el historial y un enlace a esta configuración.
@@ -35,13 +47,15 @@ El Compose existente ya conserva `/app/storage/keys` y `/app/storage/uploads` en
 
 El servidor aplica la migración `TaskNotifications` automáticamente en PostgreSQL. SQLite local usa una actualización idempotente basada en el modelo y conserva los pendientes existentes. El dominio público requiere HTTPS. El servidor debe poder conectarse por HTTPS saliente a los proveedores push compatibles: Google/Chromium (`fcm.googleapis.com`), Mozilla (`updates.push.services.mozilla.com`), Apple (`*.push.apple.com`) y Windows (`*.notify.windows.com`). Las URLs de suscripción se validan contra estos proveedores y el cliente HTTP no sigue redirecciones.
 
+La migración `NotificationDetails` conserva el historial existente, agrega el título del evento y amplía el resumen de cambios. Para avisos anteriores se recupera el título actual del pendiente: los títulos originales y campos específicos de aquellas ediciones no se almacenaban y no pueden reconstruirse. SQLite local aplica el mismo agregado de forma idempotente. Los despliegues posteriores conservan los títulos ya guardados.
+
 El contacto VAPID usa `mailto:` con `SEED_ADMIN_EMAIL`; opcionalmente se puede configurar `Notifications__Subject` con un contacto válido. `Notifications__DeliveryEnabled=false` desactiva el procesamiento de envíos para pruebas locales; no se configura en el Compose de producción y no desactiva el historial.
 
 ## Persistencia y privacidad
 
 La mutación, el aviso y sus entregas se guardan en la misma transacción. Una cola persistente procesa los envíos cada cinco segundos, con hasta ocho intentos y espera progresiva; las respuestas 404/410 eliminan la suscripción vencida. Avisos leídos, sesiones revocadas, acceso retirado y avisos de más de un día no se envían. Las entregas terminadas se limpian después de siete días; el historial permanece mientras exista el pendiente.
 
-El payload push cifrado contiene únicamente identificadores de aviso/dispositivo. El service worker consulta la API con la sesión del navegador antes de mostrar el aviso. La notificación del sistema contiene el nombre del autor y el tipo de evento; títulos, descripciones, comentarios, archivos y notas permanecen dentro de la app. Si la API no está disponible o la sesión expiró, se omite el aviso del sistema y se conserva el historial autenticado. No se almacenan datos privados de avisos en el cache offline.
+El payload push cifrado contiene únicamente identificadores de aviso/dispositivo. El service worker consulta la API con la sesión del navegador antes de mostrar el aviso. La notificación del sistema contiene el título del pendiente, el nombre del autor y la acción o propiedades modificadas, incluido el nuevo estado. Descripciones, comentarios completos, archivos y notas permanecen dentro de la app. Si la API no está disponible o la sesión expiró, se omite el aviso del sistema y se conserva el historial autenticado. No se almacenan datos privados de avisos en el cache offline.
 
 La cola tiene un único procesador, coherente con la instancia API del Compose actual. Escalar a varias instancias requiere agregar reclamación de entregas entre procesadores y un bus compartido para los eventos en tiempo real. Tras un corte entre aceptación del proveedor y confirmación en la base, un envío podría repetirse; el identificador de aviso se usa como `tag` para sustituir su notificación existente. La entrega push depende del navegador, conexión y restricciones de batería/No molestar; no es una alarma con horario garantizado.
 

@@ -1,5 +1,19 @@
 # Evidencia de validación
 
+## Avisos con título y cambios precisos — 7 de octubre de 2026
+
+Historial y notificaciones del sistema muestran el título del pendiente. Los avisos nuevos guardan el título del evento y distinguen creación, asignación/reasignación, eliminación del responsable, cambio al estado personalizado, propiedades editadas, comentario, evidencia, archivo y restauración. La comparación incluye relaciones y etiquetas; cambiar únicamente versión/fecha interna no produce avisos. No se incluyen textos completos de comentarios, descripciones ni archivos.
+
+Pasaron **169 comprobaciones completas en SQLite y 169 en PostgreSQL 18.4**. Verifican títulos conservados después de renombrar, resúmenes de más de 200 caracteres, cambios de estado con nombre real, múltiples propiedades en un aviso, etiquetas sin otros cambios, guardados sin cambios, agrupaciones masivas, padre, estimación, traslado de proyecto, responsable y respuesta autenticada para push. También pasó una ejecución enfocada previa de 53 comprobaciones sobre SQLite.
+
+La migración PostgreSQL `NotificationDetails` se probó sobre historial existente: conserva identificadores/mensajes, recupera el título actual y permite resúmenes largos. La actualización SQLite pasó dos veces sobre una tabla anterior sin `TaskTitle`, conservando historial y pendientes. Los títulos y detalles de eventos anteriores que no se almacenaban no pueden reconstruirse; su resumen original se conserva.
+
+Pasaron **18 comprobaciones .NET** de entrega/cola, rollback, actualización SQLite y transporte cifrado sobre HTTP simulado, y **4 comprobaciones del service worker**, incluyendo mostrar el título y acción devueltos por la API. Build de API Debug/Release, comprobación del modelo EF, TypeScript, lint, formato de scripts y diff sin errores. No se cambió el código del cliente ni del worker de producción, por lo que no se repitió la suite PWA de la iteración anterior.
+
+Se revisaron capturas del historial en escritorio claro y móvil oscuro de 390/320 px, con títulos largos y resúmenes de propiedades. Evidencia local en `artifacts/`: `notification-details-sqlite-results.json`, `notification-details-sqlite-full.log`, `notification-details-postgres-results.json`, `notification-details-postgres-full.log`, `postgres-migration-results.json`, `notification-details-delivery.log`, `notification-details-focused-results.json` y capturas `notification-details-*.png`.
+
+Las pruebas utilizan API/bases reales y cliente de producción; permisos y PushManager se simulan en Chromium. **No se probó recepción de proveedores push reales ni en dispositivos físicos, y no se desplegó en producción.**
+
 ## Configuración e invitación del dispositivo — 7 de octubre de 2026
 
 La activación/desactivación se trasladó a **Ajustes → Notificaciones**; la campanita conserva el historial y un enlace a esa página. Los ajustes separan opciones personales, organización del equipo y administración, con descripción y alcance de cada sección, navegación lateral en escritorio y selector compacto en móvil. Mi cuenta distingue identidad y seguridad; organización distingue proyecto, carpetas, estados y etiquetas compartidas. Se conservaron permisos y rutas anteriores.

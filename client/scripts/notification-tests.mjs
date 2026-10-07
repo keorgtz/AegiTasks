@@ -52,6 +52,9 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     (await json(client, 'GET', '/notifications')).items.filter((n) => n.spaceId === shared.id);
   let task = await json(owner, 'POST', '/tasks', input('Assigned notification'));
   assert.equal((await notices(target)).length, 1);
+  const createdNotice = (await notices(target))[0];
+  assert.equal(createdNotice.title, task.title);
+  assert.match(createdNotice.message, /creó.*asignado a ti/);
   assert.equal((await notices(other)).length, 0);
   assert.equal((await notices(owner)).length, 0);
   assert.equal((await notices(outsider)).length, 0);
@@ -77,6 +80,15 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     },
   });
   assert.equal(upload.status(), 200, await upload.text());
+  const initialNotices = await notices(target);
+  assert.equal(
+    initialNotices.find((n) => n.id === createdNotice.id).title,
+    'Assigned notification',
+  );
+  assert.match(initialNotices.find((n) => n.kind === 'updated').message, /actualizó: título/);
+  assert.match(initialNotices.find((n) => n.kind === 'comment').message, /comentó el pendiente/);
+  assert.match(initialNotices.find((n) => n.kind === 'evidence').message, /agregó evidencia/);
+  assert.ok(!initialNotices.some((n) => n.message.includes('Private comment')));
   assert.deepEqual((await notices(target)).map((n) => n.kind).sort(), [
     'comment',
     'created',
@@ -129,6 +141,10 @@ export async function testNotifications({ page, request, admin, json, pass, arti
   });
   assert.equal((await notices(target)).filter((n) => n.workItemId === task.id).length, 4);
   assert.equal((await notices(other)).filter((n) => n.workItemId === task.id).length, 1);
+  assert.match(
+    (await notices(other)).find((n) => n.workItemId === task.id).message,
+    /te asignó el pendiente.*título/,
+  );
   pass('Reassignment routes the update to the new responsible user');
   const one = (await notices(target)).find((n) => n.workItemId === task.id);
   await json(other, 'PUT', `/notifications/${one.id}/read`, undefined, 404);
@@ -168,12 +184,29 @@ export async function testNotifications({ page, request, admin, json, pass, arti
   const config = await json(target, 'GET', '/notifications/push-config');
   assert.equal(Buffer.from(config.publicKey, 'base64url').length, 65);
   assert.deepEqual(Object.keys(config), ['publicKey']);
-  const pending = await json(owner, 'POST', '/tasks', input('Pending push test'));
+  let pending = await json(owner, 'POST', '/tasks', input('Pending push test'));
   const notice = (await notices(target)).find((n) => n.workItemId === pending.id);
   const push = await json(target, 'GET', `/notifications/${notice.id}/push?device=${device.id}`);
-  assert.equal(push.title, 'AegiTasks');
+  assert.equal(push.title, pending.title);
+  assert.equal(push.body, notice.message);
   assert.ok(push.url.includes(`space=${shared.id}&task=${pending.id}`));
   assert.ok(!JSON.stringify(push).includes('Keep private'));
+  const completedStatus = workspace.statuses.find((s) => s.projectId === project.id && s.isDone);
+  pending = await json(owner, 'PUT', `/tasks/${pending.id}/status`, {
+    statusId: completedStatus.id,
+    version: pending.version,
+  });
+  const statusNotice = (await notices(target)).find(
+    (n) => n.workItemId === pending.id && n.kind === 'updated',
+  );
+  const statusPush = await json(
+    target,
+    'GET',
+    `/notifications/${statusNotice.id}/push?device=${device.id}`,
+  );
+  assert.equal(statusPush.title, pending.title);
+  assert.equal(statusPush.body, statusNotice.message);
+  assert.ok(statusPush.body.includes(`cambió el estado a «${completedStatus.name}»`));
   await json(other, 'GET', `/notifications/${notice.id}/push?device=${device.id}`, undefined, 404);
   await json(target, 'PUT', `/notifications/${notice.id}/read`, undefined, 204);
   await json(target, 'GET', `/notifications/${notice.id}/push?device=${device.id}`, undefined, 404);
@@ -219,6 +252,154 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     false,
   );
   pass('Deleting a task removes its notices without breaking existing deletion behavior');
+
+  let detailed = await json(owner, 'POST', '/tasks', input('Detailed changes', null));
+  const taskNotices = async () =>
+    (await notices(owner)).filter((n) => n.workItemId === detailed.id);
+  const firstDetails = (await taskNotices())[0];
+  const tag = await json(owner, 'POST', '/tags', { name: 'Notice tag', color: 'purple' });
+  const folder = await json(owner, 'POST', '/folders', {
+    name: 'Notice folder',
+    projectId: project.id,
+  });
+  const done = await json(owner, 'POST', '/statuses', {
+    name: 'Resuelto y revisado ' + 'X'.repeat(60),
+    projectId: project.id,
+    color: 'green',
+    isDone: true,
+  });
+  const newInput = {
+    ...input('Título detallado ' + 'X'.repeat(175), null),
+    description: 'Description content stays in the app',
+    priority: 4,
+    dueDate: '2026-12-31',
+    estimateMinutes: 90,
+    folderId: folder.id,
+    statusId: done.id,
+    tagIds: [tag.id],
+  };
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}`, {
+    ...newInput,
+    version: detailed.version,
+  });
+  const changedNotice = (await taskNotices()).find((n) => n.kind === 'updated');
+  for (const label of [
+    'título',
+    'descripción',
+    'prioridad',
+    'fecha límite',
+    'estimación',
+    'carpeta',
+    'etiquetas',
+  ])
+    assert.ok(changedNotice.message.includes(label), label);
+  assert.ok(changedNotice.message.includes(`cambió el estado a «${done.name}»`));
+  assert.ok(changedNotice.message.length > 200);
+  assert.equal(changedNotice.title, detailed.title);
+  assert.equal(
+    (await taskNotices()).find((n) => n.id === firstDetails.id).title,
+    'Detailed changes',
+  );
+  assert.ok(!changedNotice.message.includes('Description content'));
+  pass(
+    'Notifications retain event titles and name every edited property with the actual destination status, even beyond 200 characters',
+  );
+  const countBeforeNoop = (await taskNotices()).length;
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}`, {
+    ...newInput,
+    version: detailed.version,
+  });
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}/status`, {
+    statusId: done.id,
+    version: detailed.version,
+  });
+  assert.equal((await taskNotices()).length, countBeforeNoop);
+  const tagChangeInput = { ...newInput, tagIds: [] };
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}`, {
+    ...tagChangeInput,
+    version: detailed.version,
+  });
+  assert.equal((await taskNotices()).length, countBeforeNoop + 1);
+  assert.match((await taskNotices())[0].message, /actualizó: etiquetas\.$/);
+  pass(
+    'Tag-only changes notify precisely; unchanged saves and unchanged status actions do not generate generic notices',
+  );
+  detailed = await json(owner, 'POST', `/tasks/${detailed.id}/archive`, {
+    archived: true,
+    version: detailed.version,
+  });
+  assert.match((await taskNotices())[0].message, /archivó el pendiente/);
+  detailed = await json(owner, 'POST', `/tasks/${detailed.id}/archive`, {
+    archived: false,
+    version: detailed.version,
+  });
+  assert.match((await taskNotices())[0].message, /restauró el pendiente/);
+  pass('Archive and restore produce distinct actionable notifications');
+  const parentTask = await json(owner, 'POST', '/tasks', input('Notification parent'));
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}/parent`, {
+    parentTaskId: parentTask.id,
+    version: detailed.version,
+  });
+  assert.match((await taskNotices())[0].message, /pendiente padre/);
+  const module = await json(owner, 'POST', '/modules', {
+    projectId: project.id,
+    name: 'Notice module',
+  });
+  const cycle = await json(owner, 'POST', '/cycles', {
+    projectId: project.id,
+    name: 'Notice cycle',
+  });
+  for (const [group, label, item] of [
+    ['modules', 'módulo', module],
+    ['cycles', 'ciclo', cycle],
+  ]) {
+    await json(
+      owner,
+      'POST',
+      `/${group}/${item.id}/tasks`,
+      { tasks: [{ id: detailed.id, version: detailed.version }] },
+      204,
+    );
+    detailed = (await json(owner, 'GET', `/tasks/${detailed.id}`)).item;
+    assert.match((await taskNotices())[0].message, new RegExp(label));
+  }
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}`, {
+    ...tagChangeInput,
+    version: detailed.version,
+    planning: {
+      moduleId: module.id,
+      cycleId: cycle.id,
+      estimateKind: 'fibonacci',
+      estimatePoints: 8,
+    },
+  });
+  assert.match((await taskNotices())[0].message, /actualizó: estimación\.$/);
+  const nextProject = await json(owner, 'POST', '/projects', {
+    name: 'Notice move destination',
+    color: 'blue',
+  });
+  const nextWorkspace = await json(owner, 'GET', '/workspace');
+  detailed = await json(owner, 'PUT', `/tasks/${detailed.id}`, {
+    ...tagChangeInput,
+    projectId: nextProject.id,
+    folderId: null,
+    statusId: nextWorkspace.statuses.find((s) => s.projectId === nextProject.id).id,
+    version: detailed.version,
+  });
+  for (const label of ['proyecto', 'carpeta', 'módulo', 'ciclo', 'pendiente padre'])
+    assert.ok((await taskNotices())[0].message.includes(label), label);
+  task = await json(owner, 'PUT', `/tasks/${task.id}`, {
+    ...input('Unassigned after reassignment', null),
+    version: task.version,
+  });
+  for (const client of [owner, target, other])
+    assert.match(
+      (await notices(client)).find((n) => n.workItemId === task.id).message,
+      /dejó el pendiente sin responsable/,
+    );
+  pass(
+    'Parent links, bulk module/cycle assignment, point estimation, project moves and unassignment describe their actual changes',
+  );
 
   await page.goto(`/?space=${shared.id}#inbox`);
   await page
@@ -303,6 +484,10 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     );
     const box = await dialog.boundingBox();
     assert.ok(box.width <= width && box.height <= height);
+    await dialog.getByText(detailed.title, { exact: true }).first().scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: path.join(artifacts, `notification-details-${width}-${theme}.png`),
+    });
   }
   pass('Notification center fits desktop/mobile at 1440, 390 and 320 pixels in both themes');
   await dialog

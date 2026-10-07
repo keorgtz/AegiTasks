@@ -6,7 +6,7 @@
 - `aegitasks-storage`: archivos de evidencia, claves Data Protection para las sesiones y claves VAPID protegidas para push. Conservar el volumen entre despliegues evita tener que registrar de nuevo los dispositivos.
 - `.env`: configuración y claves de bootstrap. Guarda una copia privada fuera de Git.
 
-**Ajustes → Notificaciones** permite activar o desactivar push en cada dispositivo. La primera apertura de la app instalada presenta una invitación; la campanita mantiene el historial. El servidor genera y conserva las claves automáticamente, aplica la migración `TaskNotifications` y procesa una cola persistente. El dominio debe usar HTTPS y la API necesita HTTPS saliente a los proveedores push. Consulta [notificaciones](NOTIFICATIONS.md) para destinatarios, revocación, privacidad y pruebas después del despliegue.
+**Ajustes → Notificaciones** permite activar o desactivar push en cada dispositivo. La primera apertura de la app instalada presenta una invitación; la campanita mantiene el historial. Los avisos incluyen el título del pendiente y la acción o propiedades modificadas. El servidor genera y conserva las claves automáticamente, aplica las migraciones `TaskNotifications` y `NotificationDetails` y procesa una cola persistente. El dominio debe usar HTTPS y la API necesita HTTPS saliente a los proveedores push. Consulta [notificaciones](NOTIFICATIONS.md) para destinatarios, revocación, privacidad y pruebas después del despliegue.
 
 `docker compose down` conserva los volúmenes. **No uses `down -v` para actualizar:** elimina los volúmenes del stack.
 

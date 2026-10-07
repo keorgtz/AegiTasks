@@ -7,6 +7,7 @@ public class TaskNotification
     public Guid SpaceId { get; set; }
     public Guid WorkItemId { get; set; }
     public string Kind { get; set; } = "updated";
+    public string TaskTitle { get; set; } = "";
     public string Message { get; set; } = "";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReadAt { get; set; }
