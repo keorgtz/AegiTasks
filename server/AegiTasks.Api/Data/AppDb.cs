@@ -29,6 +29,10 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
     public DbSet<TaskNotification> Notifications => Set<TaskNotification>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<PushDelivery> PushDeliveries => Set<PushDelivery>();
+    public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
+    public DbSet<ChatMember> ChatMembers => Set<ChatMember>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ChatFile> ChatFiles => Set<ChatFile>();
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -38,6 +42,24 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<ChatRoom>().Property(x => x.Name).HasMaxLength(80);
+        b.Entity<ChatRoom>().Property(x => x.DirectKey).HasMaxLength(65);
+        b.Entity<ChatRoom>().HasIndex(x => x.DirectKey).IsUnique();
+        b.Entity<ChatRoom>().Property(x => x.Version).IsConcurrencyToken();
+        b.Entity<ChatRoom>().HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ChatMember>().HasKey(x => new { x.ChatRoomId, x.UserId });
+        b.Entity<ChatMember>().HasOne<ChatRoom>().WithMany().HasForeignKey(x => x.ChatRoomId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatMember>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ChatMessage>().Property(x => x.Body).HasMaxLength(4000);
+        b.Entity<ChatMessage>().HasOne<ChatRoom>().WithMany().HasForeignKey(x => x.ChatRoomId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatMessage>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ChatMessage>().HasIndex(x => new { x.ChatRoomId, x.UserId, x.ClientId }).IsUnique();
+        b.Entity<ChatMessage>().HasIndex(x => new { x.ChatRoomId, x.CreatedAt, x.Id });
+        b.Entity<ChatMessage>().HasIndex(x => new { x.ChatRoomId, x.Sequence }).IsUnique();
+        // Task references are resolved with current access; deletion must not delete the conversation.
+        b.Entity<ChatFile>().Property(x => x.Name).HasMaxLength(200);
+        b.Entity<ChatFile>().Property(x => x.ContentType).HasMaxLength(100);
+        b.Entity<ChatFile>().HasOne<ChatMessage>().WithMany().HasForeignKey(x => x.ChatMessageId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<TaskNotification>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<TaskNotification>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<TaskNotification>().HasOne<WorkItem>().WithMany().HasForeignKey(x => x.WorkItemId).OnDelete(DeleteBehavior.Cascade);

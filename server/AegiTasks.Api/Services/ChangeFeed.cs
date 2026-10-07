@@ -41,6 +41,7 @@ public sealed class ChangeFeed
                 var db = scope.ServiceProvider.GetRequiredService<AppDb>();
                 var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct);
                 if (user == null || !user.Active || http.User.FindFirstValue("sv") != user.SessionVersion.ToString()) return 401;
+                if (space == Guid.Empty) return await Access.Can(db, http.User, "chat") ? 200 : 403;
                 return await Access.SpacesFor(db, userId).AnyAsync(s => s.Id == space, ct) ? 200 : 403;
             }
             var access = await Validate();

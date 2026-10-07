@@ -2,6 +2,7 @@
 
 ## Datos persistentes
 
+- La migración `Chat` se aplica al actualizar PostgreSQL. Los adjuntos del chat quedan en `uploads/chat`, dentro del volumen de almacenamiento existente, y deben conservarse junto con la base de datos. El Nginx de esta versión admite formularios de 26 MB para videos de hasta 25 MB. Consulta [Chat](CHAT.md) para límites y permisos.
 - `aegitasks-pgdata`: PostgreSQL, usuarios, roles, permisos, espacios, membresías, notas, sesiones Focus, proyectos, pendientes e historial.
 - `aegitasks-storage`: archivos de evidencia, claves Data Protection para las sesiones y claves VAPID protegidas para push. Conservar el volumen entre despliegues evita tener que registrar de nuevo los dispositivos.
 - `.env`: configuración y claves de bootstrap. Guarda una copia privada fuera de Git.

@@ -1,5 +1,19 @@
 # Evidencia de validación
 
+## Chat global, grupos y archivos — 7 de octubre de 2026
+
+Se agregaron conversaciones privadas únicas por pareja y grupos de hasta 50 integrantes, independientes del Space, con texto, hasta cinco adjuntos por mensaje y accesos directos a pendientes. Los usuarios activos pueden iniciar conversaciones sin pertenecer al mismo workspace. Mensajes, historial y archivos exigen participación y permiso de Chat; incluso Admin no puede leer chats ajenos. El creador administra el grupo con protección de versión. Referencias a pendientes exigen acceso compartido al enviar y se vuelven a autorizar al leer.
+
+Pasaron **180 comprobaciones completas en SQLite y 180 en PostgreSQL 18.4**. Incluyen las funciones anteriores y 11 grupos nuevos de chat: independencia de headers/Spaces, privacidad, conversaciones únicas, reintentos idempotentes, mensajes concurrentes, paginación por secuencia, lectura monotónica, grupos, retiro de miembros, archivos autenticados/rangos, contenido falso o demasiado grande, referencias y revocación, interacción real, borradores entre Spaces y roles. Una ejecución enfocada previa pasó 49 comprobaciones. Los conflictos de grupo desde otra sesión conservan la edición local y rechazan sobrescribir la versión nueva.
+
+Se generó y reprodujo un **WebM real** desde canvas/MediaRecorder, se subió al servidor y se verificó avance del reproductor autenticado. Se probaron previews PNG, descarga PDF y rangos de video. Los mensajes en vivo llegan desde otro usuario sin polling. Se revisaron capturas de escritorio claro/oscuro, móviles de 390/320 px y horizontal de 844 × 450 px, manteniendo visibles los controles de envío y navegación móvil.
+
+La migración PostgreSQL **Chat** se ejecutó sobre datos anteriores y una base nueva: agrega sus tablas y el permiso por defecto, conservando pendientes, usuarios y avisos existentes. La actualización SQLite pasó dos veces sobre una base con datos anteriores, conservando pendientes y habilitando Chat para los roles existentes. Las **19 comprobaciones .NET** de entrega/cola/actualizaciones locales y las **4 del worker push** pasaron. Las **12 comprobaciones PWA** se repitieron sobre el código final con dos builds reales y pasaron.
+
+Build de cliente con TypeScript, lint/formato, API Debug/Release y modelo EF sin cambios pendientes aprobados. El cliente usa el mismo volumen de archivos y despliegue, con límite Nginx/formulario de 26 MB para videos de hasta 25 MB; los adjuntos de pendientes siguen limitados a 10 MB. La guía está en [CHAT.md](CHAT.md).
+
+Evidencia local en `artifacts/`: `chat-sqlite-results.json`, `chat-sqlite-full.log`, `chat-postgres-results.json`, `chat-postgres-full.log`, `postgres-migration-results.json`, `chat-focused-final-results.json`, `chat-local-upgrade.log`, `chat-pwa-final.log`, `chat-build-final.log`, `chat-release.log`, `chat-worker.log` y capturas `chat-*.png`. **No se validaron teléfonos físicos, Safari/iOS, Docker ni proxies del servidor real, y no se desplegó en producción.**
+
 ## Centrado del diálogo de notificaciones en móvil — 7 de octubre de 2026
 
 Se reprodujo el desplazamiento horizontal: en un viewport de 390 px el diálogo tenía 366 px de ancho y comenzaba en `x=0`, dejando 24 px libres solo a la derecha. Su ancho específico se combinaba con `margin: auto 0 0` de los modales móviles. Se agregó `margin-inline: auto` exclusivamente al diálogo de notificaciones; ahora tiene 12 px a cada lado y conserva su comportamiento de panel inferior. Los demás diálogos no cambian.

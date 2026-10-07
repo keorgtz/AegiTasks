@@ -231,6 +231,31 @@ try {
   console.log(
     'PASS PostgreSQL detailed-notice migration preserves existing history, backfills titles and accepts complete change summaries',
   );
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'NotificationDetails',
+    'Chat',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-chat.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-chat.sql'), 'utf8'));
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "ChatRooms";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "ChatMessages";').trim(), '0');
+  assert.equal(
+    sql(
+      'legacy',
+      'SELECT count(*) FROM "PagePermissions" WHERE "Page"=\'chat\' AND "Allowed";',
+    ).trim(),
+    '2',
+  );
+  assert.equal(sql('legacy', 'SELECT length("Message") FROM "Notifications";').trim(), '600');
+  console.log(
+    'PASS PostgreSQL Chat migration adds independent tables and default chat access without altering existing tasks or notification history',
+  );
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "Tasks" WHERE "ParentTaskId" IS NOT NULL;').trim(),
     '0',
@@ -302,7 +327,7 @@ try {
   assert.equal(sql('legacy', 'SELECT count(*) FROM "WorkItemTags";').trim(), '1');
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "PagePermissions" WHERE "Allowed";').trim(),
-    '12',
+    '14',
   );
   console.log(
     'PASS PostgreSQL upgrade preserves the legacy team, projects and tags and creates personal spaces',
@@ -323,6 +348,7 @@ try {
         hierarchyMigration: true,
         notificationsMigration: true,
         notificationDetailsMigration: true,
+        chatMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

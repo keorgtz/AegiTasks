@@ -32,6 +32,7 @@ import {
   Timer,
   MoreHorizontal,
   SlidersHorizontal,
+  MessageCircle,
 } from 'lucide-react';
 import { api, ApiError, errorMessage, setActiveSpace } from './api';
 import { useChanges } from './changes';
@@ -57,6 +58,8 @@ import {
 } from './SettingsNavigation';
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 import { NotificationCenter } from './Notifications';
+import { ChatProvider, ChatButton } from './ChatContext';
+const ChatPage = lazy(() => import('./Chat'));
 import { DeviceNotificationsProvider, DeviceNotificationSettings } from './DeviceNotifications';
 import './styles/settings.css';
 const NotesPage = lazy(() => import('./Notes').then((m) => ({ default: m.NotesPage })));
@@ -141,20 +144,22 @@ export default function App() {
     <DeviceNotificationsProvider key={user.id} userId={user.id}>
       <SpaceGate user={user}>
         {(session, active, switchSpace, reloadSpaces) => (
-          <TaskStatusProvider key={active.id}>
-            <WorkspaceApp
-              key={active.id}
-              spaceSession={session}
-              space={active}
-              switchSpace={switchSpace}
-              reloadSpaces={reloadSpaces}
-              user={user}
-              logout={() => void logout()}
-              theme={theme}
-              toggleTheme={toggleTheme}
-              globalError={authError}
-            />
-          </TaskStatusProvider>
+          <ChatProvider userId={user.id} enabled={session.permissions.includes('chat')}>
+            <TaskStatusProvider key={active.id}>
+              <WorkspaceApp
+                key={active.id}
+                spaceSession={session}
+                space={active}
+                switchSpace={switchSpace}
+                reloadSpaces={reloadSpaces}
+                user={user}
+                logout={() => void logout()}
+                theme={theme}
+                toggleTheme={toggleTheme}
+                globalError={authError}
+              />
+            </TaskStatusProvider>
+          </ChatProvider>
         )}
       </SpaceGate>
     </DeviceNotificationsProvider>
@@ -661,6 +666,7 @@ function WorkspaceApp({
     { id: 'inbox', name: 'Bandeja', icon: Inbox },
     { id: 'notes', name: 'Notas', icon: FileText },
     { id: 'focus', name: 'Focus', icon: Timer },
+    { id: 'chat', name: 'Chat', icon: MessageCircle },
   ];
   const navigation = (mobile = false) => (
     <>
@@ -668,12 +674,12 @@ function WorkspaceApp({
         .filter(
           (n) =>
             permissions.includes(routePage(n.id)) &&
-            (!mobile || ['inbox', 'notes', 'focus'].includes(n.id)),
+            (!mobile || ['inbox', 'notes', 'focus', 'chat'].includes(n.id)),
         )
         .map((n) => (
           <button
             key={n.id}
-            className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) ? 'active' : ''}`}
+            className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) || (n.id === 'chat' && route.startsWith('chat/')) ? 'active' : ''}`}
             onClick={() => navigate(n.id)}
           >
             <n.icon size={21} />
@@ -745,7 +751,15 @@ function WorkspaceApp({
           <div className="breadcrumb">
             <ChevronRight size={15} />
             <strong>
-              {nav.find((n) => n.id === (route.startsWith('notes/') ? 'notes' : route))?.name ||
+              {nav.find(
+                (n) =>
+                  n.id ===
+                  (route.startsWith('notes/')
+                    ? 'notes'
+                    : route.startsWith('chat/')
+                      ? 'chat'
+                      : route),
+              )?.name ||
                 (route === 'account'
                   ? 'Mi cuenta'
                   : route === 'projects'
@@ -755,6 +769,7 @@ function WorkspaceApp({
           </div>
         </div>
         <div className="header-actions">
+          {permissions.includes('chat') && <ChatButton onOpen={() => navigate('chat')} />}
           <NotificationCenter
             onOpen={(notice) => {
               if (notice.spaceId === space.id) openTask(notice.workItemId);
@@ -827,6 +842,22 @@ function WorkspaceApp({
                   Mi cuenta
                 </button>
               </section>
+            ) : route === 'chat' || route.startsWith('chat/') ? (
+              <Suspense fallback={<p role="status">Cargando chat…</p>}>
+                <ChatPage
+                  user={user}
+                  spaces={spaceSession.spaces}
+                  activeSpace={space.id}
+                  route={route}
+                  navigate={navigate}
+                  openTask={(id, targetSpace) => {
+                    if (targetSpace === space.id) {
+                      navigate('inbox');
+                      openTask(id);
+                    } else location.assign(`/?space=${targetSpace}&task=${id}#inbox`);
+                  }}
+                />
+              </Suspense>
             ) : route === 'notes' || route.startsWith('notes/') ? (
               <Suspense fallback={<p>Cargando notas…</p>}>
                 <NotesPage

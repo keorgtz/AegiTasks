@@ -115,6 +115,12 @@ using (var scope = provider.CreateScope()) {
     Assert(await db.Tasks.IgnoreQueryFilters().AnyAsync(t => t.Id == task.Id) && await db.Notifications.CountAsync() == 0, "SQLite local upgrade is idempotent and preserves existing tasks");
 }
 Console.WriteLine("Notification delivery checks passed. No external push service was contacted.");
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    await db.Database.ExecuteSqlRawAsync("DROP TABLE ChatFiles; DROP TABLE ChatMembers; DROP TABLE ChatMessages; DROP TABLE ChatRooms;");
+    await ChatUpgrade.Apply(db); await ChatUpgrade.Apply(db);
+    Assert(await db.ChatRooms.CountAsync() == 0 && await db.Tasks.IgnoreQueryFilters().AnyAsync(t => t.Id == task.Id) && await db.PagePermissions.CountAsync(p => p.Page == "chat") == 1, "SQLite chat upgrade is idempotent and preserves task data while enabling existing roles");
+}
 
 static void Assert(bool condition, string name) { if (!condition) throw new Exception(name); Console.WriteLine("PASS " + name); }
 sealed class FakeTransport : IPushTransport {

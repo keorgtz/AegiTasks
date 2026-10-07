@@ -19,6 +19,7 @@ export function normalizeRoute(route: string) {
 }
 
 export function pageForRoute(route: string) {
+  if (route.startsWith('chat/')) return 'chat';
   if (route.startsWith('notes/')) return 'notes';
   if (route.startsWith('project/'))
     return ['modules', 'cycles'].includes(route.split('/')[2] || '') ? 'projects' : 'tasks';

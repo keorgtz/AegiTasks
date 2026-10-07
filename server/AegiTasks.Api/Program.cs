@@ -53,7 +53,7 @@ builder.Services.AddRateLimiter(o =>
     o.RejectionStatusCode = 429;
     o.AddPolicy("login", c => RateLimitPartition.GetFixedWindowLimiter(c.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
 });
-builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = 11 * 1024 * 1024);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o => o.MultipartBodyLengthLimit = 26 * 1024 * 1024);
 var app = builder.Build();
 app.Use(async (c, next) =>
 {
@@ -119,7 +119,7 @@ app.Use(async (c, next) => {
 });
 app.MapGet("/api/events", (HttpContext c, Guid space, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(c, space, scopes)).RequireAuthorization();
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
-app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications();
+app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications(); app.MapChat();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
@@ -150,6 +150,7 @@ if (!app.Environment.IsEnvironment("Testing"))
             if (!hasUsername) await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users ADD COLUMN Username TEXT NOT NULL DEFAULT ''");
             await SqlitePlanningUpgrade.Apply(db);
             await SqliteNotificationUpgrade.Apply(db);
+            await ChatUpgrade.Apply(db);
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }

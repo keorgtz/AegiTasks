@@ -87,7 +87,9 @@ export function SpaceGate({
     setActiveSpace(id);
     setActiveId(id);
     localStorage.setItem(`aegitasks-space-${user.id}`, id);
-    history.replaceState(null, '', `${location.pathname}#inbox`);
+    const nextRoute =
+      location.hash === '#chat' || location.hash.startsWith('#chat/') ? location.hash : '#inbox';
+    history.replaceState(null, '', `${location.pathname}${nextRoute}`);
   };
   const active = session?.spaces.find((s) => s.id === activeId);
   if (!session || !active)

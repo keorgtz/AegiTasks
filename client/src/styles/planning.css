@@ -189,6 +189,9 @@ select optgroup {
   }
 }
 @media (max-width: 640px) {
+  .header-actions .chat-header-button {
+    display: none;
+  }
   .app-header {
     gap: 8px;
     padding: 0 12px;

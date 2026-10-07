@@ -17,6 +17,7 @@ export const pageNames: Record<string, string> = {
   focus: 'Focus Mode',
   spaces: 'Spaces y membresías',
   settings: 'Ajustes',
+  chat: 'Chat entre usuarios',
 };
 export function AdminAccess() {
   const [users, setUsers] = useState<User[]>([]);
