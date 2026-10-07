@@ -18,6 +18,7 @@
 }
 .modal:has(.notification-center) {
   width: min(600px, calc(100vw - 24px));
+  margin-inline: auto;
 }
 .notification-center {
   padding: 0 24px 24px;

@@ -469,8 +469,16 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     .click();
   for (const [width, height, theme] of [
     [1440, 900, 'light'],
+    [1440, 900, 'dark'],
+    [768, 1024, 'light'],
     [390, 844, 'dark'],
+    [390, 844, 'light'],
     [320, 740, 'dark'],
+    [320, 740, 'light'],
+    [375, 812, 'dark'],
+    [430, 932, 'light'],
+    [844, 390, 'dark'],
+    [844, 390, 'light'],
   ]) {
     await page.setViewportSize({ width, height });
     await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
@@ -484,12 +492,34 @@ export async function testNotifications({ page, request, admin, json, pass, arti
     );
     const box = await dialog.boundingBox();
     assert.ok(box.width <= width && box.height <= height);
+    assert.ok(
+      box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= height,
+    );
+    assert.ok(
+      Math.abs(box.x + box.width / 2 - width / 2) <= 1,
+      `Notification dialog must be centered at ${width}px: x=${box.x}, width=${box.width}`,
+    );
     await dialog.getByText(detailed.title, { exact: true }).first().scrollIntoViewIfNeeded();
     await page.screenshot({
       path: path.join(artifacts, `notification-details-${width}-${theme}.png`),
     });
   }
-  pass('Notification center fits desktop/mobile at 1440, 390 and 320 pixels in both themes');
+  pass(
+    'Notification center stays horizontally centered and fits desktop, tablet, portrait/landscape phones and both themes, including 320 pixels',
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dialog.getByRole('button', { name: 'Marcar todas leídas' }).click();
+  await page
+    .locator('.header-actions')
+    .getByRole('button', { name: 'Notificaciones', exact: true })
+    .waitFor();
+  await dialog.getByRole('checkbox', { name: 'Solo sin leer' }).check();
+  await dialog.getByText('No tienes notificaciones sin leer.', { exact: true }).waitFor();
+  const emptyBox = await dialog.boundingBox();
+  assert.ok(Math.abs(emptyBox.x + emptyBox.width / 2 - 195) <= 1);
+  await page.screenshot({ path: path.join(artifacts, 'notification-mobile-empty-centered.png') });
+  await dialog.getByRole('checkbox', { name: 'Solo sin leer' }).uncheck();
+  await dialog.getByText('Unassigned notification', { exact: true }).first().waitFor();
   await dialog
     .getByRole('button', { name: /Unassigned notification.*Live|Unassigned notification.*comentó/ })
     .first()

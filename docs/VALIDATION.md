@@ -1,5 +1,13 @@
 # Evidencia de validación
 
+## Centrado del diálogo de notificaciones en móvil — 7 de octubre de 2026
+
+Se reprodujo el desplazamiento horizontal: en un viewport de 390 px el diálogo tenía 366 px de ancho y comenzaba en `x=0`, dejando 24 px libres solo a la derecha. Su ancho específico se combinaba con `margin: auto 0 0` de los modales móviles. Se agregó `margin-inline: auto` exclusivamente al diálogo de notificaciones; ahora tiene 12 px a cada lado y conserva su comportamiento de panel inferior. Los demás diálogos no cambian.
+
+La comprobación nueva falló con el CSS anterior y pasó con el cambio. La suite enfocada pasó **54 verificaciones sobre SQLite**, incluidas acciones de lectura, filtros, apertura de pendientes, notificaciones y navegación. Se verificaron centrado horizontal y límites del viewport en 11 combinaciones: escritorio de 1440 px, tablet de 768 px, móviles verticales de 320/375/390/430 px y horizontal de 844 × 390 px, con ambos temas. También se verificó el diálogo vacío después de marcar todos los avisos como leídos.
+
+Build/TypeScript, lint, formato y diff correctos. Se revisaron visualmente capturas de 390 px oscuro, 320 px claro y estado vacío. Evidencia en `artifacts/`: `notification-mobile-alignment-before.log`, `notification-mobile-alignment-after.log`, `notification-mobile-alignment-results.json`, `notification-mobile-build.log`, `notification-details-*.png` y `notification-mobile-empty-centered.png`. Es validación de navegador Chromium con viewports emulados, sin prueba física ni despliegue en producción. No cambia API ni base de datos; no se repitieron PostgreSQL ni la suite PWA.
+
 ## Avisos con título y cambios precisos — 7 de octubre de 2026
 
 Historial y notificaciones del sistema muestran el título del pendiente. Los avisos nuevos guardan el título del evento y distinguen creación, asignación/reasignación, eliminación del responsable, cambio al estado personalizado, propiedades editadas, comentario, evidencia, archivo y restauración. La comparación incluye relaciones y etiquetas; cambiar únicamente versión/fecha interna no produce avisos. No se incluyen textos completos de comentarios, descripciones ni archivos.
