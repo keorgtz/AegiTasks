@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Bell,
+  BellOff,
   Download,
   FileText,
   Link2,
@@ -17,6 +19,7 @@ import { api, ApiError, errorMessage } from './api';
 import { useChanges } from './changes';
 import { Empty, ErrorBox, Field, Modal } from './components';
 import { chatName, useChat, type ChatRoom } from './ChatContext';
+import { ChatNotificationSettings, clearChatNotices } from './ChatNotifications';
 import type { Space, User } from './types';
 import './styles/chat.css';
 
@@ -57,6 +60,7 @@ export default function ChatPage({
   const [newChat, setNewChat] = useState(false);
   const [manage, setManage] = useState(false);
   const [share, setShare] = useState(false);
+  const [notifications, setNotifications] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const initial = useRef(true);
@@ -91,7 +95,9 @@ export default function ChatPage({
         if (document.visibilityState === 'visible' && result.items.length)
           void api(`/chat/${selected}/read`, 'POST', {
             sequence: result.items.at(-1)!.sequence,
-          }).catch((e) => setError(errorMessage(e)));
+          })
+            .then(() => clearChatNotices(user.id, selected, result.items.at(-1)!.sequence))
+            .catch((e) => setError(errorMessage(e)));
         if (initial.current || nearBottom) {
           initial.current = false;
           requestAnimationFrame(() => {
@@ -106,7 +112,7 @@ export default function ChatPage({
         }
       }
     },
-    [selected],
+    [selected, user.id],
   );
   useEffect(() => {
     request.current++;
@@ -229,6 +235,13 @@ export default function ChatPage({
                     </small>
                   </span>
                   {r.unread > 0 && <span className="chat-unread">{r.unread}</span>}
+                  {r.muted && (
+                    <BellOff
+                      className="chat-muted-icon"
+                      size={16}
+                      aria-label="Notificaciones silenciadas"
+                    />
+                  )}
                 </button>
               ))
           )}
@@ -266,6 +279,13 @@ export default function ChatPage({
                     : 'Conversación privada'}
                 </p>
               </div>
+              <button
+                className="btn-icon"
+                aria-label="Notificaciones del chat"
+                onClick={() => setNotifications(true)}
+              >
+                {room.muted ? <BellOff size={20} /> : <Bell size={20} />}
+              </button>
               {room.isGroup && (
                 <button
                   className="btn-icon"
@@ -482,6 +502,15 @@ export default function ChatPage({
             await chat.reload();
             navigate(`chat/${id}`);
           }}
+        />
+      )}
+      {notifications && room && (
+        <ChatNotificationSettings
+          roomId={room.id}
+          userId={user.id}
+          name={chatName(room, user.id)}
+          onClose={() => setNotifications(false)}
+          onSaved={chat.reload}
         />
       )}
       {manage && room && (

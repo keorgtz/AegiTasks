@@ -256,6 +256,31 @@ try {
   console.log(
     'PASS PostgreSQL Chat migration adds independent tables and default chat access without altering existing tasks or notification history',
   );
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'Chat',
+    'ChatNotifications',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-chat-notifications.sql'),
+  ]);
+  sql(
+    'legacy',
+    `INSERT INTO "ChatRooms" ("Id","Name","DirectKey","OwnerId","Version","NextSequence","UpdatedAt") VALUES ('80000000-0000-4000-8000-000000000001','Existing conversation',NULL,'20000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000002',1,now());
+    INSERT INTO "ChatMembers" ("ChatRoomId","UserId","ReadAt","ReadSequence") VALUES ('80000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',NULL,0);
+    INSERT INTO "ChatMessages" ("Id","ChatRoomId","UserId","ClientId","Sequence","Body","TaskId","CreatedAt") VALUES ('80000000-0000-4000-8000-000000000003','80000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000004',1,'Retained message',NULL,now());`,
+  );
+  sql('legacy', await readFile(path.join(artifact, 'migration-chat-notifications.sql'), 'utf8'));
+  for (const table of ['ChatNotificationPreferences', 'ChatAlerts', 'ChatPushDeliveries'])
+    assert.equal(sql('legacy', `SELECT count(*) FROM "${table}";`).trim(), '0');
+  assert.equal(sql('legacy', 'SELECT length("Message") FROM "Notifications";').trim(), '600');
+  assert.equal(sql('legacy', 'SELECT "Body" FROM "ChatMessages";').trim(), 'Retained message');
+  console.log(
+    'PASS PostgreSQL chat notification upgrade adds private settings, alerts and outbox without changing task history or existing conversations',
+  );
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "Tasks" WHERE "ParentTaskId" IS NOT NULL;').trim(),
     '0',
@@ -349,6 +374,7 @@ try {
         notificationsMigration: true,
         notificationDetailsMigration: true,
         chatMigration: true,
+        chatNotificationsMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

@@ -304,6 +304,7 @@ export function DeviceNotificationsProvider({
             <p>
               Recibe avisos cuando te asignen un pendiente, lo actualicen, comenten o agreguen
               evidencia. También verás los avisos de pendientes sin responsable de tus workspaces.
+              Recibe además mensajes de chats privados y grupos, con silencios por conversación.
             </p>
             <p className="muted">
               Puedes cambiar esta decisión en Ajustes → Notificaciones. Solo afecta a este
@@ -451,6 +452,13 @@ export function DeviceNotificationSettings() {
       <section className="card settings-explanation">
         <h2>Qué avisos recibirás</h2>
         <ul>
+          <li>
+            <Bell size={18} />
+            <span>
+              Mensajes nuevos de chats privados y grupos, agrupados por conversación. Puedes
+              silenciarlos desde la campana de cada chat.
+            </span>
+          </li>
           <li>
             <CheckCircle2 size={18} />
             <span>

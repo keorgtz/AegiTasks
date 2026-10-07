@@ -10,6 +10,7 @@ import {
 import { MessageCircle } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { emitChanges, useChanges } from './changes';
+import { ChatLiveNotifications } from './ChatNotifications';
 
 export interface ChatRoom {
   id: string;
@@ -18,6 +19,8 @@ export interface ChatRoom {
   ownerId: string;
   version: string;
   unread: number;
+  muted: boolean;
+  notificationMode: string;
   preview: string | null;
   members: { userId: string; name: string; active: boolean }[];
 }
@@ -94,7 +97,7 @@ export function ChatProvider({
     const events = new EventSource('/api/chat/events');
     const ready = () => {
       void reload();
-      emitChanges(['chat']);
+      emitChanges(['chat', 'chat-notifications']);
     };
     events.addEventListener('ready', ready);
     events.addEventListener('change', (event) =>
@@ -192,6 +195,7 @@ export function ChatProvider({
   return (
     <Context.Provider value={{ rooms, error, loading, drafts, busyId, update, send, reload }}>
       {children}
+      <ChatLiveNotifications userId={userId} enabled={enabled} />
       <span
         hidden
         data-update-blocked={

@@ -1,6 +1,8 @@
-# Notificaciones de pendientes
+# Notificaciones de pendientes y chat
 
 La campanita de la TitleBar muestra el historial personal de todos los Spaces a los que la cuenta tiene acceso. Los avisos se actualizan con los eventos del servidor, sin consultar periódicamente la bandeja. El historial funciona aunque el navegador no permita push o el usuario no acepte el permiso.
+
+El chat ofrece banners y su contador propio, independientes de los Spaces. Los mensajes privados y grupales también usan los dispositivos activados desde esta configuración. Sus notificaciones del sistema se agrupan por conversación, con conteo y vistas previas de autor/mensaje. Cada chat tiene una campana para silencio temporal, semanal o permanente, personal y compartido entre los dispositivos de la cuenta. [Funcionamiento y preferencias de chat](CHAT.md).
 
 ## Destinatarios
 

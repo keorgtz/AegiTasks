@@ -49,5 +49,34 @@ public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPush
         }
         // Bound the outbox without removing the user's notification history.
         await db.PushDeliveries.Where(d => d.FinishedAt < now.AddDays(-7)).ExecuteDeleteAsync(stoppingToken);
+        await DispatchChats(db, stoppingToken);
+    }
+    private async Task DispatchChats(AppDb db, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var pending = await db.ChatPushDeliveries.Where(d => d.FinishedAt == null && d.NextAttemptAt <= now)
+            .OrderBy(d => d.NextAttemptAt).Take(50).Select(d => new { delivery = d, room = db.ChatAlerts.Where(n => n.Id == d.NotificationId).Select(n => n.ChatRoomId).First() }).ToListAsync(ct);
+        foreach (var group in pending.GroupBy(d => (d.delivery.DeviceId, d.room))) {
+            var device = await db.PushDevices.SingleOrDefaultAsync(d => d.Id == group.Key.DeviceId, ct);
+            var notice = device == null ? null : await ChatNotificationEvents.Summary(db, group.Key.room, device.UserId, now, ct);
+            var valid = device != null && notice != null && await db.Users.AnyAsync(u => u.Id == device.UserId && u.Active && u.SessionVersion == device.SessionVersion, ct);
+            if (!valid) { foreach (var row in group) row.delivery.FinishedAt = now; await db.SaveChangesAsync(ct); continue; }
+            foreach (var row in group) row.delivery.Attempts++;
+            try {
+                // Content stays behind authentication; one grouped push per conversation/device/batch.
+                var payload = JsonSerializer.Serialize(new { chatNotificationId = notice!.Id, deviceId = device!.Id });
+                if (await transport.Send(device!, payload, keys.Details, ct)) foreach (var row in group) row.delivery.FinishedAt = DateTime.UtcNow;
+                else db.PushDevices.Remove(device!);
+            } catch (Exception e) when (!ct.IsCancellationRequested) {
+                logger.LogWarning("Chat push failed ({ErrorType})", e.GetType().Name);
+                foreach (var row in group) {
+                    if (row.delivery.Attempts >= 8) row.delivery.FinishedAt = DateTime.UtcNow;
+                    else row.delivery.NextAttemptAt = DateTime.UtcNow.AddSeconds(Math.Min(3600, 15 * Math.Pow(2, row.delivery.Attempts)));
+                }
+            }
+            await db.SaveChangesAsync(ct);
+        }
+        await db.ChatAlerts.Where(n => n.CreatedAt < now.AddDays(-7)).ExecuteDeleteAsync(ct);
+        await db.ChatPushDeliveries.Where(d => d.FinishedAt < now.AddDays(-7)).ExecuteDeleteAsync(ct);
     }
 }

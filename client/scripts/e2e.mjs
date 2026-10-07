@@ -15,6 +15,7 @@ import { testTaskInteractions } from './task-interaction-tests.mjs';
 import { testNotifications } from './notification-tests.mjs';
 import { testSettings } from './settings-tests.mjs';
 import { testChat } from './chat-tests.mjs';
+import { testChatNotifications } from './chat-notification-tests.mjs';
 import { testProfile } from './profile-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -403,6 +404,17 @@ try {
   page.on('pageerror', (e) => browserErrors.push(e.message));
   if (process.env.AEGITASKS_TEST_ONLY === 'chat') {
     await testChat({ page, request, admin, adminUser, shared, json, pass, artifacts, password });
+    await testChatNotifications({
+      page,
+      request,
+      admin,
+      adminUser,
+      shared,
+      json,
+      pass,
+      artifacts,
+      password,
+    });
   } else if (process.env.AEGITASKS_TEST_ONLY === 'settings') {
     await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
     await testSettings({ page, admin, adminUser, shared, json, pass, artifacts, password });
@@ -605,6 +617,17 @@ try {
     await testSettings({ page, admin, adminUser, shared, json, pass, artifacts, password });
     await testProfile({ page, request, admin, adminUser, shared, json, pass, artifacts, password });
     await testChat({ page, request, admin, adminUser, shared, json, pass, artifacts, password });
+    await testChatNotifications({
+      page,
+      request,
+      admin,
+      adminUser,
+      shared,
+      json,
+      pass,
+      artifacts,
+      password,
+    });
   }
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, 60000)));

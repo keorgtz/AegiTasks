@@ -37,6 +37,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: false,
       includeAssets: [
+        'aegitasks-notification-badge.png',
+        'aegitasks-notification-badge.svg',
         'aegitasks-favicon-32.png',
         'aegitasks-favicon-64.png',
         'aegitasks-icon-192.png',

@@ -34,15 +34,35 @@ Los borradores de texto y el pendiente seleccionado se conservan en el almacenam
 
 El acceso directo abre el pendiente en su Space y utiliza los permisos normales del detalle. No copia su descripción, evidencias ni contenido privado al mensaje. Al consultar mensajes se verifica nuevamente el acceso del lector: si se eliminó el pendiente o el usuario perdió acceso, se presenta como no disponible, sin revelar su título. La conversación y el resto de sus mensajes siguen funcionando después de perder acceso al workspace.
 
+## Notificaciones y silencios
+
+Los mensajes de otra persona generan avisos en tiempo real dentro de la app, tanto en chats privados como en grupos. El chat abierto y visible se marca como leído sin mostrar otro banner. Los mensajes anteriores al abrir la app se reflejan en los contadores; los banners avisan sobre mensajes nuevos. Abrir un banner lleva directamente al chat. Cada conversación mantiene su resumen con conteo y vistas previas de autor/texto; los mensajes propios no avisan al autor.
+
+Para recibir avisos fuera de la app, activar el dispositivo desde **Ajustes → Notificaciones**, con los mismos permisos y claves VAPID de los pendientes. El aviso del sistema tiene el nombre de la persona o grupo, el conteo y hasta las últimas cinco vistas previas. Nuevos mensajes reemplazan el aviso de esa conversación; las etiquetas son independientes por cuenta/chat. Reintentos o pushes atrasados no reemplazan un resumen más reciente ni repiten la alerta sonora. El clic abre `#chat/{id}` con los controles normales de sesión y participación.
+
+La campana de cada chat abre **Notificaciones del chat**. Cualquier integrante configura sus propias preferencias en todos sus dispositivos; ni Admin ni el propietario cambian las de otras personas:
+
+- **Notificaciones activadas:** comportamiento predeterminado.
+- **Silenciar hasta una fecha:** accesos rápidos para 1 hora, 8 horas, 1 día o 7 días, y fecha/hora personalizada. Al vencer vuelve a notificar automáticamente.
+- **Silencio por horarios y días:** hasta 14 franjas semanales, con días y horas o **Todo el día**. Los días indican cuándo empieza la franja; 22:00–08:00 cruza al día siguiente. La zona horaria se guarda y se aplica en el servidor, incluidos sus cambios de horario de verano. Desde otro dispositivo se puede elegir usar su zona local.
+- **Silenciar siempre:** evita avisos hasta volver a activarlos.
+
+Silenciar conserva los mensajes y contadores sin leer, cancela avisos pendientes y evita crear avisos diferidos para reproducir mensajes silenciados después. Leer el chat elimina sus avisos y cierra el resumen del sistema en ese dispositivo. Las preferencias detectan cambios simultáneos sin sobrescribir otro formulario. Al retirar a un integrante se eliminan sus preferencias, avisos y cola de esa conversación; si vuelve a entrar comienza con preferencias predeterminadas.
+
+El logo oficial continúa como icono principal. El icono pequeño es **done_all** de [Google Material Icons](https://github.com/google/material-design-icons), servido localmente como PNG monocromático de 96 px, con su licencia Apache-2.0. La API permite `badge`, `tag` y `renotify`; el navegador/sistema decide el diseño, el espacio de las vistas previas y si muestra ese icono, especialmente en iOS. Es una notificación web agrupada, sin acceso al diseño nativo de WhatsApp/Telegram. [Referencia de showNotification](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification).
+
 ## Despliegue y persistencia
 
 El despliegue Docker existente aplica automáticamente la migración **Chat** en PostgreSQL. Agrega tablas independientes de conversaciones, integrantes, mensajes y archivos; no modifica ni elimina pendientes, notas o historial de notificaciones. SQLite local utiliza una actualización idempotente. Los archivos están en `uploads/chat` bajo el `StoragePath` existente; el volumen `aegitasks-storage` y los respaldos recursivos ya los incluyen. El Nginx del cliente permite solicitudes de 26 MB para cubrir los 25 MB más el formulario; evidencias de pendientes conservan su límite de 10 MB.
 
-El chat usa la instancia API y base de datos actuales, sin Redis ni servicios adicionales. Las conexiones SSE de chat son independientes de los Spaces y envían únicamente temas de invalidación al usuario, sin textos, títulos o archivos. Escalar a varias instancias requiere un bus de eventos compartido, igual que las actualizaciones actuales de pendientes. Los contadores de chat son avisos dentro de la app; las notificaciones push del dispositivo continúan correspondiendo a los eventos de pendientes.
+El chat usa la instancia API y base de datos actuales, sin Redis ni servicios adicionales. Las conexiones SSE de chat son independientes de los Spaces y envían únicamente temas de invalidación al usuario, sin textos, títulos o archivos. Escalar a varias instancias requiere un bus de eventos compartido, igual que las actualizaciones actuales de pendientes.
+
+La migración **ChatNotifications** agrega preferencias personales, avisos y cola push de chat, preservando conversaciones, integrantes y mensajes existentes. Los mensajes anteriores no generan avisos retroactivos. SQLite agrega las mismas tablas de forma idempotente. El mensaje, archivos y avisos se guardan en una sola transacción. La cola persistente agrupa envíos por conversación/dispositivo, reintenta fallos y vuelve a comprobar sesión, permisos, membresía, lectura y silencio antes de enviar. El payload cifrado contiene únicamente identificadores; el worker recupera vistas previas desde la API autenticada, sin guardarlas en el cache offline. Conserva el procesador único del Compose actual.
 
 ## Validación
 
-- `AEGITASKS_TEST_ONLY=chat node client/scripts/e2e.mjs`: privacidad, permisos, grupos, concurrencia, reintentos, historial, archivos, referencias y controles reales del navegador.
+- `AEGITASKS_TEST_ONLY=chat node client/scripts/e2e.mjs`: privacidad, permisos, grupos, concurrencia, reintentos, historial, archivos, referencias, avisos agrupados y preferencias personales con controles reales del navegador.
+- `node client/scripts/push-worker-tests.mjs`: autorización, badge, agrupación, reintentos, orden, lectura y enlaces directos.
 - La suite completa incluye las pruebas de chat y la regresión de todas las funciones anteriores.
 - `node client/scripts/postgres-tests.mjs`: migración desde datos anteriores, instalación nueva y suite sobre PostgreSQL aislado.
 - `dotnet run --project server/AegiTasks.NotificationTests`: incluye comprobación de la actualización SQLite de chat sobre una base existente.

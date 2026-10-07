@@ -1,0 +1,171 @@
+.chat-mute-durations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+.modal[open]:has(.chat-notification-settings) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal:has(.chat-notification-settings) .modal-head {
+  flex-shrink: 0;
+}
+.chat-notification-settings {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.chat-settings-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 20px 26px;
+}
+.chat-notification-settings .form-actions {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--hairline);
+}
+.chat-notification-settings .form-actions .btn {
+  padding: 10px 12px;
+}
+.chat-notification-settings .form-actions .btn-primary {
+  width: auto;
+}
+.chat-mute-zone,
+.chat-mute-help {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 16px 0;
+  color: var(--text-muted);
+}
+.chat-mute-help {
+  display: flex;
+  gap: 12px;
+}
+.chat-mute-help svg {
+  flex-shrink: 0;
+  color: var(--readable-primary);
+}
+.chat-quiet-period {
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin: 16px 0;
+}
+.chat-quiet-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin: 12px 0;
+}
+.chat-quiet-days button {
+  min-height: 44px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.chat-quiet-days button[aria-pressed='true'] {
+  background: var(--primary-bg);
+  color: var(--readable-primary);
+  border-color: var(--primary);
+  font-weight: 700;
+}
+.chat-quiet-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.chat-quiet-times .field {
+  min-width: 0;
+  margin: 0;
+}
+.chat-quiet-times input {
+  min-width: 0;
+  width: 100%;
+}
+.chat-live-notices {
+  position: fixed;
+  z-index: 210;
+  right: 24px;
+  top: 84px;
+  width: min(400px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  max-height: 55dvh;
+  overflow-y: auto;
+}
+.chat-live-notice {
+  display: flex;
+  align-items: flex-start;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-3);
+  padding: 8px;
+}
+.chat-live-open {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  text-align: left;
+  padding: 8px;
+}
+.chat-live-open div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chat-live-open strong {
+  display: block;
+  font-size: 14px;
+}
+.chat-live-open small {
+  display: block;
+  font-size: 11px;
+  color: var(--readable-primary);
+  margin: 4px 0 8px;
+}
+.chat-live-open p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 5px 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.chat-notification-mark {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  background: var(--readable-primary);
+  mask: url('/aegitasks-notification-badge.svg') center/contain no-repeat;
+}
+.chat-muted-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .chat-live-notices {
+    top: 76px;
+    right: 12px;
+    width: calc(100vw - 24px);
+    max-height: 40dvh;
+  }
+  .chat-quiet-days {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .chat-quiet-times {
+    grid-template-columns: 1fr;
+  }
+  .chat-notification-settings .form-actions {
+    flex-wrap: wrap;
+  }
+}

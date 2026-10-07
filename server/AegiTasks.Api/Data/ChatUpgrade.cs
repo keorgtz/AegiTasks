@@ -7,7 +7,7 @@ public static class ChatUpgrade
 {
     public static async Task Apply(AppDb db)
     {
-        var tables = new[] { "ChatRooms", "ChatMembers", "ChatMessages", "ChatFiles" };
+        var tables = new[] { "ChatRooms", "ChatMembers", "ChatMessages", "ChatFiles", "ChatNotificationPreferences", "ChatAlerts", "ChatPushDeliveries" };
 #pragma warning disable EF1003
         foreach (var sql in db.Database.GenerateCreateScript().Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {

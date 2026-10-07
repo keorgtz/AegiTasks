@@ -33,6 +33,9 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
     public DbSet<ChatMember> ChatMembers => Set<ChatMember>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ChatFile> ChatFiles => Set<ChatFile>();
+    public DbSet<ChatNotificationPreference> ChatNotificationPreferences => Set<ChatNotificationPreference>();
+    public DbSet<ChatAlert> ChatAlerts => Set<ChatAlert>();
+    public DbSet<ChatPushDelivery> ChatPushDeliveries => Set<ChatPushDelivery>();
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -42,6 +45,18 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<ChatNotificationPreference>().HasKey(p => new { p.ChatRoomId, p.UserId });
+        b.Entity<ChatNotificationPreference>().Property(p => p.Settings).HasMaxLength(8000);
+        b.Entity<ChatNotificationPreference>().Property(p => p.Version).IsConcurrencyToken();
+        b.Entity<ChatNotificationPreference>().HasOne<ChatMember>().WithMany().HasForeignKey(p => new { p.ChatRoomId, p.UserId }).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatAlert>().HasOne<ChatMember>().WithMany().HasForeignKey(p => new { p.ChatRoomId, p.UserId }).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatAlert>().HasOne<ChatMessage>().WithMany().HasForeignKey(p => p.ChatMessageId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatAlert>().HasIndex(p => new { p.ChatMessageId, p.UserId }).IsUnique();
+        b.Entity<ChatAlert>().HasIndex(p => new { p.UserId, p.CreatedAt });
+        b.Entity<ChatPushDelivery>().HasOne<ChatAlert>().WithMany().HasForeignKey(p => p.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatPushDelivery>().HasOne<PushDevice>().WithMany().HasForeignKey(p => p.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ChatPushDelivery>().HasIndex(p => new { p.NotificationId, p.DeviceId }).IsUnique();
+        b.Entity<ChatPushDelivery>().HasIndex(p => new { p.FinishedAt, p.NextAttemptAt });
         b.Entity<ChatRoom>().Property(x => x.Name).HasMaxLength(80);
         b.Entity<ChatRoom>().Property(x => x.DirectKey).HasMaxLength(65);
         b.Entity<ChatRoom>().HasIndex(x => x.DirectKey).IsUnique();

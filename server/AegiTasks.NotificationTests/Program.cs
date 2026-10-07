@@ -124,9 +124,76 @@ using (var scope = provider.CreateScope()) {
     Assert(await db.Tasks.IgnoreQueryFilters().AnyAsync(t => t.Id == task.Id) && await db.Notifications.CountAsync() == 0, "SQLite local upgrade is idempotent and preserves existing tasks");
 }
 Console.WriteLine("Notification delivery checks passed. No external push service was contacted.");
+var mondayNight = new ChatSilence("schedule", TimeZone: "UTC", Periods: [new([1], 22 * 60, 6 * 60)]);
+Assert(mondayNight.Muted(new DateTime(2026, 10, 5, 22, 0, 0, DateTimeKind.Utc)) && mondayNight.Muted(new DateTime(2026, 10, 6, 5, 59, 0, DateTimeKind.Utc)) && !mondayNight.Muted(new DateTime(2026, 10, 6, 6, 0, 0, DateTimeKind.Utc)), "Weekly quiet hours cross midnight from the selected start day with an exclusive end");
+var weekend = new ChatSilence("schedule", TimeZone: "America/Mexico_City", Periods: [new([0, 6], 0, 0)]);
+Assert(weekend.Muted(new DateTime(2026, 10, 5, 5, 59, 0, DateTimeKind.Utc)) && !weekend.Muted(new DateTime(2026, 10, 5, 6, 0, 0, DateTimeKind.Utc)), "All-day weekend silence respects the saved timezone, independent of server timezone");
+var dst = new ChatSilence("schedule", TimeZone: "America/New_York", Periods: [new([0], 60, 120)]);
+Assert(dst.Muted(new DateTime(2026, 11, 1, 5, 30, 0, DateTimeKind.Utc)) && dst.Muted(new DateTime(2026, 11, 1, 6, 30, 0, DateTimeKind.Utc)) && !dst.Muted(new DateTime(2026, 11, 1, 7, 0, 0, DateTimeKind.Utc)), "DST repeated local hours both obey weekly silence");
+Assert(new ChatSilence("until", DateTime.UtcNow.AddMinutes(1)).Muted(DateTime.UtcNow) && !new ChatSilence("until", DateTime.UtcNow.AddMinutes(-1)).Muted(DateTime.UtcNow) && new ChatSilence("always").Muted(DateTime.UtcNow), "Temporary silence expires automatically; permanent silence does not");
+foreach (var invalid in new[] { new ChatSilence("invalid"), new ChatSilence(TimeZone: "Unknown/Invalid"), new ChatSilence("schedule", Periods: []), new ChatSilence("schedule", Periods: [new([7], 0, 0)]) }) {
+    try { invalid.Validate(DateTime.UtcNow); throw new Exception("Expected invalid silence"); } catch (InputError) { }
+}
+Console.WriteLine("PASS Invalid modes, zones, days and empty schedules are rejected");
+var recipient = new User { Name = "Chat Recipient", Email = "chat-recipient@unit.example", Username = "chat-recipient", Role = "Admin" };
+var chatRoom = new ChatRoom { Name = "Chat notification tests", OwnerId = user.Id };
 using (var scope = provider.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<AppDb>();
-    await db.Database.ExecuteSqlRawAsync("DROP TABLE ChatFiles; DROP TABLE ChatMembers; DROP TABLE ChatMessages; DROP TABLE ChatRooms;");
+    db.Users.Add(recipient); db.ChatRooms.Add(chatRoom);
+    db.ChatMembers.AddRange(new ChatMember { ChatRoomId = chatRoom.Id, UserId = user.Id }, new ChatMember { ChatRoomId = chatRoom.Id, UserId = recipient.Id });
+    db.PushDevices.Add(new PushDevice { UserId = recipient.Id, Endpoint = "https://fcm.googleapis.com/chat-unit", EndpointHash = "chat-unit" });
+    await db.SaveChangesAsync();
+    foreach (var body in new[] { "First private chat message", "Second private chat message" }) {
+        var msg = new ChatMessage { ChatRoomId = chatRoom.Id, UserId = user.Id, ClientId = Guid.NewGuid(), Sequence = ++chatRoom.NextSequence, Body = body };
+        db.ChatMessages.Add(msg); await ChatNotificationEvents.Stage(db, msg, default); await db.SaveChangesAsync();
+    }
+    var summary = await ChatNotificationEvents.Summary(db, chatRoom.Id, recipient.Id, DateTime.UtcNow);
+    Assert(summary?.Count == 2 && summary.Previews.Length == 2 && summary.Body.Contains("Second private chat message"), "Chat summaries group unread messages with author previews");
+}
+fake.Mode = "success"; calls = fake.Calls; await sender.Dispatch(default);
+Assert(fake.Calls == calls + 1 && fake.Payload!.Contains("chatNotificationId") && !fake.Payload.Contains("private chat"), "Multiple chat messages coalesce into one durable push with identifiers only");
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    var msg = new ChatMessage { ChatRoomId = chatRoom.Id, UserId = user.Id, ClientId = Guid.NewGuid(), Sequence = ++chatRoom.NextSequence, Body = "Queued before mute" };
+    db.ChatMessages.Add(msg); await ChatNotificationEvents.Stage(db, msg, default); await db.SaveChangesAsync();
+}
+fake.Mode = "fail"; await sender.Dispatch(default);
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    var retryChat = await db.ChatPushDeliveries.SingleAsync(d => d.FinishedAt == null);
+    Assert(retryChat.Attempts == 1 && retryChat.NextAttemptAt > DateTime.UtcNow, "Chat provider failures persist retries without changing messages or alerts");
+    retryChat.NextAttemptAt = DateTime.UtcNow.AddSeconds(-1);
+    db.ChatNotificationPreferences.Add(new() { ChatRoomId = chatRoom.Id, UserId = recipient.Id, Settings = new ChatSilence("always").Serialize() }); await db.SaveChangesAsync();
+}
+fake.Mode = "success";
+calls = fake.Calls; await sender.Dispatch(default);
+Assert(fake.Calls == calls, "Muting after a send suppresses already queued chat pushes at dispatch");
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>(); var before = await db.ChatAlerts.CountAsync();
+    var msg = new ChatMessage { ChatRoomId = chatRoom.Id, UserId = user.Id, ClientId = Guid.NewGuid(), Sequence = ++chatRoom.NextSequence, Body = "Muted message" };
+    db.ChatMessages.Add(msg); await ChatNotificationEvents.Stage(db, msg, default); await db.SaveChangesAsync();
+    Assert(await db.ChatAlerts.CountAsync() == before && await db.ChatMessages.AnyAsync(m => m.Id == msg.Id), "Muted messages persist without creating deferred alerts or deliveries");
+    var pref = await db.ChatNotificationPreferences.SingleAsync(); pref.Settings = new ChatSilence().Serialize(); await db.SaveChangesAsync();
+    var revocable = new ChatMessage { ChatRoomId = chatRoom.Id, UserId = user.Id, ClientId = Guid.NewGuid(), Sequence = ++chatRoom.NextSequence, Body = "Pending before session revocation" };
+    db.ChatMessages.Add(revocable); await ChatNotificationEvents.Stage(db, revocable, default); await db.SaveChangesAsync();
+    await db.Users.Where(u => u.Id == recipient.Id).ExecuteUpdateAsync(p => p.SetProperty(u => u.SessionVersion, 1));
+}
+calls = fake.Calls; await sender.Dispatch(default);
+Assert(fake.Calls == calls, "Revoked device sessions suppress already queued chat notifications");
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    await db.ChatMembers.Where(m => m.ChatRoomId == chatRoom.Id && m.UserId == recipient.Id).ExecuteDeleteAsync();
+    Assert(!await db.ChatAlerts.AnyAsync(n => n.ChatRoomId == chatRoom.Id) && !await db.ChatNotificationPreferences.AnyAsync(p => p.ChatRoomId == chatRoom.Id) && !await db.ChatPushDeliveries.AnyAsync(), "Removing a member cascades their private preferences, alerts and push outbox");
+}
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    await db.Database.ExecuteSqlRawAsync("DROP TABLE ChatPushDeliveries; DROP TABLE ChatAlerts; DROP TABLE ChatNotificationPreferences;");
+    await ChatUpgrade.Apply(db); await ChatUpgrade.Apply(db);
+    Assert(await db.ChatMessages.AnyAsync(m => m.Body == "Second private chat message") && await db.ChatNotificationPreferences.CountAsync() == 0, "SQLite chat notification upgrade preserves existing conversations and adds empty settings without retroactive alerts");
+}
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    await db.Database.ExecuteSqlRawAsync("DROP TABLE ChatPushDeliveries; DROP TABLE ChatAlerts; DROP TABLE ChatNotificationPreferences; DROP TABLE ChatFiles; DROP TABLE ChatMembers; DROP TABLE ChatMessages; DROP TABLE ChatRooms;");
     await ChatUpgrade.Apply(db); await ChatUpgrade.Apply(db);
     Assert(await db.ChatRooms.CountAsync() == 0 && await db.Tasks.IgnoreQueryFilters().AnyAsync(t => t.Id == task.Id) && await db.PagePermissions.CountAsync(p => p.Page == "chat") == 1, "SQLite chat upgrade is idempotent and preserves task data while enabling existing roles");
 }

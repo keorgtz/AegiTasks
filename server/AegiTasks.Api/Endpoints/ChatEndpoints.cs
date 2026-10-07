@@ -36,7 +36,9 @@ public static class ChatEndpoints
                     unread = db.ChatMessages.Count(msg => msg.ChatRoomId == r.Id && msg.UserId != uid && msg.Sequence > db.ChatMembers.Where(m => m.ChatRoomId == r.Id && m.UserId == uid).Select(m => m.ReadSequence).First()),
                     preview = db.ChatMessages.Where(m => m.ChatRoomId == r.Id).OrderByDescending(m => m.Sequence).Select(m => m.Body != "" ? m.Body : m.TaskId != null ? "Pendiente compartido" : "Archivo adjunto").FirstOrDefault()
                 }).ToListAsync();
-            return Results.Ok(rooms);
+            var preferences = await db.ChatNotificationPreferences.Where(p => p.UserId == uid).ToDictionaryAsync(p => p.ChatRoomId, p => p.Settings);
+            return Results.Ok(rooms.Select(r => new { r.Id, r.Name, r.isGroup, r.OwnerId, r.Version, r.UpdatedAt, r.members, r.unread, r.preview,
+                muted = ChatSilence.Parse(preferences.GetValueOrDefault(r.Id)).Muted(DateTime.UtcNow), notificationMode = ChatSilence.Parse(preferences.GetValueOrDefault(r.Id)).Mode }));
         });
         routes.MapPost("/", async (CreateInput input, AppDb db, ClaimsPrincipal user, ChangeFeed feed) =>
         {
@@ -106,7 +108,8 @@ public static class ChatEndpoints
             if (await Room(db, id, user.UserId()) == null) return Results.NotFound();
             if (input.Sequence < 0 || !await db.ChatMessages.AnyAsync(m => m.ChatRoomId == id && m.Sequence == input.Sequence)) throw new InputError("Mensaje no válido.");
             var changed = await db.ChatMembers.Where(m => m.ChatRoomId == id && m.UserId == user.UserId() && m.ReadSequence < input.Sequence).ExecuteUpdateAsync(s => s.SetProperty(m => m.ReadSequence, input.Sequence).SetProperty(m => m.ReadAt, DateTime.UtcNow));
-            if (changed > 0) feed.Publish(null, user.UserId(), "chat"); return Results.NoContent();
+            await db.ChatAlerts.Where(n => n.ChatRoomId == id && n.UserId == user.UserId() && db.ChatMessages.Any(m => m.Id == n.ChatMessageId && m.Sequence <= input.Sequence)).ExecuteDeleteAsync();
+            if (changed > 0) feed.Publish(null, user.UserId(), "chat", "chat-notifications"); return Results.NoContent();
         });
         routes.MapGet("/{id:guid}/task-options", async (Guid id, Guid space, string? q, int? page, AppDb db, ClaimsPrincipal user) =>
         {
@@ -141,6 +144,7 @@ public static class ChatEndpoints
             if (form.Files.Count > 5 || form.Files.Sum(f => f.Length) > 25 * 1024 * 1024) throw new InputError("Máximo 5 archivos y 25 MB por mensaje.");
             var message = new ChatMessage { ChatRoomId = id, UserId = user.UserId(), ClientId = client, Body = body, TaskId = taskId, Sequence = ++room.NextSequence };
             var written = new List<string>();
+            var notified = new List<Guid>();
             try
             {
                 foreach (var file in form.Files)
@@ -155,10 +159,12 @@ public static class ChatEndpoints
                     db.ChatFiles.Add(attachment);
                 }
                 room.UpdatedAt = message.CreatedAt; db.ChatMessages.Add(message);
+                notified = await ChatNotificationEvents.Stage(db, message, ct);
                 await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
             }
             catch { foreach (var path in written) File.Delete(path); throw; }
             foreach (var uid in await db.ChatMembers.Where(m => m.ChatRoomId == id).Select(m => m.UserId).ToListAsync(ct)) feed.Publish(null, uid, "chat");
+            foreach (var uid in notified) feed.Publish(null, uid, "chat-notifications");
             return Results.Ok(new { message.Id });
         });
         routes.MapGet("/files/{id:guid}", async (Guid id, bool? download, AppDb db, ClaimsPrincipal user, IConfiguration config) =>

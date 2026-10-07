@@ -57,7 +57,10 @@ public static class NotificationEndpoints
             if (device == null) { device = new PushDevice { EndpointHash = hash }; db.PushDevices.Add(device); }
             // Rebinding a shared browser invalidates queued deliveries for its previous account.
             if (device.UserId != userId || device.SessionVersion != int.Parse(user.FindFirstValue("sv")!) || device.P256dh != input.Keys.P256dh || device.Auth != input.Keys.Auth)
+            {
                 await db.PushDeliveries.Where(d => d.DeviceId == device.Id).ExecuteDeleteAsync();
+                await db.ChatPushDeliveries.Where(d => d.DeviceId == device.Id).ExecuteDeleteAsync();
+            }
             device.UserId = userId; device.SessionVersion = int.Parse(user.FindFirstValue("sv")!);
             device.Endpoint = input.Endpoint; device.P256dh = input.Keys.P256dh; device.Auth = input.Keys.Auth; device.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
