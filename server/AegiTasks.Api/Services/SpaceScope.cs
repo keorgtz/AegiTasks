@@ -13,7 +13,7 @@ public sealed class SpaceScope
 }
 public static class Access
 {
-    public static readonly string[] Pages = ["tasks", "projects", "notes", "focus", "spaces", "settings", "chat"];
+    public static readonly string[] Pages = ["tasks", "projects", "notes", "focus", "spaces", "settings", "chat", "reminders"];
     public static async Task<bool> Can(AppDb db, ClaimsPrincipal user, string page)
     {
         if (user.Identity?.IsAuthenticated != true) return false;

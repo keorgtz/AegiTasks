@@ -26,6 +26,7 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
     public DbSet<WorkItem> Tasks => Set<WorkItem>();
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<Reminder> Reminders => Set<Reminder>();
     public DbSet<TaskNotification> Notifications => Set<TaskNotification>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<PushDelivery> PushDeliveries => Set<PushDelivery>();
@@ -75,6 +76,20 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
         b.Entity<ChatFile>().Property(x => x.Name).HasMaxLength(200);
         b.Entity<ChatFile>().Property(x => x.ContentType).HasMaxLength(100);
         b.Entity<ChatFile>().HasOne<ChatMessage>().WithMany().HasForeignKey(x => x.ChatMessageId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Reminder>().HasQueryFilter(r => r.SpaceId == CurrentSpaceId);
+        b.Entity<Reminder>().HasOne<Space>().WithMany().HasForeignKey(r => r.SpaceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Reminder>().HasOne<Project>().WithMany().HasForeignKey(r => new { r.ProjectId, r.SpaceId }).HasPrincipalKey(p => new { p.Id, p.SpaceId }).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Reminder>().HasOne<WorkItem>().WithMany().HasForeignKey(r => r.WorkItemId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Reminder>().HasOne<User>().WithMany().HasForeignKey(r => r.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Reminder>().HasOne<User>().WithMany().HasForeignKey(r => r.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Reminder>().Property(r => r.Title).HasMaxLength(200);
+        b.Entity<Reminder>().Property(r => r.Message).HasMaxLength(2000);
+        b.Entity<Reminder>().Property(r => r.Audience).HasMaxLength(20);
+        b.Entity<Reminder>().Property(r => r.ScheduleJson).HasMaxLength(2000);
+        b.Entity<Reminder>().Property(r => r.Version).IsConcurrencyToken();
+        b.Entity<Reminder>().HasIndex(r => new { r.Enabled, r.NextRunAt });
+        b.Entity<Reminder>().HasIndex(r => new { r.SpaceId, r.WorkItemId });
+        b.Entity<TaskNotification>().HasOne<Reminder>().WithMany().HasForeignKey(n => n.ReminderId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<TaskNotification>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<TaskNotification>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<TaskNotification>().HasOne<WorkItem>().WithMany().HasForeignKey(x => x.WorkItemId).OnDelete(DeleteBehavior.Cascade);

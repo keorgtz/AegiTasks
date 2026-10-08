@@ -281,6 +281,42 @@ try {
   console.log(
     'PASS PostgreSQL chat notification upgrade adds private settings, alerts and outbox without changing task history or existing conversations',
   );
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'ChatNotifications',
+    'Reminders',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-reminders.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-reminders.sql'), 'utf8'));
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "Reminders";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT length("Message") FROM "Notifications";').trim(), '600');
+  assert.equal(sql('legacy', 'SELECT "Body" FROM "ChatMessages";').trim(), 'Retained message');
+  assert.equal(
+    sql(
+      'legacy',
+      `SELECT is_nullable FROM information_schema.columns WHERE table_name='Notifications' AND column_name='WorkItemId';`,
+    ).trim(),
+    'YES',
+  );
+  assert.equal(
+    sql(
+      'legacy',
+      `SELECT count(*) FROM "PagePermissions" WHERE "Page"='reminders' AND "Allowed";`,
+    ).trim(),
+    '2',
+  );
+  assert.equal(
+    sql('legacy', 'SELECT count(*) FROM "Notifications" WHERE "ReminderId" IS NOT NULL;').trim(),
+    '0',
+  );
+  console.log(
+    'PASS PostgreSQL reminder upgrade preserves task/chat history, supports independent notices and grants default page access to existing roles',
+  );
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "Tasks" WHERE "ParentTaskId" IS NOT NULL;').trim(),
     '0',
@@ -352,7 +388,7 @@ try {
   assert.equal(sql('legacy', 'SELECT count(*) FROM "WorkItemTags";').trim(), '1');
   assert.equal(
     sql('legacy', 'SELECT count(*) FROM "PagePermissions" WHERE "Allowed";').trim(),
-    '14',
+    '16',
   );
   console.log(
     'PASS PostgreSQL upgrade preserves the legacy team, projects and tags and creates personal spaces',
@@ -375,6 +411,7 @@ try {
         notificationDetailsMigration: true,
         chatMigration: true,
         chatNotificationsMigration: true,
+        remindersMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

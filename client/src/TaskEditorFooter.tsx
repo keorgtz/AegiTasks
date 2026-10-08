@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import {
   CalendarDays,
+  BellRing,
   Clock3,
   FolderKanban,
   GitBranch,
@@ -25,6 +26,7 @@ type Props = {
   existing: boolean;
   onSave: () => void;
   onParent: () => void;
+  onReminders?: () => void;
 };
 export function TaskEditorFooter({
   draft,
@@ -38,6 +40,7 @@ export function TaskEditorFooter({
   existing,
   onSave,
   onParent,
+  onReminders,
 }: Props) {
   const [property, setProperty] = useState<Property | null>(null);
   const value =
@@ -399,6 +402,17 @@ export function TaskEditorFooter({
               {draft.parentTaskId ? draft.parentTitle || 'Padre seleccionado' : 'Agregar padre'}
             </span>
           </button>
+          {onReminders && (
+            <button
+              type="button"
+              className="task-property-chip"
+              onClick={onReminders}
+              aria-label="Recordatorios del pendiente"
+            >
+              <BellRing size={15} />
+              <span>Recordatorios</span>
+            </button>
+          )}
         </div>
         <div className="task-editor-save">
           <small className="muted">

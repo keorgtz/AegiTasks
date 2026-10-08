@@ -13,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<SpaceScope>();
 builder.Services.AddSingleton<ChangeFeed>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHostedService<ReminderWorker>();
 builder.Services.AddSingleton<ChatPresence>();
 builder.Services.AddSingleton<PushKeys>();
 builder.Services.AddSingleton<PushWakeup>();
@@ -79,7 +80,7 @@ app.Use(async (c, next) => {
     if (c.User.Identity?.IsAuthenticated == true) {
         var scope = c.RequestServices.GetRequiredService<SpaceScope>();
         scope.UserId = c.User.UserId();
-        var paths = new[] { "/api/workspace", "/api/projects", "/api/modules", "/api/cycles", "/api/folders", "/api/statuses", "/api/tags", "/api/tasks", "/api/attachments", "/api/notes", "/api/note-folders", "/api/focus" };
+        var paths = new[] { "/api/reminders", "/api/workspace", "/api/projects", "/api/modules", "/api/cycles", "/api/folders", "/api/statuses", "/api/tags", "/api/tasks", "/api/attachments", "/api/notes", "/api/note-folders", "/api/focus" };
         if (paths.Any(p => c.Request.Path.StartsWithSegments(p))) {
             var db = c.RequestServices.GetRequiredService<AppDb>();
             var raw = c.Request.Headers["X-Space-Id"].ToString();
@@ -107,17 +108,18 @@ app.Use(async (c, next) => {
     var area = c.Request.Path.Value?.Split('/').ElementAtOrDefault(2);
     switch (area) {
         case "projects":
-            feed.Publish(space, null, "catalog", "tasks");
+            feed.Publish(space, null, "catalog", "tasks", "reminders");
             if (c.Request.Method == "DELETE") feed.Publish(space, null, "notes");
             break;
-        case "folders": case "statuses": case "tags": case "modules": case "cycles": feed.Publish(space, null, "catalog", "tasks"); break;
+        case "folders": case "statuses": case "tags": case "modules": case "cycles": feed.Publish(space, null, "catalog", "tasks", "reminders"); break;
+        case "reminders": feed.Publish(space, null, "reminders"); break;
         case "tasks":
-            feed.Publish(space, null, "tasks");
+            feed.Publish(space, null, "tasks", "reminders");
             if (c.Request.Method == "DELETE") feed.Publish(space, null, "notes");
             break;
         case "notes": case "note-folders":
             feed.Publish(space, null, "notes");
-            if (c.Request.Path.Value!.EndsWith("/task", StringComparison.OrdinalIgnoreCase)) feed.Publish(space, null, "tasks");
+            if (c.Request.Path.Value!.EndsWith("/task", StringComparison.OrdinalIgnoreCase)) feed.Publish(space, null, "tasks", "reminders");
             break;
         case "focus": feed.Publish(null, c.User.UserId(), "focus"); break;
         case "spaces": case "users": case "roles": feed.Publish(null, null, "access", "catalog"); break;
@@ -126,7 +128,7 @@ app.Use(async (c, next) => {
 });
 app.MapGet("/api/events", (HttpContext c, Guid space, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(c, space, scopes)).RequireAuthorization();
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
-app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications(); app.MapChat(); app.MapChatNotifications();
+app.MapReminders(); app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications(); app.MapChat(); app.MapChatNotifications();
 app.MapPushPreviews();
 if (!app.Environment.IsEnvironment("Testing"))
 {
@@ -159,6 +161,7 @@ if (!app.Environment.IsEnvironment("Testing"))
             await SqlitePlanningUpgrade.Apply(db);
             await SqliteNotificationUpgrade.Apply(db);
             await ChatUpgrade.Apply(db);
+            await ReminderUpgrade.Apply(db);
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }

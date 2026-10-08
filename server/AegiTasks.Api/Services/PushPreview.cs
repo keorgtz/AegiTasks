@@ -32,8 +32,8 @@ public sealed class PushPreview(IDataProtectionProvider provider)
             return alert == null ? null : await ChatNotificationEvents.Summary(db, alert.ChatRoomId, grant.UserId, now, ct);
         }
         var notice = await NotificationEvents.Visible(db, grant.UserId).SingleOrDefaultAsync(n => n.Id == id && n.ReadAt == null && n.CreatedAt > DateTime.UtcNow.AddDays(-1), ct);
-        if (notice == null) return null;
+        if (notice == null || notice.ReminderId != null && !await ReminderAccess.CanDeliver(db, notice.ReminderId.Value, grant.UserId, ct)) return null;
         var title = notice.TaskTitle.Length > 0 ? notice.TaskTitle : await db.Tasks.IgnoreQueryFilters().Where(t => t.Id == notice.WorkItemId).Select(t => t.Title).SingleAsync(ct);
-        return new { title, body = notice.Message, url = $"/?space={notice.SpaceId}&task={notice.WorkItemId}#inbox", tag = notice.Id.ToString(), userId = grant.UserId };
+        return new { title, body = notice.Message, url = ReminderAccess.Url(notice), tag = notice.Id.ToString(), userId = grant.UserId };
     }
 }

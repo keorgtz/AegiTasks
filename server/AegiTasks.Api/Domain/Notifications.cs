@@ -5,7 +5,8 @@ public class TaskNotification
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
     public Guid SpaceId { get; set; }
-    public Guid WorkItemId { get; set; }
+    public Guid? WorkItemId { get; set; }
+    public Guid? ReminderId { get; set; }
     public string Kind { get; set; } = "updated";
     public string TaskTitle { get; set; } = "";
     public string Message { get; set; } = "";

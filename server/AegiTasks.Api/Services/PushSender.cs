@@ -38,7 +38,7 @@ public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPush
             var device = await db.PushDevices.SingleOrDefaultAsync(d => d.Id == delivery.DeviceId, stoppingToken);
             var notification = device == null ? null : await NotificationEvents.Visible(db, device.UserId).SingleOrDefaultAsync(n => n.Id == delivery.NotificationId, stoppingToken);
             var valid = device != null && notification != null && notification.ReadAt == null &&
-                notification.CreatedAt > now.AddDays(-1) && await db.Users.AnyAsync(u => u.Id == device.UserId && u.SessionVersion == device.SessionVersion, stoppingToken);
+                notification.CreatedAt > now.AddDays(-1) && (notification.ReminderId == null || await ReminderAccess.CanDeliver(db, notification.ReminderId.Value, device!.UserId, stoppingToken)) && await db.Users.AnyAsync(u => u.Id == device.UserId && u.SessionVersion == device.SessionVersion, stoppingToken);
             if (!valid) { delivery.FinishedAt = now; await db.SaveChangesAsync(stoppingToken); continue; }
             delivery.Attempts++;
             try

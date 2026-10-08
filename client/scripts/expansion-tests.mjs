@@ -148,6 +148,7 @@ export async function testSpaces({
     'focus',
     'notes',
     'projects',
+    'reminders',
     'settings',
     'spaces',
     'tasks',
@@ -157,7 +158,16 @@ export async function testSpaces({
   await json(outsider, 'GET', `/spaces/${shared.id}/members`, undefined, 404);
   await json(outsider, 'POST', `/spaces/${shared.id}/invite`, undefined, 404);
   pass('Custom roles default to operational pages; unjoined users cannot read a workspace');
-  const allPages = ['tasks', 'projects', 'notes', 'focus', 'spaces', 'settings', 'chat'];
+  const allPages = [
+    'tasks',
+    'projects',
+    'notes',
+    'focus',
+    'spaces',
+    'settings',
+    'chat',
+    'reminders',
+  ];
   await json(
     admin,
     'PUT',
@@ -287,13 +297,15 @@ export async function testExpansionUi({
     .locator('.role-card')
     .filter({ has: page.getByRole('heading', { name: 'Editor QA', exact: true }) });
   await roleCard.waitFor();
-  assert.equal(await roleCard.locator('input:checked').count(), 7);
+  const pageCount = (await json(admin, 'GET', '/roles')).pages.length;
+  assert.equal(await roleCard.locator('input:checked').count(), pageCount);
   await roleCard.getByLabel('Notas', { exact: true }).click();
   await page.waitForFunction(
-    () =>
+    (expected) =>
       [...document.querySelectorAll('.role-card')]
         .find((el) => el.textContent.includes('Editor QA'))
-        ?.querySelectorAll('input:checked').length === 6,
+        ?.querySelectorAll('input:checked').length === expected,
+    pageCount - 1,
   );
   await page.screenshot({ path: path.join(artifacts, 'roles-desktop.png'), fullPage: true });
   pass('Admin can create a role and change page access through the actual UI');

@@ -8,7 +8,8 @@ import './styles/notifications.css';
 interface Notice {
   id: string;
   spaceId: string;
-  workItemId: string;
+  workItemId: string | null;
+  reminderId: string | null;
   message: string;
   title: string;
   spaceName: string;

@@ -11,6 +11,11 @@ public static class Deletion
     public record RemovedContent(Guid[] Files, Guid[] FocusUsers);
     public static async Task<RemovedContent> RemoveTasks(AppDb db, List<WorkItem> tasks, Guid? projectId = null, Guid? actorId = null)
     {
+        if (projectId != null) foreach (var reminder in await db.Reminders.Where(r => r.ProjectId == projectId).ToListAsync()) {
+            reminder.ProjectId = null; reminder.Enabled = false; reminder.NextRunAt = null;
+            if (reminder.Audience == "project") reminder.Audience = "workspace";
+            reminder.Version = Guid.NewGuid(); reminder.UpdatedAt = DateTime.UtcNow;
+        }
         var ids = tasks.Select(t => t.Id).ToArray();
         foreach (var child in await db.Tasks.Where(t => t.ParentTaskId != null && ids.Contains(t.ParentTaskId.Value)).ToListAsync()) {
             child.ParentTaskId = null; child.Version = Guid.NewGuid(); child.UpdatedAt = DateTime.UtcNow;

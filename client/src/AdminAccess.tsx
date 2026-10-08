@@ -12,6 +12,7 @@ type RoleData = {
 };
 export const pageNames: Record<string, string> = {
   tasks: 'Pendientes y bandeja',
+  reminders: 'Recordatorios',
   projects: 'Proyectos y organización',
   notes: 'Notas',
   focus: 'Focus Mode',

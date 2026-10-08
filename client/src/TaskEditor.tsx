@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import {
   Archive,
   ArrowUpRight,
@@ -49,7 +49,9 @@ export type Draft = {
   estimateCategory: string;
   tagIds: string[];
 };
+const TaskReminders = lazy(() => import('./Reminders').then((m) => ({ default: m.TaskReminders })));
 export function TaskEditor({
+  canReminders = true,
   id,
   projectId,
   folderId,
@@ -65,6 +67,7 @@ export function TaskEditor({
   onNavigate,
   onCreateChild,
 }: {
+  canReminders?: boolean;
   id?: string;
   projectId: string;
   folderId: string;
@@ -83,6 +86,7 @@ export function TaskEditor({
   const [activeTab, setActiveTab] = useState<DetailTab>('general');
   const tabsId = useId();
   const formId = useId();
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const [parentPicker, setParentPicker] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   const selectTab = (tab: DetailTab) => {
@@ -587,6 +591,7 @@ export function TaskEditor({
         busy={busy}
         dirty={dirty}
         existing={!!id}
+        onReminders={canReminders && id ? () => setRemindersOpen(true) : undefined}
         onParent={() => setParentPicker(true)}
         onSave={() => {
           const form = document.getElementById(formId) as HTMLFormElement;
@@ -596,6 +601,17 @@ export function TaskEditor({
           } else form.requestSubmit();
         }}
       />
+      {remindersOpen && id && detail && (
+        <Suspense fallback={<p role="status">Cargando recordatorios…</p>}>
+          <TaskReminders
+            taskId={id}
+            title={detail.item.title}
+            workspace={w}
+            user={user}
+            onClose={() => setRemindersOpen(false)}
+          />
+        </Suspense>
+      )}
       {parentPicker && (
         <TaskRelationPicker
           projectId={draft.projectId}

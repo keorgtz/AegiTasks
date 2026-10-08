@@ -81,7 +81,9 @@ public static class NotificationEvents
 
     // Recheck membership, page permissions and project moves whenever reading or delivering.
     public static IQueryable<TaskNotification> Visible(AppDb db, Guid userId) => db.Notifications.Where(n => n.UserId == userId &&
-        db.Users.Any(u => u.Id == userId && u.Active && (u.Role == "Admin" || db.PagePermissions.Any(p => p.RoleName == u.Role && p.Page == "tasks" && p.Allowed))) &&
         Access.SpacesFor(db, userId).Any(s => s.Id == n.SpaceId) &&
-        db.Tasks.IgnoreQueryFilters().Any(t => t.Id == n.WorkItemId && db.Projects.IgnoreQueryFilters().Any(p => p.Id == t.ProjectId && p.SpaceId == n.SpaceId)));
+        (n.ReminderId != null
+            ? ReminderAccess.ForRecipient(db, userId).Any(r => r.Id == n.ReminderId && r.SpaceId == n.SpaceId && r.WorkItemId == n.WorkItemId)
+            : db.Users.Any(u => u.Id == userId && u.Active && (u.Role == "Admin" || db.PagePermissions.Any(p => p.RoleName == u.Role && p.Page == "tasks" && p.Allowed))) &&
+              db.Tasks.IgnoreQueryFilters().Any(t => t.Id == n.WorkItemId && db.Projects.IgnoreQueryFilters().Any(p => p.Id == t.ProjectId && p.SpaceId == n.SpaceId))));
 }

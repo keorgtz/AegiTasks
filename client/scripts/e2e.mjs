@@ -14,6 +14,7 @@ import { testNavigationInbox } from './navigation-inbox-tests.mjs';
 import { testTaskInteractions } from './task-interaction-tests.mjs';
 import { testNotifications } from './notification-tests.mjs';
 import { testSettings } from './settings-tests.mjs';
+import { testReminders } from './reminder-tests.mjs';
 import { testChat } from './chat-tests.mjs';
 import { testChatNotifications } from './chat-notification-tests.mjs';
 import { testShellChatLayout } from './shell-chat-layout-tests.mjs';
@@ -71,7 +72,16 @@ async function ready(url) {
   throw new Error(`Service did not start: ${url}\n${apiLog}`);
 }
 async function json(context, method, url, body, expected = 200) {
-  const r = await context.fetch(`/api${url}`, { method, data: body });
+  let r = await context.fetch(`/api${url}`, { method, data: body });
+  // Large suites share one loopback IP. Respect the production login window without weakening it.
+  if (method === 'POST' && url === '/auth/login' && expected === 200 && r.status() === 429) {
+    console.log('WAIT Test authentication reached the fixed login window; awaiting reset');
+    const deadline = Date.now() + 310000;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      r = await context.fetch(`/api${url}`, { method, data: body });
+    } while (r.status() === 429 && Date.now() < deadline);
+  }
   assert.equal(r.status(), expected, `${method} ${url}: ${await r.text()}`);
   const text = await r.text();
   return text ? JSON.parse(text) : null;
@@ -417,6 +427,8 @@ try {
     });
   if (process.env.AEGITASKS_TEST_ONLY === 'password-presence') {
     // The new feature suite above also runs as part of the full regression suite.
+  } else if (process.env.AEGITASKS_TEST_ONLY === 'reminders') {
+    await testReminders({ page, request, admin, adminUser, json, pass, artifacts, password });
   } else if (process.env.AEGITASKS_TEST_ONLY === 'chat') {
     await testChat({ page, request, admin, adminUser, shared, json, pass, artifacts, password });
     await testChatNotifications({
@@ -631,6 +643,7 @@ try {
     await testFocusVisuals({ page, context, admin, support, json, pass, artifacts });
     await testFocusLayout({ page, admin, json, pass, artifacts });
     await testNoteEditor({ page, context, admin, json, pass, artifacts });
+    await testReminders({ page, request, admin, adminUser, json, pass, artifacts, password });
     await testNotifications({ page, request, admin, adminUser, json, pass, artifacts, password });
     await testSettings({ page, admin, adminUser, shared, json, pass, artifacts, password });
     await testProfile({ page, request, admin, adminUser, shared, json, pass, artifacts, password });

@@ -13,6 +13,9 @@ public static class Bootstrap
             foreach (var page in Access.Pages) if (!await db.PagePermissions.AnyAsync(p => p.RoleName == name && p.Page == page)) db.PagePermissions.Add(new PagePermission { RoleName = name, Page = page });
         }
         await db.SaveChangesAsync();
+        foreach (var role in await db.Roles.Select(r => r.Name).ToListAsync())
+            if (!await db.PagePermissions.AnyAsync(p => p.RoleName == role && p.Page == "reminders")) db.PagePermissions.Add(new PagePermission { RoleName = role, Page = "reminders" });
+        await db.SaveChangesAsync();
         var existing = await db.Users.OrderBy(u => u.Email).ToListAsync();
         var usernames = existing.Where(u => !string.IsNullOrEmpty(u.Username)).Select(u => u.Username).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var u in existing) if (string.IsNullOrEmpty(u.Username)) u.Username = Rules.DefaultUsername(u.Email, usernames);

@@ -62,6 +62,7 @@ import {
 import { SpaceGate, SpaceSelector, SpacesPage } from './Spaces';
 import { NotificationCenter } from './Notifications';
 import { ChatProvider, ChatButton } from './ChatContext';
+const RemindersPage = lazy(() => import('./Reminders').then((m) => ({ default: m.RemindersPage })));
 const ChatPage = lazy(() => import('./Chat'));
 import { DeviceNotificationsProvider, DeviceNotificationSettings } from './DeviceNotifications';
 import './styles/settings.css';
@@ -711,13 +712,17 @@ function WorkspaceApp({
   ].filter(Boolean).length;
   const nav = [
     { id: 'inbox', name: 'Bandeja', icon: Inbox },
+    { id: 'reminders', name: 'Recordatorios', icon: Bell },
     { id: 'notes', name: 'Notas', icon: FileText },
     { id: 'focus', name: 'Focus', icon: Timer },
     { id: 'chat', name: 'Chat', icon: MessageCircle },
   ];
   const navigation = (mobile = false, compact = false) => (
     <>
-      {(mobile ? [nav[0]!, nav[3]!, nav[1]!, nav[2]!] : nav)
+      {(mobile
+        ? ['inbox', 'chat', 'notes', 'focus'].map((id) => nav.find((n) => n.id === id)!)
+        : nav
+      )
         .filter(
           (n) =>
             permissions.includes(routePage(n.id)) &&
@@ -728,7 +733,7 @@ function WorkspaceApp({
             key={n.id}
             title={compact ? n.name : undefined}
             aria-label={compact ? n.name : undefined}
-            className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) || (n.id === 'chat' && route.startsWith('chat/')) ? 'active' : ''}`}
+            className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) || (n.id === 'chat' && route.startsWith('chat/')) || (n.id === 'reminders' && route.startsWith('reminders/')) ? 'active' : ''}`}
             onClick={() => navigate(n.id)}
           >
             <n.icon size={21} />
@@ -841,8 +846,13 @@ function WorkspaceApp({
               )}
               <NotificationCenter
                 onOpen={(notice) => {
-                  if (notice.spaceId === space.id) openTask(notice.workItemId);
-                  else location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+                  if (notice.workItemId) {
+                    if (notice.spaceId === space.id) openTask(notice.workItemId);
+                    else
+                      location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+                  } else if (notice.spaceId === space.id)
+                    navigate(`reminders/${notice.reminderId}`);
+                  else location.assign(`/?space=${notice.spaceId}#reminders/${notice.reminderId}`);
                 }}
               />
               <button
@@ -900,7 +910,9 @@ function WorkspaceApp({
                     ? 'notes'
                     : route.startsWith('chat/')
                       ? 'chat'
-                      : route),
+                      : route.startsWith('reminders/')
+                        ? 'reminders'
+                        : route),
               )?.name ||
                 (route === 'account'
                   ? 'Mi cuenta'
@@ -915,8 +927,16 @@ function WorkspaceApp({
           {!(isChat && wideChat) && (
             <NotificationCenter
               onOpen={(notice) => {
-                if (notice.spaceId === space.id) openTask(notice.workItemId);
-                else location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+                if (notice.workItemId) {
+                  if (notice.workItemId) {
+                    if (notice.spaceId === space.id) openTask(notice.workItemId);
+                    else
+                      location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+                  } else if (notice.spaceId === space.id)
+                    navigate(`reminders/${notice.reminderId}`);
+                  else location.assign(`/?space=${notice.spaceId}#reminders/${notice.reminderId}`);
+                } else if (notice.spaceId === space.id) navigate(`reminders/${notice.reminderId}`);
+                else location.assign(`/?space=${notice.spaceId}#reminders/${notice.reminderId}`);
               }}
             />
           )}
@@ -1013,6 +1033,16 @@ function WorkspaceApp({
                   space={space}
                   workspace={w}
                   canTasks={permissions.includes('tasks')}
+                  openTask={openTask}
+                />
+              </Suspense>
+            ) : route === 'reminders' || route.startsWith('reminders/') ? (
+              <Suspense fallback={<p role="status">Cargando recordatorios…</p>}>
+                <RemindersPage
+                  workspace={w}
+                  user={user}
+                  editorId={route.startsWith('reminders/') ? route.slice(10) : null}
+                  navigate={navigate}
                   openTask={openTask}
                 />
               </Suspense>
@@ -1573,6 +1603,7 @@ function WorkspaceApp({
             {editor && (
               <TaskEditor
                 key={`${editor}-${parentTask?.id || ''}`}
+                canReminders={permissions.includes('reminders')}
                 id={editor === 'new' ? undefined : editor}
                 projectId={parentTask?.projectId || taskProjectId}
                 parentTask={parentTask}
