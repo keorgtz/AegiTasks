@@ -92,13 +92,19 @@
 }
 .mobile-menu {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .mobile-menu .sidebar-link {
   background: var(--surface-2);
   border-radius: 12px;
   font-size: 12px;
+  min-width: 0;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.mobile-menu .sidebar-link svg {
+  flex-shrink: 0;
 }
 .notes-layout {
   display: grid;

@@ -50,7 +50,7 @@
   scrollbar-width: thin;
   align-items: center;
 }
-.sidebar-is-compact .sidebar-link {
+.sidebar-is-compact > .sidebar .sidebar-link {
   justify-content: center;
   width: 44px;
   height: 44px;

@@ -718,7 +718,7 @@ function WorkspaceApp({
   ];
   const navigation = (mobile = false, compact = false) => (
     <>
-      {nav
+      {(mobile ? [nav[0]!, nav[3]!, nav[1]!, nav[2]!] : nav)
         .filter(
           (n) =>
             permissions.includes(routePage(n.id)) &&

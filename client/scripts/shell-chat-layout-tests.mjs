@@ -53,6 +53,76 @@ export async function testShellChatLayout({ page, admin, adminUser, json, pass, 
 
   await page.goto('/#inbox');
   for (const [width, height, theme] of [
+    [320, 740, 'light'],
+    [390, 844, 'dark'],
+    [430, 932, 'light'],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    for (const route of ['inbox', 'notes', 'focus', 'chat']) {
+      await page.goto(`/#${route}`);
+      const bottom = page.getByRole('navigation', { name: 'Navegación móvil', exact: true });
+      await bottom.getByRole('button', { name: 'Más', exact: true }).waitFor();
+      assert.deepEqual(await bottom.locator('button > span').allTextContents(), [
+        'Bandeja',
+        'Chat',
+        'Notas',
+        'Focus',
+        'Más',
+      ]);
+      await bottom.getByRole('button', { name: 'Más', exact: true }).click();
+      const more = page.getByRole('dialog', { name: 'Más opciones', exact: true });
+      const menu = more.locator('.mobile-menu');
+      for (const button of await menu.locator('.sidebar-link').all()) {
+        const bounds = await button.boundingBox();
+        const grid = await menu.boundingBox();
+        const padding = await menu.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+        });
+        assert.ok(
+          bounds.width >= 100 && bounds.width >= (grid.width - padding) / 2 - 10,
+          `${route}: menu buttons must fill their grid cell, ${JSON.stringify(bounds)}`,
+        );
+        assert.ok(bounds.height >= 44);
+        assert.ok(bounds.x >= grid.x && bounds.x + bounds.width <= grid.x + grid.width + 1);
+        const icons = button.locator('svg');
+        assert.ok((await icons.count()) >= 1);
+        for (const icon of await icons.all()) {
+          const glyph = await icon.boundingBox();
+          assert.ok(
+            glyph.width >= 15 &&
+              glyph.x >= bounds.x &&
+              glyph.x + glyph.width <= bounds.x + bounds.width + 1,
+            `${route}: readable icon inside its button`,
+          );
+        }
+      }
+      await more.getByRole('button', { name: 'Ajustes', exact: true }).click();
+      await more.getByRole('navigation', { name: 'Submenú de ajustes', exact: true }).waitFor();
+      await more.getByRole('button', { name: 'Ajustes', exact: true }).click();
+      await page.screenshot({
+        path: path.join(artifacts, `more-menu-${route}-${width}-${theme}.png`),
+      });
+      await more.press('Escape');
+      assert.ok(await bottom.getByRole('button', { name: 'Más', exact: true }).isVisible());
+    }
+  }
+  await page
+    .getByRole('navigation', { name: 'Navegación móvil', exact: true })
+    .getByRole('button', { name: 'Más', exact: true })
+    .click();
+  const navigationMenu = page.getByRole('dialog', { name: 'Más opciones', exact: true });
+  await navigationMenu.getByRole('button', { name: 'Notas', exact: true }).click();
+  await page.waitForURL((url) => url.hash === '#notes');
+  assert.equal(await navigationMenu.count(), 0);
+  pass(
+    'Mobile navigation puts Chat second; More options retain full-width buttons/icons on Inbox, Notes, Focus and Chat in both themes, with working settings/close/navigation',
+  );
+  await page.goto('/#inbox');
+  for (const [width, height, theme] of [
     [320, 640, 'light'],
     [360, 740, 'dark'],
     [390, 844, 'dark'],
