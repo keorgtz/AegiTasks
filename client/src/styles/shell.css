@@ -1,0 +1,175 @@
+/* Compact app chrome; safe areas are reserved once, beside the device controls. */
+.app-shell {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --sidebar-width: 244px;
+  --header-height: calc(56px + var(--safe-top));
+  --bottom-nav-height: calc(56px + var(--safe-bottom));
+}
+.app-shell.sidebar-is-compact {
+  --sidebar-width: 72px;
+}
+.app-shell > .sidebar {
+  width: var(--sidebar-width);
+  padding: 12px;
+}
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.sidebar-top .brand {
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+.sidebar-top .brand strong {
+  font-size: 17px;
+}
+.sidebar-collapse {
+  background: transparent;
+  border: 0;
+  flex-shrink: 0;
+}
+.sidebar-is-compact .sidebar-top {
+  flex-direction: column;
+  gap: 4px;
+}
+.sidebar-is-compact .brand > div {
+  display: none;
+}
+.sidebar-rail {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  align-items: center;
+}
+.sidebar-is-compact .sidebar-link {
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.sidebar-is-compact .sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.sidebar-is-compact .profile {
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+.sidebar-is-compact .profile > .avatar,
+.sidebar-is-compact .profile .btn-icon {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.sidebar-chat-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sidebar-overflow {
+  display: none;
+}
+.sidebar-is-compact .sidebar-chat-tools {
+  flex-direction: column;
+}
+.app-shell > .app-header {
+  height: var(--header-height);
+  left: var(--sidebar-width);
+  padding: var(--safe-top) 20px 0;
+  gap: 8px;
+}
+.app-shell .header-actions {
+  gap: 6px;
+}
+.app-shell .header-context {
+  gap: 12px;
+}
+.app-shell .header-context .space-selector {
+  padding: 0 8px;
+  border-radius: 12px;
+}
+.app-shell .header-context .space-selector select {
+  min-height: 44px;
+  padding-block: 4px;
+}
+.app-shell > .app-content:where(:not(:has(.note-editor-page))) {
+  margin-left: var(--sidebar-width);
+  padding-top: calc(var(--header-height) + 20px);
+}
+.app-shell > .app-content:has(.focus-page) {
+  padding-top: calc(var(--header-height) + 12px);
+}
+@media (max-width: 1023px) {
+  .app-shell {
+    --sidebar-width: 0px;
+  }
+  .app-shell.sidebar-is-compact {
+    --sidebar-width: 0px;
+  }
+  .app-shell > .app-header {
+    padding-inline: max(8px, var(--safe-left)) max(8px, var(--safe-right));
+  }
+  .app-shell > .app-content:where(:not(:has(.note-editor-page))) {
+    padding-top: calc(var(--header-height) + 16px);
+    padding-bottom: calc(var(--bottom-nav-height) + 16px);
+  }
+  .app-shell > .app-content:has(.focus-page) {
+    padding-top: calc(var(--header-height) + 12px);
+    padding-bottom: calc(var(--bottom-nav-height) + 12px);
+  }
+  .app-shell > .bottom-nav {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--bottom-nav-height);
+    padding: 4px max(8px, var(--safe-right)) calc(4px + var(--safe-bottom))
+      max(8px, var(--safe-left));
+    border-radius: 0;
+    border-width: 1px 0 0;
+    box-shadow: none;
+    gap: 4px;
+  }
+  .bottom-nav .nav-item {
+    min-height: 44px;
+    gap: 2px;
+    border-radius: 12px;
+  }
+  .bottom-nav .nav-item svg {
+    width: 20px;
+    height: 20px;
+  }
+  .app-shell .toast {
+    bottom: calc(var(--bottom-nav-height) + 12px);
+  }
+}
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 1023px) {
+  .app-shell > .app-content:has(.focus-page) {
+    padding-top: 12px;
+  }
+}
+@media (min-width: 768px) and (max-height: 600px) {
+  .sidebar-is-compact .sidebar-overflow {
+    display: inline-flex;
+    order: 1;
+  }
+  .sidebar-is-compact .sidebar-bottom > :is(.sidebar-link, .profile),
+  .sidebar-is-compact .sidebar-chat-tools > .btn-icon:not(.notification-bell) {
+    display: none;
+  }
+}

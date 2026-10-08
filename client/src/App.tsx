@@ -33,6 +33,9 @@ import {
   MoreHorizontal,
   SlidersHorizontal,
   MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Globe2,
 } from 'lucide-react';
 import { api, ApiError, errorMessage, setActiveSpace } from './api';
 import { useChanges } from './changes';
@@ -335,6 +338,40 @@ function WorkspaceApp({
   const routePage = pageForRoute;
   const [w, setWorkspace] = useState<Workspace | null>(null);
   const [route, setRoute] = useState(() => normalizeRoute(location.hash.slice(1)));
+  const isChat = route === 'chat' || route.startsWith('chat/');
+  const [wideChat, setWideChat] = useState(() => matchMedia('(min-width: 768px)').matches);
+  useEffect(() => {
+    const media = matchMedia('(min-width: 768px)');
+    const changed = () => setWideChat(media.matches);
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  const sidebarKey = 'aegitasks-sidebar-compact-' + user.id;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(sidebarKey) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [chatNavigationExpanded, setChatNavigationExpanded] = useState(false);
+  const [spaceMenu, setSpaceMenu] = useState(false);
+  const spacePicker = useRef<HTMLDivElement>(null);
+  const sidebarCompact = isChat ? !chatNavigationExpanded : sidebarCollapsed;
+  useEffect(() => {
+    setChatNavigationExpanded(false);
+  }, [isChat]);
+  function toggleSidebar() {
+    if (isChat) setChatNavigationExpanded((value) => !value);
+    else {
+      setSidebarCollapsed(!sidebarCollapsed);
+      try {
+        localStorage.setItem(sidebarKey, String(!sidebarCollapsed));
+      } catch {
+        /* Navigation remains available without storage. */
+      }
+    }
+  }
   useEffect(() => {
     const raw = location.hash.slice(1);
     const normalized = normalizeRoute(raw);
@@ -679,7 +716,7 @@ function WorkspaceApp({
     { id: 'focus', name: 'Focus', icon: Timer },
     { id: 'chat', name: 'Chat', icon: MessageCircle },
   ];
-  const navigation = (mobile = false) => (
+  const navigation = (mobile = false, compact = false) => (
     <>
       {nav
         .filter(
@@ -690,60 +727,155 @@ function WorkspaceApp({
         .map((n) => (
           <button
             key={n.id}
+            title={compact ? n.name : undefined}
+            aria-label={compact ? n.name : undefined}
             className={`${mobile ? 'nav-item' : 'sidebar-link'} ${route === n.id || (n.id === 'notes' && route.startsWith('notes/')) || (n.id === 'chat' && route.startsWith('chat/')) ? 'active' : ''}`}
             onClick={() => navigate(n.id)}
           >
             <n.icon size={21} />
-            <span>{n.name}</span>
-            {!mobile && n.id === 'inbox' && <span className="nav-count">{summary.open}</span>}
+            <span className={compact ? 'sr-only' : undefined}>{n.name}</span>
+            {!mobile && !compact && n.id === 'inbox' && (
+              <span className="nav-count">{summary.open}</span>
+            )}
           </button>
         ))}
-      {!mobile && (
+      {!mobile && !compact && (
         <SettingsDisclosure route={route} permissions={permissions} navigate={navigate} />
+      )}
+      {compact && (
+        <button
+          className={`sidebar-link ${route.startsWith('settings/') ? 'active' : ''}`}
+          title="Ajustes"
+          aria-label="Ajustes"
+          onClick={() => navigate('settings/account')}
+        >
+          <SettingsIcon size={21} />
+        </button>
       )}
     </>
   );
   const title = project?.name || (route === 'archived' ? 'Archivados' : 'Tu bandeja');
   return (
     <div
-      className="app-shell"
+      className={`app-shell ${sidebarCompact ? 'sidebar-is-compact' : ''} ${isChat ? 'is-chat' : ''}`}
       data-device-prompt-ready={!!w && !editor && !route.startsWith('notes/')}
     >
       <a href="#main-content" className="skip-link">
         Ir al contenido
       </a>
       <aside className="sidebar">
-        <Brand onInstall={() => setInstallHelp(true)} />
-        <SidebarSections
-          label={space.isPersonal ? 'MI ESPACIO' : 'WORKSPACE COMPARTIDO'}
-          navigation={navigation()}
-          preferenceKey={'aegitasks-sidebar-' + user.id + '-' + space.id}
-          catalogActive={route === 'projects'}
-          createProject={permissions.includes('projects') ? () => setProjectModal(true) : undefined}
-          projects={
-            w?.projects.filter(
-              (p) =>
-                !p.archived && (permissions.includes('tasks') || permissions.includes('projects')),
-            ) || []
-          }
-          activeProjectId={projectId}
-          activeSection={planningKind || ''}
-          canTasks={permissions.includes('tasks')}
-          canProjects={permissions.includes('projects')}
-          navigate={navigate}
-        />
+        <div className="sidebar-top">
+          <Brand onInstall={() => setInstallHelp(true)} />
+          <button
+            className="btn-icon sidebar-collapse"
+            onClick={toggleSidebar}
+            aria-label={sidebarCompact ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+            title={sidebarCompact ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+            aria-expanded={!sidebarCompact}
+          >
+            {sidebarCompact ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          </button>
+        </div>
+        {sidebarCompact ? (
+          <nav className="sidebar-rail" aria-label="Navegación principal">
+            {navigation(false, true)}
+            <button
+              className="sidebar-link"
+              title="Cambiar espacio"
+              aria-label="Cambiar espacio"
+              onClick={() => setSpaceMenu(true)}
+            >
+              <Globe2 size={21} />
+            </button>
+            {(permissions.includes('tasks') || permissions.includes('projects')) && (
+              <button
+                className={`sidebar-link ${projectId || route === 'projects' ? 'active' : ''}`}
+                title="Explorar proyectos"
+                aria-label="Explorar proyectos"
+                onClick={() => setProjectMenu(true)}
+              >
+                <FolderTree size={21} />
+              </button>
+            )}
+          </nav>
+        ) : (
+          <SidebarSections
+            label={space.isPersonal ? 'MI ESPACIO' : 'WORKSPACE COMPARTIDO'}
+            navigation={navigation()}
+            preferenceKey={'aegitasks-sidebar-' + user.id + '-' + space.id}
+            catalogActive={route === 'projects'}
+            createProject={
+              permissions.includes('projects') ? () => setProjectModal(true) : undefined
+            }
+            projects={
+              w?.projects.filter(
+                (p) =>
+                  !p.archived &&
+                  (permissions.includes('tasks') || permissions.includes('projects')),
+              ) || []
+            }
+            activeProjectId={projectId}
+            activeSection={planningKind || ''}
+            canTasks={permissions.includes('tasks')}
+            canProjects={permissions.includes('projects')}
+            navigate={navigate}
+          />
+        )}
         <div className="sidebar-bottom">
+          {sidebarCompact && (
+            <button
+              className="btn-icon sidebar-overflow"
+              title="Más opciones"
+              aria-label="Más opciones"
+              onClick={() => setMoreMenu(true)}
+            >
+              <MoreHorizontal size={21} />
+            </button>
+          )}
+          {isChat && wideChat && (
+            <div className="sidebar-chat-tools">
+              {!sidebarCompact && (
+                <button className="sidebar-link" onClick={() => setSpaceMenu(true)}>
+                  <Globe2 size={19} />
+                  <span>Cambiar espacio</span>
+                </button>
+              )}
+              <NotificationCenter
+                onOpen={(notice) => {
+                  if (notice.spaceId === space.id) openTask(notice.workItemId);
+                  else location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+                }}
+              />
+              <button
+                className="btn-icon"
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              >
+                {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+              </button>
+            </div>
+          )}
           {permissions.includes('tasks') && (
             <button
               className={`sidebar-link ${route === 'archived' ? 'active' : ''}`}
+              title="Archivados"
+              aria-label="Archivados"
               onClick={() => navigate('archived')}
             >
-              <Archive size={19} /> Archivados
+              <Archive size={19} />
+              <span className={sidebarCompact ? 'sr-only' : undefined}>Archivados</span>
             </button>
           )}
           <div className="profile">
-            <div className="avatar">{initials(user.name)}</div>
-            <span>
+            <button
+              className="avatar"
+              onClick={() => navigate('account')}
+              aria-label="Mi cuenta"
+              title={user.name}
+            >
+              {initials(user.name)}
+            </button>
+            <span className={sidebarCompact ? 'sr-only' : undefined}>
               <strong>{user.name}</strong>
               <small>{user.role === 'Admin' ? 'Administrador' : user.role}</small>
             </span>
@@ -781,12 +913,14 @@ function WorkspaceApp({
         </div>
         <div className="header-actions">
           {permissions.includes('chat') && <ChatButton onOpen={() => navigate('chat')} />}
-          <NotificationCenter
-            onOpen={(notice) => {
-              if (notice.spaceId === space.id) openTask(notice.workItemId);
-              else location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
-            }}
-          />
+          {!(isChat && wideChat) && (
+            <NotificationCenter
+              onOpen={(notice) => {
+                if (notice.spaceId === space.id) openTask(notice.workItemId);
+                else location.assign(`/?space=${notice.spaceId}&task=${notice.workItemId}#inbox`);
+              }}
+            />
+          )}
           <span className="today-label">
             {new Date().toLocaleDateString('es-MX', {
               weekday: 'long',
@@ -1505,6 +1639,30 @@ function WorkspaceApp({
         <Modal title="Más opciones" onClose={() => setMoreMenu(false)}>
           <div className="modal-body mobile-menu">
             {navigation()}
+            <button className="sidebar-link" onClick={() => navigate('account')}>
+              <UserRound size={19} /> Mi cuenta
+            </button>
+            <button
+              className="sidebar-link"
+              onClick={() => {
+                setMoreMenu(false);
+                setSpaceMenu(true);
+              }}
+            >
+              <Globe2 size={19} /> Cambiar espacio
+            </button>
+            {permissions.includes('tasks') && (
+              <button className="sidebar-link" onClick={() => navigate('archived')}>
+                <Archive size={19} /> Archivados
+              </button>
+            )}
+            <button className="sidebar-link" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}{' '}
+              {theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            </button>
+            <button className="sidebar-link" onClick={logout}>
+              <LogOut size={19} /> Cerrar sesión
+            </button>
             {permissions.includes('projects') && (
               <button className="sidebar-link" onClick={() => navigate('projects')}>
                 <FolderKanban size={19} /> Proyectos
@@ -1527,6 +1685,11 @@ function WorkspaceApp({
       {projectMenu && w && (
         <Modal title="Explorar proyectos" onClose={() => setProjectMenu(false)}>
           <div className="modal-body">
+            {permissions.includes('projects') && (
+              <button className="btn btn-ghost" onClick={() => navigate('projects')}>
+                <FolderKanban size={18} /> Todos los proyectos
+              </button>
+            )}
             <ProjectTreeMenu
               projects={w.projects.filter(
                 (p) =>
@@ -1538,6 +1701,22 @@ function WorkspaceApp({
               canTasks={permissions.includes('tasks')}
               canProjects={permissions.includes('projects')}
               navigate={navigate}
+            />
+          </div>
+        </Modal>
+      )}
+      {spaceMenu && (
+        <Modal title="Cambiar espacio" onClose={() => setSpaceMenu(false)}>
+          <div className="modal-body" ref={spacePicker}>
+            <SpaceSelector
+              spaces={spaceSession.spaces}
+              active={space}
+              onChange={(id) => {
+                // Close only this picker before the existing open-form safety check.
+                spacePicker.current?.closest<HTMLDialogElement>('dialog')?.close();
+                setSpaceMenu(false);
+                switchSpace(id);
+              }}
             />
           </div>
         </Modal>

@@ -11,6 +11,7 @@ import './styles/features.css';
 import './styles/focus-visuals.css';
 import './styles/focus-layout.css';
 import './styles/planning.css';
+import './styles/shell.css';
 import App from './App';
 import { startAppUpdates } from './pwaUpdates';
 

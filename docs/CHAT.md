@@ -1,6 +1,10 @@
 # Chat entre usuarios
 
-El chat es de la cuenta, no del Space seleccionado. Puedes conversar con cualquier cuenta activa que tenga permiso de Chat aunque no comparta tus workspaces. Cambiar de Space conserva la conversación abierta, los mensajes y el borrador. En computadora se muestran la lista y la conversación juntas; en móvil se navega entre ambas con el botón de volver. Chat está en la navegación lateral, la barra superior de escritorio y la navegación inferior móvil.
+El chat es de la cuenta, no del Space seleccionado. Puedes conversar con cualquier cuenta activa que tenga permiso de Chat aunque no comparta tus workspaces. Cambiar de Space conserva la conversación abierta, los mensajes y el borrador. Chat está en la navegación lateral, la barra superior de escritorio y la navegación inferior móvil.
+
+En horizontal, desde 768 px, la lista y la conversación ocupan la ventana junto a una barra lateral de iconos, que puedes expandir. El selector de Space está en **Cambiar espacio**, dentro de esa barra; también permanecen accesibles los ajustes, proyectos, notificaciones y tema. En ventanas bajas, las acciones secundarias de cuenta, tema y sesión se reúnen en **Más opciones** para dejar espacio a la navegación. Entrar al chat reduce temporalmente la barra, sin cambiar tu preferencia para otras páginas. Fuera del chat, la preferencia de contraer/expandir se recuerda por cuenta en ese navegador.
+
+En móvil, abrir una conversación oculta la titlebar y la navegación global: solo quedan encabezado, mensajes y compositor. **Volver a conversaciones** restaura la lista y la navegación de la app. El encabezado y el compositor respetan las zonas seguras del teléfono; el compositor sigue el viewport visible al abrirse el teclado. El comportamiento real del teclado depende del navegador y se debe verificar también en dispositivos físicos.
 
 ## Conversaciones y grupos
 
@@ -13,6 +17,8 @@ El permiso **Chat entre usuarios** se habilita por defecto para roles existentes
 ## Mensajes y archivos
 
 Escribe y pulsa **Enviar**, o Ctrl/⌘ + Enter. El texto admite hasta 4000 caracteres y conserva saltos de línea. La lista se actualiza por eventos privados del servidor, sin consultar cada 30 segundos; el contador de mensajes sin leer se sincroniza entre sesiones. **Mensajes anteriores** carga bloques de 50 sin perder mensajes cuando llegan otros nuevos.
+
+El campo comienza con una línea y la misma altura que Enviar; crece al escribir hasta un máximo adaptado a la pantalla y después permite desplazar el texto. Enviar se mantiene accesible al pie del campo. **+ → Agregar al mensaje** reúne **Adjuntar archivos** y **Compartir pendiente**, sin ocupar una segunda fila permanente. Abrir o cerrar ese diálogo conserva el borrador.
 
 Cada mensaje admite hasta cinco archivos y 25 MB en total:
 
@@ -68,3 +74,5 @@ La migración **ChatNotifications** agrega preferencias personales, avisos y col
 - `dotnet run --project server/AegiTasks.NotificationTests`: incluye comprobación de la actualización SQLite de chat sobre una base existente.
 
 Las pruebas de navegador usan Chromium y viewports emulados, con un WebM realmente grabado y reproducido. No sustituyen la instalación y reproducción en teléfonos físicos, ni la comprobación del proxy/volúmenes en el servidor real.
+
+`AEGITASKS_TEST_ONLY=layout node client/scripts/e2e.mjs` verifica barra lateral, titlebar compacta, navegación inferior al borde, chat completo, autoexpansión del texto, teclado y adjuntos con controles reales. Incluye viewports de 320–1920 px en ambos temas; las zonas seguras y el cambio de viewport del teclado se simulan explícitamente. La composición se basa en [navegación adaptativa de Material](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns) y en la [distinción entre viewport de layout y visual de Chrome](https://developer.chrome.com/blog/viewport-resize-behavior).

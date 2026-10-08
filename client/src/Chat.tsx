@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -61,7 +61,10 @@ export default function ChatPage({
   const [manage, setManage] = useState(false);
   const [share, setShare] = useState(false);
   const [notifications, setNotifications] = useState(false);
+  const [attachments, setAttachments] = useState(false);
+  const textarea = useRef<HTMLTextAreaElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const page = useRef<HTMLElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const initial = useRef(true);
   const request = useRef(0);
@@ -69,6 +72,59 @@ export default function ChatPage({
   selectedRef.current = selected;
   const draft = chat.drafts[selected] || { body: '', files: [], task: null };
   const busy = chat.busyId === selected;
+  useEffect(() => {
+    const content = page.current?.closest<HTMLElement>('.app-content');
+    const viewport = window.visualViewport;
+    if (!content || !viewport) return;
+    const resize = () => {
+      // Follow the visible viewport when a mobile keyboard resizes/pans it; preserve pinch zoom.
+      if (viewport.scale !== 1) return;
+      content.style.setProperty('--chat-viewport-height', `${viewport.height}px`);
+      content.style.setProperty('--chat-viewport-top', `${viewport.offsetTop}px`);
+      content.dataset.chatKeyboard = String(innerHeight - viewport.height > 80);
+    };
+    resize();
+    viewport.addEventListener('resize', resize);
+    viewport.addEventListener('scroll', resize);
+    window.addEventListener('resize', resize);
+    return () => {
+      viewport.removeEventListener('resize', resize);
+      viewport.removeEventListener('scroll', resize);
+      window.removeEventListener('resize', resize);
+      content.style.removeProperty('--chat-viewport-height');
+      content.style.removeProperty('--chat-viewport-top');
+      delete content.dataset.chatKeyboard;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const element = textarea.current;
+    if (!element) return;
+    const resize = () => {
+      element.style.height = '0px';
+      const maximum = Math.min(160, Math.max(44, innerHeight * 0.25));
+      const style = getComputedStyle(element);
+      const fullHeight =
+        element.scrollHeight +
+        parseFloat(style.borderTopWidth) +
+        parseFloat(style.borderBottomWidth);
+      element.style.height = `${Math.min(maximum, Math.max(44, fullHeight))}px`;
+      element.style.overflowY = fullHeight > maximum ? 'auto' : 'hidden';
+    };
+    resize();
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth !== width) {
+        width = element.clientWidth;
+        resize();
+      }
+    });
+    let width = element.clientWidth;
+    observer.observe(element);
+    window.addEventListener('resize', resize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', resize);
+    };
+  }, [draft.body, selected, !!room]);
   const load = useCallback(
     async (reset = false) => {
       if (!selected) return;
@@ -180,6 +236,7 @@ export default function ChatPage({
   }
   return (
     <section
+      ref={page}
       className={`chat-page ${room ? 'chat-conversation-open' : ''}`}
       aria-label="Chat entre usuarios"
     >
@@ -432,67 +489,85 @@ export default function ChatPage({
                   ))}
                 </div>
               )}
-              <textarea
-                aria-label="Mensaje"
-                placeholder="Escribe un mensaje…"
-                maxLength={4000}
-                rows={2}
-                value={draft.body}
-                disabled={busy}
-                onChange={(e) => chat.update(selected, { body: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }}
-              />
-              <div className="chat-composer-actions">
-                <div>
-                  <input
-                    ref={input}
-                    type="file"
-                    multiple
-                    hidden
-                    accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.odt,.ods,.odp,.zip,.txt,.md,.csv,.json,.log,.mp4,.webm"
-                    onChange={(e) => {
-                      attach(Array.from(e.target.files || []));
-                      e.target.value = '';
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-icon"
-                    aria-label="Adjuntar archivos"
-                    disabled={busy}
-                    onClick={() => input.current?.click()}
-                  >
-                    <Paperclip size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-icon"
-                    aria-label="Compartir pendiente"
-                    disabled={busy}
-                    onClick={() => setShare(true)}
-                  >
-                    <Link2 size={20} />
-                  </button>
-                  <span className="chat-attachment-hint">Videos hasta 25 MB</span>
-                </div>
+              <div className="chat-composer-row">
+                <input
+                  ref={input}
+                  type="file"
+                  multiple
+                  hidden
+                  accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.odt,.ods,.odp,.zip,.txt,.md,.csv,.json,.log,.mp4,.webm"
+                  onChange={(e) => {
+                    attach(Array.from(e.target.files || []));
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-icon"
+                  aria-label="Agregar al mensaje"
+                  disabled={busy}
+                  onClick={() => setAttachments(true)}
+                >
+                  <Plus size={21} />
+                </button>
+                <textarea
+                  ref={textarea}
+                  aria-label="Mensaje"
+                  placeholder="Escribe un mensaje…"
+                  maxLength={4000}
+                  rows={1}
+                  value={draft.body}
+                  disabled={busy}
+                  onChange={(e) => chat.update(selected, { body: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
                 <button
                   type="submit"
-                  className="btn btn-primary"
+                  className="btn btn-primary chat-send"
+                  aria-label={busy ? 'Enviando…' : 'Enviar'}
+                  title={busy ? 'Enviando…' : 'Enviar'}
                   disabled={busy || (!draft.body.trim() && !draft.files.length && !draft.task)}
                 >
                   <Send size={17} />
-                  {busy ? 'Enviando…' : 'Enviar'}
+                  <span className="sr-only">{busy ? 'Enviando…' : 'Enviar'}</span>
                 </button>
               </div>
             </form>
           </>
         )}
       </div>
+      {attachments && (
+        <Modal title="Agregar al mensaje" onClose={() => setAttachments(false)}>
+          <div className="modal-body chat-attachment-options">
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setAttachments(false);
+                input.current?.click();
+              }}
+            >
+              <Paperclip size={20} /> Adjuntar archivos
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setAttachments(false);
+                setShare(true);
+              }}
+            >
+              <Link2 size={20} /> Compartir pendiente
+            </button>
+            <p className="muted small">
+              Imágenes, documentos y videos. Hasta 5 archivos y 25 MB por mensaje.
+            </p>
+          </div>
+        </Modal>
+      )}
       {newChat && (
         <ChatEditor
           user={user}

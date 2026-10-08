@@ -245,6 +245,7 @@ export async function testChat({
     'Task shortcuts require access for every participant, hide titles after revocation and never bind the conversation to a workspace',
   );
   const roomAdmin = await json(admin, 'POST', '/chat', { isGroup: false, users: [alice.id] });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/?space=${shared.id}#chat/${roomAdmin.id}`);
   await page.getByRole('heading', { name: 'Chat Alice', exact: true }).waitFor();
   await page.getByLabel('Mensaje', { exact: true }).fill('Hola desde la interfaz');
@@ -260,14 +261,32 @@ export async function testChat({
     .waitFor();
   await page.getByLabel('Mensaje', { exact: true }).fill('Borrador al cambiar Space');
   const personal = (await json(admin, 'GET', '/spaces')).spaces.find((s) => s.isPersonal);
-  await page.getByLabel('Espacio activo').selectOption(personal.id);
+  await page.getByRole('button', { name: 'Cambiar espacio', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Cambiar espacio', exact: true })
+    .getByLabel('Espacio activo')
+    .selectOption(personal.id);
+  await page.waitForFunction(
+    (id) => document.querySelector('.app-header select[aria-label="Espacio activo"]')?.value === id,
+    personal.id,
+  );
   await page.getByRole('heading', { name: 'Chat Alice', exact: true }).waitFor();
   assert.equal(
     await page.getByLabel('Mensaje', { exact: true }).inputValue(),
     'Borrador al cambiar Space',
   );
   await page.getByLabel('Mensaje', { exact: true }).fill('');
-  await page.getByLabel('Espacio activo').selectOption(shared.id);
+  await page.getByRole('button', { name: 'Cambiar espacio', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Cambiar espacio', exact: true })
+    .getByLabel('Espacio activo')
+    .selectOption(shared.id);
+  await page.waitForFunction(
+    (id) => document.querySelector('.app-header select[aria-label="Espacio activo"]')?.value === id,
+    shared.id,
+  );
+  await page.getByLabel('Mensaje', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Agregar al mensaje', exact: true }).click();
   await page.getByRole('button', { name: 'Adjuntar archivos', exact: true }).click(); // file chooser remains optional in automation
   await page
     .locator('.chat-composer input[type=file]')
@@ -315,6 +334,7 @@ export async function testChat({
   pass(
     'A real recorded WebM uploads and renders in the authenticated player with video metadata and controls',
   );
+  await page.getByRole('button', { name: 'Agregar al mensaje', exact: true }).click();
   await page.getByRole('button', { name: 'Compartir pendiente', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Compartir pendiente', exact: true });
   await picker.getByRole('button', { name: task.title, exact: true }).click();
@@ -334,6 +354,11 @@ export async function testChat({
   ]) {
     await page.setViewportSize({ width, height });
     await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+    await page.waitForFunction(
+      () =>
+        !!document.querySelector('.chat-composer') &&
+        document.querySelector('.chat-composer').getBoundingClientRect().bottom <= innerHeight + 1,
+    );
     assert.ok(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       `No horizontal overflow at ${width}`,
