@@ -20,7 +20,7 @@ public static class Bootstrap
             foreach (var u in existing) if (!await db.Spaces.AnyAsync(s => s.IsPersonal && s.OwnerId == u.Id)) Access.AddPersonal(db, u);
             await db.SaveChangesAsync(); return;
         }
-        var password = config["SEED_ADMIN_PASSWORD"] ?? throw new InvalidOperationException("Set SEED_ADMIN_PASSWORD (12+ characters) before the first start.");
+        var password = config["SEED_ADMIN_PASSWORD"] ?? throw new InvalidOperationException("Set SEED_ADMIN_PASSWORD before the first start (an empty value is allowed).");
         Rules.Password(password);
         var user = new User { Name = "Administrador", Email = (config["SEED_ADMIN_EMAIL"] ?? "admin@example.com").Trim().ToLowerInvariant(), Role = "Admin" };
         user.Username = Rules.DefaultUsername(user.Email, usernames);

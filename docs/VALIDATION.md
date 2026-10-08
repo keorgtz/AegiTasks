@@ -1,5 +1,15 @@
 # Evidencia de validación
 
+## Contraseñas flexibles y presencia de chat — 7 de octubre de 2026
+
+Se eliminaron las restricciones de longitud y obligatoriedad de la contraseña en API, acceso, cambio de clave, edición de identidad y administración de usuarios. Las claves vacías siguen pasando por PasswordHasher; no existe un bypass de autenticación. En edición administrativa, omitir o enviar `null` conserva el hash, mientras `""` lo reemplaza por una clave vacía. El bootstrap y Compose admiten un valor inicial explícitamente vacío, manteniendo el error cuando falta la configuración. El medidor local y orientativo detecta contraseñas comunes, patrones y datos de la persona; analiza como máximo 128 caracteres para limitar trabajo del navegador, sin recortar la clave guardada.
+
+La presencia usa las conexiones SSE autenticadas y agrega varias pestañas/dispositivos. El servidor emite cambios de estado; los latidos no recargan datos ni generan notificaciones. Se probaron estados conectado/ausente/desconectado, ocultamiento, cinco minutos de inactividad con reloj de navegador controlado, reanudación, cierre de la última conexión, vencimiento a 90 segundos, tokens ajenos/inventados y exclusión de cuentas desactivadas. La lectura se limita a integrantes actuales de chats compartidos. Se revisaron capturas de 1440, 390 y 320 px en ambos temas.
+
+La ejecución final completa pasó **211 comprobaciones en SQLite y 211 en PostgreSQL real**, incluyendo migraciones existentes y todas las funciones anteriores. La ejecución enfocada pasó **44**, la de ajustes **72**, el ejecutable .NET **50**, el worker push **7** y la actualización PWA **12**. Build/typecheck, lint, formato y revisión de whitespace aprobaron. Evidencias locales: `artifacts/password-presence-focused-results.json`, `password-presence-settings-results.json`, `password-presence-unit.log`, `password-presence-sqlite-results.json`, `postgres-test-results.json`, `pwa-test-results.json`, `password-strength-*.png` y `chat-presence-*.png`.
+
+Los viewports, reloj, ocultamiento y proveedores de notificación se simularon en Chromium; las conexiones, sesiones y bases de datos fueron reales. No se verificó esta versión en teléfonos físicos ni se desplegó en el servidor de producción. No requiere una migración nueva; la presencia queda en memoria de la única API existente.
+
 ## Chat global, grupos y archivos — 7 de octubre de 2026
 
 Se agregaron conversaciones privadas únicas por pareja y grupos de hasta 50 integrantes, independientes del Space, con texto, hasta cinco adjuntos por mensaje y accesos directos a pendientes. Los usuarios activos pueden iniciar conversaciones sin pertenecer al mismo workspace. Mensajes, historial y archivos exigen participación y permiso de Chat; incluso Admin no puede leer chats ajenos. El creador administra el grupo con protección de versión. Referencias a pendientes exigen acceso compartido al enviar y se vuelven a autorizar al leer.

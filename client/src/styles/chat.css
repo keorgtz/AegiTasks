@@ -106,6 +106,39 @@ body:has(.app-shell.is-chat) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.chat-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.chat-presence i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.chat-presence[data-presence='online'] i {
+  background: var(--success);
+}
+.chat-presence[data-presence='away'] i {
+  background: var(--warning);
+}
+.chat-group-presence {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.chat-room-copy .chat-group-presence {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-selected-users .chat-presence {
+  font-weight: 400;
+}
 .chat-room-copy small {
   color: var(--text-muted);
   font-size: 11px;

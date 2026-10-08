@@ -20,7 +20,7 @@ public static class AuthEndpoints
             var identifier = (input.Identifier ?? input.Email)?.Trim().ToLowerInvariant() ?? "";
             if (identifier.Length is 0 or > 200) return Results.Json(new { error = "Correo, usuario o contraseña incorrectos." }, statusCode: 401);
             var user = await db.Users.SingleOrDefaultAsync(x => (identifier.Contains('@') ? x.Email == identifier : x.Username == identifier) && x.Active);
-            if (user == null || string.IsNullOrEmpty(input.Password) || input.Password.Length > 128 || hash.VerifyHashedPassword(user, user.PasswordHash, input.Password) == PasswordVerificationResult.Failed)
+            if (user == null || input.Password is null || hash.VerifyHashedPassword(user, user.PasswordHash, input.Password) == PasswordVerificationResult.Failed)
                 return Results.Json(new { error = "Correo, usuario o contraseña incorrectos." }, statusCode: 401);
             var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), new Claim(ClaimTypes.Role, user.Role), new Claim("sv", user.SessionVersion.ToString()) }, CookieAuthenticationDefaults.AuthenticationScheme);
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
@@ -40,7 +40,7 @@ public static class AuthEndpoints
             var username = Rules.Username(input.Username);
             var email = Email(input.Email);
             if (username != user.Username || email != user.Email) {
-                if (string.IsNullOrEmpty(input.CurrentPassword) || input.CurrentPassword.Length > 128 || hash.VerifyHashedPassword(user, user.PasswordHash, input.CurrentPassword) == PasswordVerificationResult.Failed)
+                if (input.CurrentPassword is null || hash.VerifyHashedPassword(user, user.PasswordHash, input.CurrentPassword) == PasswordVerificationResult.Failed)
                     throw new InputError("Confirma tu contraseña actual para cambiar el usuario o correo.");
             }
             await UniqueIdentity(db, user.Id, username, email);
@@ -56,7 +56,7 @@ public static class AuthEndpoints
         app.MapPost("/api/auth/password", async (PasswordInput input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal, HttpContext context) =>
         {
             var user = await db.Users.SingleAsync(x => x.Id == principal.UserId());
-            if (string.IsNullOrEmpty(input.CurrentPassword) || input.CurrentPassword.Length > 128 || hash.VerifyHashedPassword(user, user.PasswordHash, input.CurrentPassword) == PasswordVerificationResult.Failed) throw new InputError("La contraseña actual no coincide.");
+            if (input.CurrentPassword is null || hash.VerifyHashedPassword(user, user.PasswordHash, input.CurrentPassword) == PasswordVerificationResult.Failed) throw new InputError("La contraseña actual no coincide.");
             Rules.Password(input.NewPassword); user.PasswordHash = hash.HashPassword(user, input.NewPassword); user.SessionVersion++;
             await db.SaveChangesAsync(); await context.SignOutAsync(); return Results.NoContent();
         }).RequireAuthorization();
@@ -71,7 +71,7 @@ public static class AuthEndpoints
                 ? Rules.DefaultUsername(email, (await db.Users.Select(u => u.Username).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase))
                 : Rules.Username(input.Username);
             await UniqueIdentity(db, user.Id, user.Username, user.Email);
-            user.PasswordHash = hash.HashPassword(user, input.Password!); db.Users.Add(user); Access.AddPersonal(db, user); await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
+            user.PasswordHash = hash.HashPassword(user, input.Password ?? ""); db.Users.Add(user); Access.AddPersonal(db, user); await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
         admin.MapPut("/{id:guid}", async (Guid id, UserUpdate input, AppDb db, IPasswordHasher<User> hash, ClaimsPrincipal principal) =>
         {
@@ -85,7 +85,8 @@ public static class AuthEndpoints
             if (input.Email != null) user.Email = Email(input.Email);
             await UniqueIdentity(db, id, user.Username, user.Email);
             user.Name = Rules.Text(input.Name, 80, "Nombre"); user.Active = input.Active; user.Role = input.Role; user.SessionVersion++;
-            if (!string.IsNullOrWhiteSpace(input.Password)) { Rules.Password(input.Password); user.PasswordHash = hash.HashPassword(user, input.Password); }
+            // Omitted/null keeps the password; an explicit empty string removes it.
+            if (input.Password is not null) { Rules.Password(input.Password); user.PasswordHash = hash.HashPassword(user, input.Password); }
             await db.SaveChangesAsync(); return Results.Ok(Rules.PublicUser(user));
         });
     }

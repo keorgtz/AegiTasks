@@ -287,7 +287,6 @@ function Login({
               <Field label="Contraseña">
                 <input
                   type="password"
-                  required
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

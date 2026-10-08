@@ -11,6 +11,7 @@ import { MessageCircle } from 'lucide-react';
 import { api, errorMessage } from './api';
 import { emitChanges, useChanges } from './changes';
 import { ChatLiveNotifications } from './ChatNotifications';
+import { useChatPresence, type PresenceMap } from './ChatPresence';
 
 export interface ChatRoom {
   id: string;
@@ -32,6 +33,7 @@ export interface ChatDraft {
 }
 const blank = (): ChatDraft => ({ body: '', files: [], clientId: crypto.randomUUID(), task: null });
 interface State {
+  presence: PresenceMap;
   rooms: ChatRoom[];
   error: string;
   loading: boolean;
@@ -52,6 +54,7 @@ export function ChatProvider({
   children: ReactNode;
 }) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const { presence, connect, disconnect } = useChatPresence(enabled);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, ChatDraft>>(() => {
@@ -95,16 +98,19 @@ export function ChatProvider({
     }
     void reload();
     const events = new EventSource('/api/chat/events');
-    const ready = () => {
+    const ready = (event: Event) => {
+      connect(JSON.parse((event as MessageEvent).data).connectionId);
       void reload();
       emitChanges(['chat', 'chat-notifications']);
     };
     events.addEventListener('ready', ready);
+    events.addEventListener('error', disconnect);
     events.addEventListener('change', (event) =>
       emitChanges(JSON.parse((event as MessageEvent).data)),
     );
     events.addEventListener('revoked', (event) => {
       events.close();
+      disconnect();
       request.current++;
       setRooms([]);
       if ((event as MessageEvent).data === '401')
@@ -114,9 +120,10 @@ export function ChatProvider({
     // EventSource reconnects automatically; ready refreshes messages missed while offline.
     return () => {
       events.close();
+      disconnect();
       request.current++;
     };
-  }, [enabled, reload]);
+  }, [enabled, reload, connect, disconnect]);
   useChanges(['chat', 'access'], () => {
     if (enabled) void reload();
   });
@@ -193,7 +200,9 @@ export function ChatProvider({
     }
   }
   return (
-    <Context.Provider value={{ rooms, error, loading, drafts, busyId, update, send, reload }}>
+    <Context.Provider
+      value={{ rooms, presence, error, loading, drafts, busyId, update, send, reload }}
+    >
       {children}
       <ChatLiveNotifications userId={userId} enabled={enabled} />
       <span

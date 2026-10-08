@@ -128,12 +128,10 @@ export function AccountProfile({
           {identityChanged && (
             <Field
               label="Confirmar contraseña actual"
-              hint="Necesaria para cambiar el usuario o correo. Después podrás iniciar sesión con cualquiera de tus nuevos datos."
+              hint="Confirma tu clave para cambiar el usuario o correo. Déjala vacía si tu cuenta no tiene contraseña."
             >
               <input
-                required
                 type="password"
-                maxLength={128}
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setPassword(e.target.value)}

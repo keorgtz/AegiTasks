@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<SpaceScope>();
 builder.Services.AddSingleton<ChangeFeed>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ChatPresence>();
 builder.Services.AddSingleton<PushKeys>();
 builder.Services.AddHttpClient<IPushTransport, WebPushTransport>(http => http.Timeout = TimeSpan.FromSeconds(15))
     .RemoveAllLoggers()

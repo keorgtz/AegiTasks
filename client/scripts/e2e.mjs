@@ -18,6 +18,7 @@ import { testChat } from './chat-tests.mjs';
 import { testChatNotifications } from './chat-notification-tests.mjs';
 import { testShellChatLayout } from './shell-chat-layout-tests.mjs';
 import { testProfile } from './profile-tests.mjs';
+import { testPasswordPresence } from './password-presence-tests.mjs';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -403,7 +404,20 @@ try {
   });
   const browserErrors = [];
   page.on('pageerror', (e) => browserErrors.push(e.message));
-  if (process.env.AEGITASKS_TEST_ONLY === 'chat') {
+  if (!process.env.AEGITASKS_TEST_ONLY || process.env.AEGITASKS_TEST_ONLY === 'password-presence')
+    await testPasswordPresence({
+      page,
+      request,
+      admin,
+      adminUser,
+      json,
+      pass,
+      artifacts,
+      password,
+    });
+  if (process.env.AEGITASKS_TEST_ONLY === 'password-presence') {
+    // The new feature suite above also runs as part of the full regression suite.
+  } else if (process.env.AEGITASKS_TEST_ONLY === 'chat') {
     await testChat({ page, request, admin, adminUser, shared, json, pass, artifacts, password });
     await testChatNotifications({
       page,

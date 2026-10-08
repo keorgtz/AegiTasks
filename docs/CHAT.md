@@ -22,11 +22,11 @@ El campo comienza con una línea y la misma altura que Enviar; crece al escribir
 
 Cada mensaje admite hasta cinco archivos y 25 MB en total:
 
-| Contenido | Formatos | Límite por archivo |
-| --- | --- | --- |
-| Imágenes con preview | PNG, JPG, WebP, GIF | 10 MB |
-| Documentos descargables | PDF, DOCX, XLSX, PPTX, ODT, ODS, ODP, ZIP, TXT, MD, CSV, LOG, JSON | 10 MB |
-| Videos con controles | MP4 y WebM | 25 MB |
+| Contenido               | Formatos                                                           | Límite por archivo |
+| ----------------------- | ------------------------------------------------------------------ | ------------------ |
+| Imágenes con preview    | PNG, JPG, WebP, GIF                                                | 10 MB              |
+| Documentos descargables | PDF, DOCX, XLSX, PPTX, ODT, ODS, ODP, ZIP, TXT, MD, CSV, LOG, JSON | 10 MB              |
+| Videos con controles    | MP4 y WebM                                                         | 25 MB              |
 
 Las imágenes se pueden abrir y descargar; los videos ofrecen reproducción y peticiones de rango. La reproducción depende del soporte del formato/códec en el navegador. Los documentos se descargan como archivos y no ejecutan HTML. Se comprueban firmas de imágenes/PDF/video/archivos comprimidos y formatos de texto; la extensión o MIME declarado por el navegador no basta para admitir una imagen o video.
 
@@ -64,6 +64,14 @@ El despliegue Docker existente aplica automáticamente la migración **Chat** en
 El chat usa la instancia API y base de datos actuales, sin Redis ni servicios adicionales. Las conexiones SSE de chat son independientes de los Spaces y envían únicamente temas de invalidación al usuario, sin textos, títulos o archivos. Escalar a varias instancias requiere un bus de eventos compartido, igual que las actualizaciones actuales de pendientes.
 
 La migración **ChatNotifications** agrega preferencias personales, avisos y cola push de chat, preservando conversaciones, integrantes y mensajes existentes. Los mensajes anteriores no generan avisos retroactivos. SQLite agrega las mismas tablas de forma idempotente. El mensaje, archivos y avisos se guardan en una sola transacción. La cola persistente agrupa envíos por conversación/dispositivo, reintenta fallos y vuelve a comprobar sesión, permisos, membresía, lectura y silencio antes de enviar. El payload cifrado contiene únicamente identificadores; el worker recupera vistas previas desde la API autenticada, sin guardarlas en el cache offline. Conserva el procesador único del Compose actual.
+
+## Presencia
+
+La lista, el encabezado de cada conversación y los integrantes de grupos muestran **Conectado**, **Ausente** o **Desconectado**. Una cuenta está conectada mientras alguna pestaña o dispositivo tiene AegiTasks visible, enfocado y con actividad reciente. Pasa a ausente al perder el foco, ocultar la app o cumplir cinco minutos sin interacción. Cada dispositivo renueva una conexión identificada por el servidor; un dispositivo suspendido o sin red deja de contar después de 90 segundos. Cerrar la última conexión lo desconecta inmediatamente cuando el servidor detecta el cierre. El estado no disponible se muestra explícitamente cuando el cliente pierde conexión.
+
+La presencia se comparte únicamente con participantes de conversaciones actuales, requiere permiso de Chat y no depende de Spaces. Cambia mediante SSE; los latidos de actividad no recargan mensajes ni generan avisos push. No guarda historial de actividad ni requiere migraciones. Usa memoria de la única API del Compose; varias réplicas requerirían presencia y eventos compartidos. La detección de ocultamiento sigue la [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API).
+
+`AEGITASKS_TEST_ONLY=password-presence node client/scripts/e2e.mjs` verifica contraseñas flexibles, medidor, privacidad y presencia con conexiones SSE reales, varias pestañas y cambios de cuenta. Las pruebas .NET incluyen vencimiento de conexiones con reloj controlado.
 
 ## Validación
 

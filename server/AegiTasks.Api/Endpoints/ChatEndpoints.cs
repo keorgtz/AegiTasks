@@ -9,10 +9,26 @@ namespace AegiTasks.Api.Endpoints;
 
 public static class ChatEndpoints
 {
+    public record PresenceInput(bool Active);
     public static void MapChat(this WebApplication app)
     {
         var routes = app.MapGroup("/api/chat").RequireAuthorization("page:chat");
         routes.MapGet("/events", (HttpContext http, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(http, Guid.Empty, scopes));
+        routes.MapGet("/presence", async (AppDb db, ClaimsPrincipal user, ChatPresence presence) =>
+        {
+            var uid = user.UserId();
+            var sharedRooms = db.ChatMembers.Where(m => m.UserId == uid).Select(m => m.ChatRoomId);
+            var contacts = db.ChatMembers.Where(m => sharedRooms.Contains(m.ChatRoomId)).Select(m => m.UserId);
+            var ids = await Eligible(db).Where(u => contacts.Contains(u.Id)).Select(u => u.Id).ToListAsync();
+            return Results.Ok(presence.Snapshot(ids));
+        });
+        routes.MapPut("/presence/{connectionId:guid}", (Guid connectionId, PresenceInput input, ClaimsPrincipal user, ChatPresence presence, ChangeFeed feed) =>
+        {
+            var result = presence.Update(connectionId, user.UserId(), input.Active);
+            if (!result.Accepted) return Results.NotFound();
+            if (result.Changed) feed.Publish(Guid.Empty, null, "presence");
+            return Results.NoContent();
+        });
         routes.MapGet("/users", async (AppDb db, ClaimsPrincipal user, string? q, int? page) =>
         {
             var users = Eligible(db).Where(u => u.Id != user.UserId());

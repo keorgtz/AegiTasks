@@ -28,7 +28,7 @@ services:
       DatabaseProvider: Postgres
       ConnectionStrings__Default: Host=db;Port=5432;Database=aegitasks;Username=aegitasks;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:?Set SEED_ADMIN_EMAIL in .env}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD?Set SEED_ADMIN_PASSWORD in .env}
       StoragePath: /app/storage/uploads
       DataProtectionPath: /app/storage/keys
     volumes:

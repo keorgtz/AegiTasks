@@ -53,6 +53,8 @@ Los paneles del sidebar usan la altura de su contenido, sin reservar mitades igu
 | Autenticación                | Cookie HttpOnly, SameSite Strict, Secure en producción; contraseñas con PasswordHasher de ASP.NET Core |
 | Infraestructura              | Docker Compose: PostgreSQL + API + Nginx; red externa `proxy`                                          |
 
+Las contraseñas admiten cualquier longitud, incluida una clave vacía. El medidor en creación de usuarios y cambio de contraseña orienta sin impedir guardar; usa [zxcvbn-ts](https://zxcvbn-ts.github.io/zxcvbn/guide/getting-started/) localmente, con detección de patrones y datos personales. Una cuenta sin contraseña puede abrirse conociendo su usuario o correo. Al editar una cuenta, **Cambiar contraseña** debe activarse para reemplazarla, incluso por una vacía; si no se activa se conserva la clave actual. Los cambios de contraseña siguen revocando las sesiones existentes. El administrador inicial acepta `SEED_ADMIN_PASSWORD` vacío si se configura explícitamente; los scripts de despliegue siguen generando una clave aleatoria por defecto.
+
 Redis no es necesario para esta versión: los pendientes se consultan directamente con índices y paginación. Esto evita invalidaciones de caché innecesarias en un espacio compartido. Se puede incorporar cuando las mediciones justifiquen su uso.
 
 ```text

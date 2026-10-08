@@ -20,6 +20,7 @@ import { useChanges } from './changes';
 import { Empty, ErrorBox, Field, Modal } from './components';
 import { chatName, useChat, type ChatRoom } from './ChatContext';
 import { ChatNotificationSettings, clearChatNotices } from './ChatNotifications';
+import { PresenceBadge, RoomPresence } from './ChatPresence';
 import type { Space, User } from './types';
 import './styles/chat.css';
 
@@ -290,6 +291,7 @@ export default function ChatPage({
                           ? `${r.members.length} integrantes`
                           : 'Comienza la conversación')}
                     </small>
+                    <RoomPresence room={r} userId={user.id} presence={chat.presence} />
                   </span>
                   {r.unread > 0 && <span className="chat-unread">{r.unread}</span>}
                   {r.muted && (
@@ -331,9 +333,7 @@ export default function ChatPage({
               <div>
                 <h2>{chatName(room, user.id)}</h2>
                 <p className="muted small">
-                  {room.isGroup
-                    ? `${room.members.length} integrantes · Grupo`
-                    : 'Conversación privada'}
+                  <RoomPresence room={room} userId={user.id} presence={chat.presence} />
                 </p>
               </div>
               <button
@@ -626,6 +626,7 @@ function ChatEditor({
   onClose: () => void;
   onSaved: (id: string) => Promise<void>;
 }) {
+  const { presence } = useChat();
   const [group, setGroup] = useState(!!room);
   const [name, setName] = useState(room?.name || '');
   const [q, setQ] = useState('');
@@ -742,6 +743,13 @@ function ChatEditor({
           {selected.map((u) => (
             <span key={u.id}>
               {u.name}
+              {room?.members.some((m) => m.userId === u.id) && (
+                <PresenceBadge
+                  userId={u.id}
+                  active={room.members.find((m) => m.userId === u.id)?.active}
+                  presence={presence}
+                />
+              )}
               {canEdit && (
                 <button
                   className="btn-icon"
@@ -755,7 +763,11 @@ function ChatEditor({
               )}
             </span>
           ))}
-          {room && <span>{user.name} · Tú</span>}
+          {room && (
+            <span>
+              {user.name} · Tú <PresenceBadge userId={user.id} presence={presence} />
+            </span>
+          )}
         </div>
         {canEdit && (
           <>

@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Identity;
 using WebPush;
 using TaskStatus = AegiTasks.Api.Domain.TaskStatus;
 
@@ -198,7 +199,45 @@ using (var scope = provider.CreateScope()) {
     Assert(await db.ChatRooms.CountAsync() == 0 && await db.Tasks.IgnoreQueryFilters().AnyAsync(t => t.Id == task.Id) && await db.PagePermissions.CountAsync(p => p.Page == "chat") == 1, "SQLite chat upgrade is idempotent and preserves task data while enabling existing roles");
 }
 
+using (var emptySeedConnection = new SqliteConnection("Data Source=:memory:")) {
+    await emptySeedConnection.OpenAsync();
+    using var emptySeedDb = new AppDb(new DbContextOptionsBuilder<AppDb>().UseSqlite(emptySeedConnection).Options, new SpaceScope());
+    await emptySeedDb.Database.EnsureCreatedAsync();
+    var emptySeedConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["SEED_ADMIN_PASSWORD"] = "" }).Build();
+    var hasher = new PasswordHasher<User>();
+    await Bootstrap.Seed(emptySeedDb, hasher, emptySeedConfig);
+    var seeded = await emptySeedDb.Users.SingleAsync();
+    Assert(hasher.VerifyHashedPassword(seeded, seeded.PasswordHash, "") != PasswordVerificationResult.Failed && hasher.VerifyHashedPassword(seeded, seeded.PasswordHash, "wrong") == PasswordVerificationResult.Failed, "Explicit empty administrator seed is hashed and still verifies the supplied secret");
+    Assert(await emptySeedDb.Spaces.AnyAsync(s => s.IsPersonal && s.OwnerId == seeded.Id), "Empty-password bootstrap still creates the administrator's personal space");
+}
+
+var presenceClock = new PresenceClock();
+var presence = new ChatPresence(presenceClock);
+var tab1 = Guid.NewGuid(); var tab2 = Guid.NewGuid(); var presenceUser = Guid.NewGuid();
+string PresenceStatus() => presence.Snapshot([presenceUser])[presenceUser];
+Assert(PresenceStatus() == "offline", "Users without SSE connections are offline");
+Assert(presence.Connect(tab1, presenceUser) && PresenceStatus() == "away", "Validated connections start away until activity is confirmed");
+Assert(!presence.Update(tab1, Guid.NewGuid(), true).Accepted && PresenceStatus() == "away", "A connection cannot update another user's presence");
+Assert(!presence.Update(Guid.NewGuid(), presenceUser, true).Accepted, "Activity cannot create a fabricated connection");
+Assert(presence.Update(tab1, presenceUser, true).Changed && PresenceStatus() == "online", "Activity makes an authenticated connected account online");
+Assert(!presence.Update(tab1, presenceUser, true).Changed, "Heartbeats do not broadcast unchanged presence");
+Assert(!presence.Connect(tab2, presenceUser) && PresenceStatus() == "online", "An inactive second tab does not override an active device");
+Assert(presence.Update(tab1, presenceUser, false).Changed && PresenceStatus() == "away", "All connected tabs inactive makes the account away");
+presence.Update(tab2, presenceUser, true);
+Assert(!presence.Disconnect(tab1) && PresenceStatus() == "online", "Closing one tab preserves online status from another device");
+presenceClock.Advance(ChatPresence.Lease);
+Assert(presence.Sweep() && PresenceStatus() == "offline", "Silent or suspended connections expire after ninety seconds");
+Assert(!presence.Sweep(), "Expired connections do not emit duplicate changes");
+Assert(presence.Update(tab2, presenceUser, true).Changed && PresenceStatus() == "online", "Resuming a live stream renews its expired lease");
+Assert(presence.Disconnect(tab2) && PresenceStatus() == "offline", "Closing the last stream makes the account offline immediately");
+Assert(!presence.Update(tab2, presenceUser, true).Accepted, "Disconnected connection tokens cannot resurrect presence");
+
 static void Assert(bool condition, string name) { if (!condition) throw new Exception(name); Console.WriteLine("PASS " + name); }
+sealed class PresenceClock : TimeProvider {
+    private DateTimeOffset now = DateTimeOffset.UtcNow;
+    public override DateTimeOffset GetUtcNow() => now;
+    public void Advance(TimeSpan duration) => now += duration;
+}
 sealed class FakeTransport : IPushTransport {
     public string Mode { get; set; } = "success"; public int Calls { get; private set; } public string? Payload { get; private set; }
     public Task<bool> Send(PushDevice device, string payload, VapidDetails keys, CancellationToken ct) {

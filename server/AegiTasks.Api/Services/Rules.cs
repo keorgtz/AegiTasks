@@ -37,7 +37,7 @@ public static class Rules
     }
     public static void Password(string? value)
     {
-        if (value is null || value.Length < 12 || value.Length > 128) throw new InputError("La contraseña debe tener entre 12 y 128 caracteres.");
+        if (value is null) throw new InputError("Envía la contraseña; puede ser una cadena vacía.");
     }
     public static void Log(AppDb db, Guid item, Guid user, string body, string kind = "system") => db.Activities.Add(new Activity { WorkItemId = item, UserId = user, Body = body, Kind = kind });
     public static async Task ApplyTask(AppDb db, WorkItem item, TaskInput input)

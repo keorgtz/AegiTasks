@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AegiTasks.Api.Services;
 
 // One API instance serves the Docker deployment. Events contain invalidation topics, never content.
-public sealed class ChangeFeed
+public sealed class ChangeFeed(ChatPresence presence)
 {
     private readonly ConcurrentDictionary<Guid, Subscription> subscribers = new();
     public sealed class Subscription(Guid userId, Guid spaceId)
@@ -46,10 +46,11 @@ public sealed class ChangeFeed
             }
             var access = await Validate();
             if (access != 200) { http.Response.StatusCode = access; return; }
+            if (space == Guid.Empty && presence.Connect(key, userId)) Publish(Guid.Empty, null, "presence");
             http.Response.ContentType = "text/event-stream";
             http.Response.Headers["Cache-Control"] = "no-cache, no-store";
             http.Response.Headers["X-Accel-Buffering"] = "no";
-            await http.Response.WriteAsync("retry: 3000\nevent: ready\ndata: {}\n\n", ct);
+            await http.Response.WriteAsync($"retry: 3000\nevent: ready\ndata: {JsonSerializer.Serialize(new { connectionId = key })}\n\n", ct);
             await http.Response.Body.FlushAsync(ct);
             var pendingRead = subscription.Signal.Reader.WaitToReadAsync(ct).AsTask();
             while (!ct.IsCancellationRequested)
@@ -72,11 +73,26 @@ public sealed class ChangeFeed
                     await http.Response.WriteAsync($"event: change\ndata: {JsonSerializer.Serialize(topics)}\n\n", ct);
                     pendingRead = subscription.Signal.Reader.WaitToReadAsync(ct).AsTask();
                 }
-                else await http.Response.WriteAsync(": keepalive\n\n", ct);
+                else
+                {
+                    access = await Validate();
+                    if (access != 200)
+                    {
+                        await http.Response.WriteAsync($"event: revoked\ndata: {access}\n\n", ct);
+                        await http.Response.Body.FlushAsync(ct);
+                        break;
+                    }
+                    if (space == Guid.Empty && presence.Sweep()) Publish(Guid.Empty, null, "presence");
+                    await http.Response.WriteAsync(": keepalive\n\n", ct);
+                }
                 await http.Response.Body.FlushAsync(ct);
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        finally { subscribers.TryRemove(key, out _); }
+        finally
+        {
+            subscribers.TryRemove(key, out _);
+            if (space == Guid.Empty && presence.Disconnect(key)) Publish(Guid.Empty, null, "presence");
+        }
     }
 }

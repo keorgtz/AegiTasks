@@ -12,6 +12,7 @@ import { api, errorMessage } from './api';
 import { Badge, ColorSwatches, ErrorBox, Field, Modal } from './components';
 import { estimateKinds } from './estimates';
 import { AccountProfile } from './AccountProfile';
+import { PasswordStrength } from './PasswordStrength';
 import {
   type Folder,
   type Project,
@@ -57,6 +58,7 @@ export function CatalogEditor({
   const [email, setEmail] = useState(value.email || '');
   const [username, setUsername] = useState(value.username || '');
   const [password, setPassword] = useState('');
+  const [changePassword, setChangePassword] = useState(!value.id);
   const [role, setRole] = useState(value.role || 'User');
   const [active, setActive] = useState(value.active ?? true);
   const [error, setError] = useState('');
@@ -77,7 +79,7 @@ export function CatalogEditor({
         archived,
         email,
         ...(kind === 'users' ? { username } : {}),
-        password: password || null,
+        password: changePassword ? password : null,
         role,
         active,
         projectId: value.projectId || projectId,
@@ -210,20 +212,32 @@ export function CatalogEditor({
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </Field>
-              <Field
-                label={value.id ? 'Nueva contraseña (opcional)' : 'Contraseña inicial'}
-                hint="Al menos 12 caracteres. La persona puede cambiarla en Ajustes."
-              >
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={12}
-                  maxLength={128}
-                  required={!value.id}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </Field>
+              {value.id && (
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={changePassword}
+                    onChange={(e) => setChangePassword(e.target.checked)}
+                  />
+                  Cambiar contraseña
+                </label>
+              )}
+              {changePassword && (
+                <>
+                  <Field
+                    label={value.id ? 'Nueva contraseña (opcional)' : 'Contraseña inicial'}
+                    hint="Puedes dejarla vacía o elegir cualquier longitud. La persona puede cambiarla en Ajustes."
+                  >
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </Field>
+                  <PasswordStrength password={password} context={[name, username, email]} />
+                </>
+              )}
               <Field label="Rol">
                 <select value={role} onChange={(e) => setRole(e.target.value as User['role'])}>
                   {roles.map((r) => (
@@ -599,9 +613,11 @@ export function Settings({
               data-update-blocked={!!currentPassword || !!newPassword || busy}
             >
               <fieldset disabled={busy}>
-                <Field label="Contraseña actual">
+                <Field
+                  label="Contraseña actual"
+                  hint="Déjala vacía si tu cuenta no tiene contraseña."
+                >
                   <input
-                    required
                     type="password"
                     autoComplete="current-password"
                     value={currentPassword}
@@ -610,18 +626,19 @@ export function Settings({
                 </Field>
                 <Field
                   label="Nueva contraseña"
-                  hint="Al menos 12 caracteres. Se cerrarán tus sesiones abiertas."
+                  hint="Cualquier longitud, incluso vacía. Se cerrarán tus sesiones abiertas."
                 >
                   <input
-                    required
-                    minLength={12}
-                    maxLength={128}
                     type="password"
                     autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNew(e.target.value)}
                   />
                 </Field>
+                <PasswordStrength
+                  password={newPassword}
+                  context={[user.name, user.username, user.email]}
+                />
                 <button className="btn btn-primary">
                   {busy ? 'Guardando…' : 'Cambiar contraseña'}
                 </button>

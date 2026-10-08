@@ -8,7 +8,7 @@ $env:DatabaseProvider = 'Sqlite'
 $env:ConnectionStrings__Default = "Data Source=$(Join-Path $dataPath 'aegitasks.db')"
 $env:SEED_ADMIN_EMAIL = $AdminEmail
 if (-not (Test-Path (Join-Path $dataPath 'aegitasks.db'))) {
-    $secret = Read-Host 'Initial admin password (12+ characters)' -AsSecureString
+    $secret = Read-Host 'Initial admin password (any length, blank is allowed)' -AsSecureString
     $env:SEED_ADMIN_PASSWORD = [System.Net.NetworkCredential]::new('', $secret).Password
 }
 try { dotnet run --project server/AegiTasks.Api --urls http://localhost:5213 }
