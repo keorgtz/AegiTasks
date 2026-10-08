@@ -19,7 +19,7 @@ Los cambios rechazados no generan avisos. Al eliminar un pendiente se eliminan s
 
 ## Contenido del aviso
 
-Los avisos de pendientes y chat conservan el identificador nativo de la app y el badge pequeño; no se envía una segunda imagen mediante `icon` o `image`. Esto evita repetir el logo como imagen grande al expandir el aviso. El navegador/sistema controla su presentación final. El cambio aplica a los avisos nuevos después de actualizar la PWA; no modifica los que el sistema ya tenía visibles. [Opciones de notificación](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification).
+Los avisos de pendientes y chat envían el logo oficial mediante `icon: '/aegitasks-icon-192.png'` y conservan el badge pequeño. Se restauró el icono porque al omitirlo el teléfono mostrado por el usuario generó un círculo con la letra T. No se envía `image`; la API web no tiene una opción para exigir que el sistema oculte ese espacio y el navegador/sistema controla la presentación final. El cambio aplica a los avisos nuevos después de actualizar la PWA; no modifica los que el sistema ya tenía visibles. [Opciones de notificación](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification).
 
 El historial y la notificación del sistema muestran el título del pendiente. Los avisos nuevos conservan el título que tenía al producirse el evento; renombrarlo después no reescribe los avisos anteriores.
 

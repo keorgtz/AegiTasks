@@ -1,5 +1,9 @@
 # Evidencia de validación
 
+## Restauración del logo en notificaciones — 7 de octubre de 2026
+
+La captura móvil del usuario mostró un círculo con la letra T después de omitir `icon`. Se restauró `/aegitasks-icon-192.png` en el worker compartido por avisos de pendientes y chat, manteniendo el badge, autorización, agrupación y ausencia de `image`. Las pruebas verifican explícitamente el logo enviado en ambos tipos de aviso: **7 comprobaciones del worker push y 12 de actualización PWA aprobadas**, con dos builds reales. Lint, formato y whitespace aprobaron. La presentación nativa después de este cambio no se verificó en un teléfono físico; el cambio se aplica a nuevos avisos tras desplegar y actualizar la PWA.
+
 ## Contraseñas flexibles y presencia de chat — 7 de octubre de 2026
 
 Se eliminaron las restricciones de longitud y obligatoriedad de la contraseña en API, acceso, cambio de clave, edición de identidad y administración de usuarios. Las claves vacías siguen pasando por PasswordHasher; no existe un bypass de autenticación. En edición administrativa, omitir o enviar `null` conserva el hash, mientras `""` lo reemplaza por una clave vacía. El bootstrap y Compose admiten un valor inicial explícitamente vacío, manteniendo el error cuando falta la configuración. El medidor local y orientativo detecta contraseñas comunes, patrones y datos de la persona; analiza como máximo 128 caracteres para limitar trabajo del navegador, sin recortar la clave guardada.

@@ -35,7 +35,8 @@ self.addEventListener('push', (event) => {
       }
       await self.registration.showNotification(notice.title, {
         body: notice.body,
-        // Keep the native app identity/badge without an additional large content icon.
+        // Android may generate an origin monogram when icon is omitted.
+        icon: '/aegitasks-icon-192.png',
         badge: '/aegitasks-notification-badge.png',
         tag: notice.tag,
         ...(chat ? { renotify } : {}),
