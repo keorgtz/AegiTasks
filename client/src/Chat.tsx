@@ -12,6 +12,7 @@ import {
   Search,
   Send,
   Settings2,
+  Smile,
   Users,
   X,
 } from 'lucide-react';
@@ -21,6 +22,8 @@ import { Empty, ErrorBox, Field, Modal } from './components';
 import { chatName, useChat, type ChatRoom } from './ChatContext';
 import { ChatNotificationSettings, clearChatNotices } from './ChatNotifications';
 import { PresenceBadge, RoomPresence } from './ChatPresence';
+import { ChatMediaPicker } from './ChatMediaPicker';
+import { GifPreview } from './GifPreview';
 import type { Space, User } from './types';
 import './styles/chat.css';
 
@@ -63,6 +66,8 @@ export default function ChatPage({
   const [share, setShare] = useState(false);
   const [notifications, setNotifications] = useState(false);
   const [attachments, setAttachments] = useState(false);
+  const [media, setMedia] = useState<{ room: string; tab: 'emoji' | 'gif' } | null>(null);
+  const emojiCursor = useRef({ start: 0, end: 0 });
   const textarea = useRef<HTMLTextAreaElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const page = useRef<HTMLElement>(null);
@@ -227,13 +232,42 @@ export default function ChatPage({
     }
   }
   function attach(files: File[]) {
+    if (busy) return false;
     const next = [...draft.files, ...files];
-    if (next.length > 5 || next.reduce((n, f) => n + f.size, 0) > 25 * 1024 * 1024) {
-      setError('Máximo 5 archivos y 25 MB por mensaje.');
-      return;
+    if (
+      next.length > 5 ||
+      next.reduce((n, f) => n + f.size, 0) > 25 * 1024 * 1024 ||
+      files.some((f) => f.type === 'image/gif' && f.size > 10 * 1024 * 1024)
+    ) {
+      setError('Máximo 5 archivos y 25 MB por mensaje; cada GIF admite hasta 10 MB.');
+      return false;
     }
     chat.update(selected, { files: next });
     setError('');
+    return true;
+  }
+  function openMedia(tab: 'emoji' | 'gif') {
+    emojiCursor.current = {
+      start: textarea.current?.selectionStart ?? draft.body.length,
+      end: textarea.current?.selectionEnd ?? draft.body.length,
+    };
+    setMedia({ room: selected, tab });
+  }
+  function closeMedia() {
+    setMedia(null);
+    requestAnimationFrame(() => {
+      textarea.current?.focus();
+      textarea.current?.setSelectionRange(emojiCursor.current.start, emojiCursor.current.end);
+    });
+  }
+  function insertEmoji(emoji: string) {
+    if (busy) return false;
+    const { start, end } = emojiCursor.current;
+    const body = draft.body.slice(0, start) + emoji + draft.body.slice(end);
+    if (body.length > 4000) return false;
+    chat.update(selected, { body });
+    emojiCursor.current = { start: start + emoji.length, end: start + emoji.length };
+    return true;
   }
   return (
     <section
@@ -409,7 +443,9 @@ export default function ChatPage({
                       ))}
                     {m.files.map((file) => (
                       <div key={file.id} className="chat-file">
-                        {file.contentType.startsWith('image/') ? (
+                        {file.contentType === 'image/gif' ? (
+                          <GifPreview src={`/api/chat/files/${file.id}`} name={file.name} />
+                        ) : file.contentType.startsWith('image/') ? (
                           <a href={`/api/chat/files/${file.id}`} target="_blank" rel="noreferrer">
                             <img
                               src={`/api/chat/files/${file.id}`}
@@ -510,6 +546,16 @@ export default function ChatPage({
                 >
                   <Plus size={21} />
                 </button>
+                <button
+                  type="button"
+                  className="btn-icon chat-media-open"
+                  aria-label="Emojis y GIFs"
+                  title="Emojis y GIFs"
+                  disabled={busy}
+                  onClick={() => openMedia('emoji')}
+                >
+                  <Smile size={20} />
+                </button>
                 <textarea
                   ref={textarea}
                   aria-label="Mensaje"
@@ -519,6 +565,15 @@ export default function ChatPage({
                   value={draft.body}
                   disabled={busy}
                   onChange={(e) => chat.update(selected, { body: e.target.value })}
+                  onPaste={(e) => {
+                    const files = Array.from(e.clipboardData.files).filter((f) =>
+                      f.type.startsWith('image/'),
+                    );
+                    if (files.length) {
+                      e.preventDefault();
+                      attach(files);
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                       e.preventDefault();
@@ -548,6 +603,15 @@ export default function ChatPage({
               className="btn btn-ghost"
               onClick={() => {
                 setAttachments(false);
+                openMedia('emoji');
+              }}
+            >
+              <Smile size={20} /> Emojis y GIFs
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setAttachments(false);
                 input.current?.click();
               }}
             >
@@ -567,6 +631,16 @@ export default function ChatPage({
             </p>
           </div>
         </Modal>
+      )}
+      {media?.room === selected && room && (
+        <ChatMediaPicker
+          key={selected}
+          userId={user.id}
+          initialTab={media.tab}
+          onClose={closeMedia}
+          onEmoji={insertEmoji}
+          onFiles={attach}
+        />
       )}
       {newChat && (
         <ChatEditor

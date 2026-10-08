@@ -33,14 +33,14 @@ public static class ChatNotificationEvents
         var count = await query.CountAsync(ct); if (count == 0) return null;
         var room = await db.ChatRooms.AsNoTracking().SingleAsync(r => r.Id == roomId, ct);
         var rows = await query.Join(db.ChatMessages, n => n.ChatMessageId, m => m.Id, (n, m) => new { noticeId = n.Id, m.Sequence, m.Body, m.Id, author = db.Users.Where(u => u.Id == m.UserId).Select(u => u.Name).First(), m.CreatedAt, hasTask = m.TaskId != null,
-            fileCount = db.ChatFiles.Count(f => f.ChatMessageId == m.Id) }).OrderByDescending(m => m.Sequence).Take(5).ToListAsync(ct);
+            fileCount = db.ChatFiles.Count(f => f.ChatMessageId == m.Id), hasGif = db.ChatFiles.Any(f => f.ChatMessageId == m.Id && f.ContentType == "image/gif") }).OrderByDescending(m => m.Sequence).Take(5).ToListAsync(ct);
         var title = room.DirectKey == null ? room.Name : await db.ChatMembers.Where(m => m.ChatRoomId == roomId && m.UserId != uid).Select(m => db.Users.Where(u => u.Id == m.UserId).Select(u => u.Name).First()).FirstAsync(ct);
-        var previews = rows.AsEnumerable().Reverse().Select(m => $"{m.author}: {Preview(m.Body, m.hasTask, m.fileCount)}").ToArray();
+        var previews = rows.AsEnumerable().Reverse().Select(m => $"{m.author}: {Preview(m.Body, m.hasTask, m.fileCount, m.hasGif)}").ToArray();
         return new(rows[0].noticeId, roomId, uid, title, count, rows[0].Sequence, previews, rows[0].CreatedAt);
     }
-    private static string Preview(string body, bool task, int files)
+    private static string Preview(string body, bool task, int files, bool gif)
     {
-        var text = body.Length > 0 ? body.Replace('\r', ' ').Replace('\n', ' ') : task ? "Pendiente compartido" : files == 1 ? "Archivo adjunto" : $"{files} archivos adjuntos";
+        var text = body.Length > 0 ? body.Replace('\r', ' ').Replace('\n', ' ') : task ? "Pendiente compartido" : gif ? files == 1 ? "GIF adjunto" : $"GIF y {files - 1} archivo(s) adjunto(s)" : files == 1 ? "Archivo adjunto" : $"{files} archivos adjuntos";
         return string.Concat(text.EnumerateRunes().Take(140).Select(r => r.ToString())) + (text.EnumerateRunes().Count() > 140 ? "…" : "");
     }
     public record ChatNotice(Guid Id, Guid RoomId, Guid UserId, string Title, int Count, long Sequence, string[] Previews, DateTime CreatedAt)

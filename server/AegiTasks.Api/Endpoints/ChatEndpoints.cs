@@ -13,6 +13,17 @@ public static class ChatEndpoints
     public static void MapChat(this WebApplication app)
     {
         var routes = app.MapGroup("/api/chat").RequireAuthorization("page:chat");
+        routes.MapGet("/gifs", async (int? page, string? q, AppDb db, ClaimsPrincipal user, CancellationToken ct) =>
+        {
+            var uid = user.UserId();
+            var query = from file in db.ChatFiles
+                        join message in db.ChatMessages on file.ChatMessageId equals message.Id
+                        where file.ContentType == "image/gif" && db.ChatMembers.Any(m => m.ChatRoomId == message.ChatRoomId && m.UserId == uid)
+                        select new { file.Id, file.Name, file.Size, message.CreatedAt };
+            if (!string.IsNullOrWhiteSpace(q)) { var search = Rules.Text(q, 80, "Búsqueda").ToLower(); query = query.Where(f => f.Name.ToLower().Contains(search)); }
+            var current = Math.Clamp(page ?? 1, 1, 100000);
+            return Results.Ok(new { items = await query.OrderByDescending(f => f.CreatedAt).ThenBy(f => f.Id).Skip((current - 1) * 24).Take(24).Select(f => new { f.Id, f.Name, f.Size }).ToListAsync(ct), total = await query.CountAsync(ct) });
+        });
         routes.MapGet("/events", (HttpContext http, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(http, Guid.Empty, scopes));
         routes.MapGet("/presence", async (AppDb db, ClaimsPrincipal user, ChatPresence presence) =>
         {
@@ -50,7 +61,7 @@ public static class ChatEndpoints
                     r.UpdatedAt,
                     members = db.ChatMembers.Where(m => m.ChatRoomId == r.Id).Select(m => new { m.UserId, name = db.Users.Where(u => u.Id == m.UserId).Select(u => u.Name).First(), active = db.Users.Any(u => u.Id == m.UserId && u.Active) }).ToList(),
                     unread = db.ChatMessages.Count(msg => msg.ChatRoomId == r.Id && msg.UserId != uid && msg.Sequence > db.ChatMembers.Where(m => m.ChatRoomId == r.Id && m.UserId == uid).Select(m => m.ReadSequence).First()),
-                    preview = db.ChatMessages.Where(m => m.ChatRoomId == r.Id).OrderByDescending(m => m.Sequence).Select(m => m.Body != "" ? m.Body : m.TaskId != null ? "Pendiente compartido" : "Archivo adjunto").FirstOrDefault()
+                    preview = db.ChatMessages.Where(m => m.ChatRoomId == r.Id).OrderByDescending(m => m.Sequence).Select(m => m.Body != "" ? m.Body : m.TaskId != null ? "Pendiente compartido" : db.ChatFiles.Any(f => f.ChatMessageId == m.Id && f.ContentType == "image/gif") ? "GIF adjunto" : "Archivo adjunto").FirstOrDefault()
                 }).ToListAsync();
             var preferences = await db.ChatNotificationPreferences.Where(p => p.UserId == uid).ToDictionaryAsync(p => p.ChatRoomId, p => p.Settings);
             return Results.Ok(rooms.Select(r => new { r.Id, r.Name, r.isGroup, r.OwnerId, r.Version, r.UpdatedAt, r.members, r.unread, r.preview,

@@ -20,6 +20,18 @@ Escribe y pulsa **Enviar**, o Ctrl/⌘ + Enter. El texto admite hasta 4000 carac
 
 El campo comienza con una línea y la misma altura que Enviar; crece al escribir hasta un máximo adaptado a la pantalla y después permite desplazar el texto. Enviar se mantiene accesible al pie del campo. **+ → Agregar al mensaje** reúne **Adjuntar archivos** y **Compartir pendiente**, sin ocupar una segunda fila permanente. Abrir o cerrar ese diálogo conserva el borrador.
 
+### Emojis y GIFs
+
+**Emojis y GIFs** abre un selector con dos secciones. En escritorio tiene un botón de sonrisa junto al mensaje; en teléfonos de hasta 480 px se encuentra dentro de **+ → Emojis y GIFs**, conservando el espacio para escribir. Funciona en conversaciones individuales y grupos.
+
+- **Emojis:** búsqueda por nombre en español, categorías, recientes y seis opciones de tono de piel en gestos compatibles. Inserta en la posición del cursor o reemplaza el texto seleccionado; permite elegir varios antes de cerrar. Usa Unicode nativo y conserva los recientes/tono localmente por cuenta. También se pueden escribir desde el teclado del dispositivo. El límite de 4000 caracteres se respeta sin recortar el borrador.
+- **GIFs:** **Adjuntar GIF** selecciona archivos locales de hasta 10 MB. Comprueba tamaño y firma antes de agregarlos al borrador; Enviar sigue siendo una acción explícita. **GIFs de tus chats** ofrece búsqueda por nombre y páginas de 24 archivos provenientes únicamente de conversaciones en las que todavía participas. Elegir uno descarga el archivo autenticado y lo adjunta como una nueva copia. La descarga y el envío vuelven a comprobar permisos; perder acceso a un grupo también lo retira de la galería.
+- **Portapapeles:** pegar una imagen/GIF en el campo lo agrega a los adjuntos del borrador, con los límites normales de cinco archivos y 25 MB por mensaje.
+
+Los GIFs enviados conservan sus bytes y animación. **Pausar GIF** muestra un fotograma estático y **Reproducir GIF** vuelve a mostrar la animación. Con movimiento reducido, los mensajes comienzan estáticos y la galería mantiene **Animar** desactivado; se puede reproducir explícitamente. El poster utiliza el primer fotograma definido por el [estándar de canvas](https://html.spec.whatwg.org/multipage/canvas.html#canvasimagesource). Si falla la preview, el archivo conserva su opción de descarga. Mensajes sin texto que contienen GIFs se identifican como **GIF adjunto** en la lista y en las vistas previas de notificaciones.
+
+La galería utiliza el almacenamiento y autorización actuales de AegiTasks, sin claves API adicionales ni migraciones. Emojis, GIFs y sus notificaciones conservan los mismos controles de participación, permisos y silencios que los demás mensajes.
+
 Cada mensaje admite hasta cinco archivos y 25 MB en total:
 
 | Contenido               | Formatos                                                           | Límite por archivo |

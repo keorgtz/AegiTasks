@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 export async function testChat({
   page,
@@ -209,6 +210,59 @@ export async function testChat({
   pass(
     'Authenticated chat files support documents/images and video ranges, reject spoofed/oversized uploads atomically and deny nonparticipants',
   );
+  // Two real looping purple/green GIF frames, 160ms each.
+  const gifBytes = await readFile(new URL('./fixtures/chat-animation.gif', import.meta.url));
+  const gifUpload = { name: 'animated-check.gif', mimeType: 'image/gif', buffer: gifBytes };
+  const gifMessage = await send(a, direct.id, '', { file: gifUpload });
+  const gifFile = (await json(b, 'GET', `/chat/${direct.id}/messages`)).items.find(
+    (m) => m.id === gifMessage.id,
+  ).files[0];
+  assert.equal(gifFile.contentType, 'image/gif');
+  assert.deepEqual(await (await b.get(`/api/chat/files/${gifFile.id}`)).body(), gifBytes);
+  assert.equal((await json(b, 'GET', '/chat/gifs?q=ANIMATED-CHECK')).items[0].id, gifFile.id);
+  assert.equal((await json(admin, 'GET', '/chat/gifs')).total, 0);
+  assert.equal((await json(x, 'GET', '/chat/gifs')).total, 0);
+  assert.equal((await x.get(`/api/chat/files/${gifFile.id}`)).status(), 404);
+  await send(a, direct.id, '', {
+    file: { ...gifUpload, buffer: Buffer.from('<script>not a GIF</script>') },
+    status: 400,
+  });
+  const gifGroup = await json(a, 'POST', '/chat', {
+    isGroup: true,
+    name: 'GIF sharing',
+    users: [bob.id, outsider.id],
+  });
+  await send(a, gifGroup.id, '', { file: { ...gifUpload, name: 'group-animation.gif' } });
+  assert.equal((await json(x, 'GET', '/chat/gifs?q=group-animation')).total, 1);
+  const gifGroupInfo = (await json(a, 'GET', '/chat')).find((r) => r.id === gifGroup.id);
+  await json(
+    a,
+    'PUT',
+    `/chat/${gifGroup.id}`,
+    { name: gifGroupInfo.name, users: [bob.id], version: gifGroupInfo.version },
+    204,
+  );
+  assert.equal((await json(x, 'GET', '/chat/gifs?q=group-animation')).total, 0);
+  for (let i = 0; i < 25; i++)
+    await send(a, direct.id, '', { file: { ...gifUpload, name: `paged-${i}.gif` } });
+  const gifPage1 = await json(b, 'GET', '/chat/gifs?q=paged-&page=1');
+  const gifPage2 = await json(b, 'GET', '/chat/gifs?q=paged-&page=2');
+  assert.equal(gifPage1.items.length, 24);
+  assert.equal(gifPage2.items.length, 1);
+  assert.equal(gifPage1.total, 25);
+  assert.equal(new Set([...gifPage1.items, ...gifPage2.items].map((f) => f.id)).size, 25);
+  assert.equal(
+    (await json(b, 'GET', '/chat')).find((r) => r.id === direct.id).preview,
+    'GIF adjunto',
+  );
+  assert.ok(
+    (await json(b, 'GET', '/chat/notifications'))
+      .find((n) => n.roomId === direct.id)
+      .previews.some((p) => p.includes('GIF adjunto')),
+  );
+  pass(
+    'Animated GIF bytes persist unchanged; the searchable bounded gallery includes only current participant chats, excludes Admin/outsiders and removes group access immediately',
+  );
   await json(admin, 'POST', `/spaces/${shared.id}/members`, { userId: alice.id }, 204);
   await json(admin, 'POST', `/spaces/${shared.id}/members`, { userId: bob.id }, 204);
   const project = await json(admin, 'POST', '/projects', {
@@ -245,9 +299,145 @@ export async function testChat({
     'Task shortcuts require access for every participant, hide titles after revocation and never bind the conversation to a workspace',
   );
   const roomAdmin = await json(admin, 'POST', '/chat', { isGroup: false, users: [alice.id] });
+  const openMediaPicker = async () => {
+    if (page.viewportSize().width <= 480) {
+      await page.getByRole('button', { name: 'Agregar al mensaje', exact: true }).click();
+      await page
+        .getByRole('dialog', { name: 'Agregar al mensaje', exact: true })
+        .getByRole('button', { name: 'Emojis y GIFs', exact: true })
+        .click();
+    } else
+      await page
+        .locator('.chat-composer')
+        .getByRole('button', { name: 'Emojis y GIFs', exact: true })
+        .click();
+  };
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/?space=${shared.id}#chat/${roomAdmin.id}`);
   await page.getByRole('heading', { name: 'Chat Alice', exact: true }).waitFor();
+  const composerText = page.getByLabel('Mensaje', { exact: true });
+  await composerText.fill('Inicio FINAL');
+  await composerText.evaluate((el) => {
+    el.focus();
+    el.setSelectionRange(7, 12);
+  });
+  await openMediaPicker();
+  const mediaPicker = page.getByRole('dialog', { name: 'Emojis y GIFs', exact: true });
+  await mediaPicker.getByLabel('Buscar emojis').fill('pulgar arriba');
+  await mediaPicker.getByLabel('Tono de piel').selectOption('3');
+  await mediaPicker
+    .getByRole('button', { name: 'Insertar pulgar arriba bien ok', exact: true })
+    .click();
+  await mediaPicker.getByLabel('Buscar emojis').fill('corazon morado');
+  await mediaPicker.getByRole('button', { name: 'Insertar corazón morado', exact: true }).click();
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  assert.equal(await composerText.inputValue(), 'Inicio 👍🏽💜');
+  assert.equal(await composerText.evaluate((el) => el.selectionStart), 'Inicio 👍🏽💜'.length);
+  await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+  await page.locator('.chat-message-text').getByText('Inicio 👍🏽💜', { exact: true }).waitFor();
+  await openMediaPicker();
+  await mediaPicker.getByLabel('Categoría de emojis').selectOption('Recientes');
+  await mediaPicker.getByRole('button', { name: 'Insertar 💜', exact: true }).waitFor();
+  assert.equal(await mediaPicker.getByLabel('Tono de piel').inputValue(), '3');
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  pass(
+    'Emoji picker searches accent-insensitively, replaces the selected text at the cursor, supports skin tones and multiple insertions, sends Unicode and restores per-account recent preferences',
+  );
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker
+    .locator('input[type=file]')
+    .setInputFiles({ name: 'fake.gif', mimeType: 'image/gif', buffer: pngBytes });
+  await mediaPicker
+    .getByRole('alert')
+    .getByText('Selecciona un archivo GIF válido.', { exact: true })
+    .waitFor();
+  await mediaPicker.locator('input[type=file]').setInputFiles({
+    name: 'oversized.gif',
+    mimeType: 'image/gif',
+    buffer: Buffer.concat([gifBytes, Buffer.alloc(10 * 1024 * 1024)]),
+  });
+  await mediaPicker
+    .getByRole('alert')
+    .getByText('Selecciona GIFs de hasta 10 MB cada uno.', { exact: true })
+    .waitFor();
+  await mediaPicker.locator('input[type=file]').setInputFiles(gifUpload);
+  await page.locator('.chat-draft-chip').getByText(gifUpload.name, { exact: true }).waitFor();
+  assert.ok(
+    !(await json(admin, 'GET', `/chat/${roomAdmin.id}/messages`)).items.some((m) =>
+      m.files.some((f) => f.name === gifUpload.name),
+    ),
+  );
+  await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+  const sentGif = page
+    .locator('.chat-file')
+    .filter({ has: page.getByAltText(gifUpload.name, { exact: true }) });
+  await sentGif
+    .getByRole('button', { name: `Pausar GIF ${gifUpload.name}`, exact: true })
+    .waitFor();
+  // Canvas draws the poster of animated images by specification. Measure actual browser rendering.
+  const frames = new Set();
+  for (let i = 0; i < 8; i++) {
+    frames.add((await sentGif.locator('img').screenshot()).toString('base64'));
+    await page.waitForTimeout(70);
+  }
+  assert.ok(frames.size >= 2, 'The real rendered GIF advances between different frames');
+  await sentGif.getByRole('button', { name: `Pausar GIF ${gifUpload.name}`, exact: true }).click();
+  await sentGif.locator('canvas').waitFor({ state: 'visible' });
+  await sentGif
+    .getByRole('button', { name: `Reproducir GIF ${gifUpload.name}`, exact: true })
+    .click();
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: `Adjuntar GIF ${gifUpload.name}`, exact: true })
+    .click();
+  await page.locator('.chat-draft-chip').getByText(gifUpload.name, { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelectorAll('.chat-file .chat-gif-preview').length === 2,
+  );
+  pass(
+    'GIF picker uploads to the draft before sending, displays real animation with pause/play and reuses an authorized GIF as a new attachment without modifying the original',
+  );
+  await composerText.fill('a'.repeat(4000));
+  await openMediaPicker();
+  await mediaPicker.getByLabel('Buscar emojis').fill('cohete');
+  await mediaPicker
+    .getByRole('button', { name: 'Insertar cohete lanzamiento', exact: true })
+    .click();
+  await mediaPicker
+    .getByRole('alert')
+    .getByText('El mensaje admite hasta 4000 caracteres.')
+    .waitFor();
+  await page.keyboard.press('Escape');
+  assert.equal((await composerText.inputValue()).length, 4000);
+  await composerText.fill('');
+  await composerText.evaluate(
+    (el, bytes) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array(bytes)], 'pasted.gif', { type: 'image/gif' }));
+      el.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
+      );
+    },
+    [...gifBytes],
+  );
+  await page.locator('.chat-draft-chip').getByText('pasted.gif', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Quitar pasted.gif', exact: true }).click();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  assert.equal(await mediaPicker.getByLabel('Animar', { exact: true }).isChecked(), false);
+  const galleryGif = mediaPicker
+    .getByRole('button', { name: `Adjuntar GIF ${gifUpload.name}`, exact: true })
+    .first();
+  await galleryGif.locator('canvas').waitFor({ state: 'visible' });
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  pass(
+    'Emoji limits reject overflow without losing the draft; pasted GIFs attach without sending and reduced-motion previews default to still frames',
+  );
   await page.getByLabel('Mensaje', { exact: true }).fill('Hola desde la interfaz');
   await page.getByRole('button', { name: 'Enviar', exact: true }).click();
   await page
@@ -371,6 +561,34 @@ export async function testChat({
       JSON.stringify(composer),
     );
     await page.screenshot({ path: path.join(artifacts, `chat-${width}-${theme}.png`) });
+    await openMediaPicker();
+    await mediaPicker.getByLabel('Buscar emojis').fill('cohete');
+    const mediaBounds = await mediaPicker.boundingBox();
+    assert.ok(
+      mediaBounds.x >= 0 &&
+        mediaBounds.x + mediaBounds.width <= width + 1 &&
+        mediaBounds.y >= 0 &&
+        mediaBounds.y + mediaBounds.height <= height + 1,
+    );
+    await page.screenshot({ path: path.join(artifacts, `chat-media-${width}-${theme}.png`) });
+    const emojiBounds = await mediaPicker
+      .getByRole('button', { name: 'Insertar cohete lanzamiento', exact: true })
+      .boundingBox();
+    const pickerScroll = await mediaPicker.locator('.chat-media-scroll').boundingBox();
+    assert.ok(
+      emojiBounds.y + emojiBounds.height <= pickerScroll.y + pickerScroll.height + 1,
+      'Emoji is fully reachable in the picker',
+    );
+    await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+    await mediaPicker.locator('.chat-gif-option').first().waitFor();
+    await page.screenshot({ path: path.join(artifacts, `chat-gifs-${width}-${theme}.png`) });
+    const gifBounds = await mediaPicker.locator('.chat-gif-option').first().boundingBox();
+    const gifScroll = await mediaPicker.locator('.chat-media-scroll').boundingBox();
+    assert.ok(
+      gifBounds.y + gifBounds.height <= gifScroll.y + gifScroll.height + 1,
+      'GIF choice is fully reachable in the picker',
+    );
+    await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
     if (width < 768) {
       await page.getByRole('button', { name: 'Volver a conversaciones' }).click();
       await page.getByRole('button', { name: 'Nuevo chat', exact: true }).waitFor();
@@ -433,6 +651,7 @@ export async function testChat({
   await json(admin, 'PUT', `/users/${bob.id}`, { name: bob.name, role: 'NoChat', active: true });
   await json(b, 'POST', '/auth/login', { email: bob.email, password });
   await json(b, 'GET', '/chat', undefined, 403);
+  await json(b, 'GET', '/chat/gifs', undefined, 403);
   assert.equal((await b.get(`/api/chat/files/${file.id}`)).status(), 403);
   assert.ok(!(await json(a, 'GET', '/chat/users?q=Chat Bob')).items.some((u) => u.id === bob.id));
   pass(
