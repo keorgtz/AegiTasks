@@ -3,5 +3,6 @@
     <Project Path="server/AegiTasks.Api/AegiTasks.Api.csproj" />
     <Project Path="server/AegiTasks.NotificationTests/AegiTasks.NotificationTests.csproj" />
     <Project Path="server/AegiTasks.ReminderTests/AegiTasks.ReminderTests.csproj" />
+    <Project Path="server/AegiTasks.TeamRoleTests/AegiTasks.TeamRoleTests.csproj" />
   </Folder>
 </Solution>

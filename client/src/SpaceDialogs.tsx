@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, errorMessage } from './api';
 import { ErrorBox, Field, Modal } from './components';
-import type { Space, User } from './types';
+import type { Space, SpaceMember, User } from './types';
 
 export function SpaceEditor({
   space,
@@ -73,7 +73,7 @@ export function SpaceMemberDialog({
   onSaved,
 }: {
   space: Space;
-  members: User[];
+  members: SpaceMember[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {

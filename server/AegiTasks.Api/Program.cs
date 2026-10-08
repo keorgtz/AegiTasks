@@ -72,7 +72,7 @@ app.Use(async (c, next) =>
     }
     try { await next(); }
     catch (InputError e) { c.Response.StatusCode = 400; await c.Response.WriteAsJsonAsync(new { error = e.Message }); }
-    catch (DbUpdateConcurrencyException) { c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "Otra persona actualizó este pendiente. Cierra y vuelve a abrirlo antes de guardar." }); }
+    catch (DbUpdateConcurrencyException) { c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "Otra persona actualizó este elemento. Cierra y vuelve a abrirlo antes de guardar." }); }
     catch (DbUpdateException e) { app.Logger.LogWarning(e, "Database rejected a mutation"); c.Response.StatusCode = 409; await c.Response.WriteAsJsonAsync(new { error = "No se pudo guardar: el nombre ya existe o el elemento está en uso." }); }
 });
 app.UseAuthentication(); app.UseRateLimiter();
@@ -130,6 +130,7 @@ app.MapGet("/api/events", (HttpContext c, Guid space, ChangeFeed feed, IServiceS
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
 app.MapReminders(); app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications(); app.MapChat(); app.MapChatNotifications();
 app.MapPushPreviews();
+app.MapTeamRoles();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
@@ -162,6 +163,7 @@ if (!app.Environment.IsEnvironment("Testing"))
             await SqliteNotificationUpgrade.Apply(db);
             await ChatUpgrade.Apply(db);
             await ReminderUpgrade.Apply(db);
+            await TeamRoleUpgrade.Apply(db);
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }

@@ -6,6 +6,16 @@ export interface User {
   role: string;
   active: boolean;
 }
+export interface TeamRole {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+}
+export interface SpaceMember extends Omit<User, 'role'> {
+  teamRole: TeamRole | null;
+  teamRoleVersion: string | null;
+}
 export interface Project {
   id: string;
   name: string;

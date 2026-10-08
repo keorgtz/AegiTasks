@@ -35,7 +35,13 @@ public static class SpaceEndpoints
         });
         group.MapGet("/{id:guid}/members", async (Guid id, AppDb db, ClaimsPrincipal user) => {
             if (!await Access.SpacesFor(db, user.UserId()).AnyAsync(s => s.Id == id)) return Results.NotFound();
-            return Results.Ok(await Access.Members(db, id).OrderBy(u => u.Name).Select(u => new { u.Id, u.Name, u.Username, u.Email, u.Active }).ToListAsync());
+            var roles = await (from a in db.TeamRoleAssignments
+                               join r in db.TeamRoles on a.TeamRoleId equals r.Id
+                               where a.SpaceId == id
+                               select new { a.UserId, AssignmentVersion = a.Version, Role = new { r.Id, r.Name, r.Description, r.Version } }).ToDictionaryAsync(a => a.UserId);
+            var members = await Access.Members(db, id).OrderBy(u => u.Name).Select(u => new { u.Id, u.Name, u.Username, u.Email, u.Active }).ToListAsync();
+            return Results.Ok(members.Select(u => new { u.Id, u.Name, u.Username, u.Email, u.Active,
+                TeamRole = roles.GetValueOrDefault(u.Id)?.Role, TeamRoleVersion = (Guid?)roles.GetValueOrDefault(u.Id)?.AssignmentVersion }));
         });
         group.MapPut("/{id:guid}", async (Guid id, SpaceInput input, AppDb db, ClaimsPrincipal user) => {
             var space = await Access.SpacesFor(db, user.UserId()).SingleOrDefaultAsync(s => s.Id == id);

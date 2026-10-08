@@ -3,8 +3,9 @@ import { Copy, Globe2, LockKeyhole, Pencil, Plus, UserPlus, UserRound, Users } f
 import { api, errorMessage, setActiveSpace } from './api';
 import { emitChanges, useChanges } from './changes';
 import { Brand, ErrorBox, Field } from './components';
-import type { Space, SpaceSession, User } from './types';
+import type { Space, SpaceMember, SpaceSession, TeamRole, User } from './types';
 import { SpaceEditor, SpaceMemberDialog } from './SpaceDialogs';
+import { TeamRoles } from './TeamRoles';
 
 export function SpaceGate({
   user,
@@ -157,13 +158,30 @@ export function SpacesPage({
   const [invite, setInvite] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [members, setMembers] = useState<User[]>([]);
+  const [members, setMembers] = useState<SpaceMember[]>([]);
+  const [teamRoles, setTeamRoles] = useState<TeamRole[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const memberRequest = useRef(0);
   const [editor, setEditor] = useState<'edit' | 'member' | null>(null);
   const [message, setMessage] = useState('');
   const canEdit = active.ownerId === user.id || (!active.isPersonal && user.role === 'Admin');
   const loadMembers = async (signal?: AbortSignal) => {
-    const result = await api<User[]>(`/spaces/${active.id}/members`, 'GET', undefined, signal);
-    if (!signal?.aborted) setMembers(result);
+    const request = ++memberRequest.current;
+    setMembersLoading(true);
+    try {
+      const [result, roles] = await Promise.all([
+        api<SpaceMember[]>(`/spaces/${active.id}/members`, 'GET', undefined, signal),
+        active.isPersonal
+          ? Promise.resolve([])
+          : api<TeamRole[]>(`/spaces/${active.id}/team-roles`, 'GET', undefined, signal),
+      ]);
+      if (!signal?.aborted && request === memberRequest.current) {
+        setMembers(result);
+        setTeamRoles(roles);
+      }
+    } finally {
+      if (!signal?.aborted && request === memberRequest.current) setMembersLoading(false);
+    }
   };
   useChanges(['access'], () => void loadMembers().catch((e) => setError(errorMessage(e))));
   useEffect(() => {
@@ -171,6 +189,7 @@ export function SpacesPage({
     setInvite('');
     setMessage('');
     setMembers([]);
+    setTeamRoles([]);
     void loadMembers(controller.signal).catch((e) => {
       if (!controller.signal.aborted) setError(errorMessage(e));
     });
@@ -287,6 +306,16 @@ export function SpacesPage({
           {message}
         </p>
       )}
+      {!active.isPersonal && (
+        <TeamRoles
+          key={active.id}
+          space={active}
+          roles={teamRoles}
+          canManage={canEdit}
+          loading={membersLoading}
+          onSaved={loadMembers}
+        />
+      )}
       <section className="card">
         <div className="section-heading">
           <div>
@@ -372,8 +401,13 @@ export function SpacesPage({
             </button>
           </div>
         )}
+        {membersLoading && members.length === 0 && (
+          <p role="status" className="muted">
+            Cargando miembros…
+          </p>
+        )}
         {members.map((m) => (
-          <div className="settings-row" key={m.id}>
+          <div className="settings-row workspace-member-row" key={m.id}>
             <UserRound size={18} />
             <span>
               <strong>{m.name}</strong>
@@ -381,6 +415,38 @@ export function SpacesPage({
                 {m.id === active.ownerId ? 'Propietario' : 'Miembro'} · {m.email}
               </small>
             </span>
+            {!active.isPersonal &&
+              (canEdit ? (
+                <select
+                  className="member-team-role"
+                  aria-label={`Rol de equipo de ${m.name}`}
+                  value={m.teamRole?.id || ''}
+                  disabled={busy || membersLoading}
+                  onChange={(event) => {
+                    const teamRoleId = event.target.value || null;
+                    void run(async () => {
+                      try {
+                        await api(`/spaces/${active.id}/members/${m.id}/team-role`, 'PUT', {
+                          teamRoleId,
+                          version: m.teamRoleVersion,
+                        });
+                      } finally {
+                        await loadMembers();
+                      }
+                      setMessage(`Rol de equipo de ${m.name} actualizado.`);
+                    });
+                  }}
+                >
+                  <option value="">Sin rol de equipo</option>
+                  {teamRoles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="member-role-label">{m.teamRole?.name || 'Sin rol de equipo'}</span>
+              ))}
             {m.id !== active.ownerId &&
               (active.ownerId === user.id || user.role === 'Admin' || m.id === user.id) && (
                 <button

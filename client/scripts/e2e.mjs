@@ -8,6 +8,7 @@ import { testNoteEditor } from './note-editor-tests.mjs';
 import { testTaskDetailTabs } from './task-detail-tests.mjs';
 import { testInboxFilters } from './inbox-filter-tests.mjs';
 import { testSpaceAccounts, testSpaceAccountUi } from './space-account-tests.mjs';
+import { testTeamRoles } from './team-role-tests.mjs';
 import { testPlanningApi, testPlanningUi } from './planning-tests.mjs';
 import { testTaskHierarchy } from './task-hierarchy-tests.mjs';
 import { testNavigationInbox } from './navigation-inbox-tests.mjs';
@@ -427,6 +428,19 @@ try {
     });
   if (process.env.AEGITASKS_TEST_ONLY === 'password-presence') {
     // The new feature suite above also runs as part of the full regression suite.
+  } else if (process.env.AEGITASKS_TEST_ONLY === 'team-roles') {
+    await testTeamRoles({
+      page,
+      request,
+      admin,
+      support,
+      adminUser,
+      member,
+      shared,
+      json,
+      pass,
+      artifacts,
+    });
   } else if (process.env.AEGITASKS_TEST_ONLY === 'reminders') {
     await testReminders({ page, request, admin, adminUser, json, pass, artifacts, password });
   } else if (process.env.AEGITASKS_TEST_ONLY === 'chat') {
@@ -660,6 +674,19 @@ try {
       password,
     });
   }
+  if (!process.env.AEGITASKS_TEST_ONLY)
+    await testTeamRoles({
+      page,
+      request,
+      admin,
+      support,
+      adminUser,
+      member,
+      shared,
+      json,
+      pass,
+      artifacts,
+    });
   if (!process.env.AEGITASKS_TEST_ONLY)
     await testShellChatLayout({ page, admin, adminUser, json, pass, artifacts });
   const waitMs = new Date(spaceTests.clockSession.endsAt).getTime() - Date.now() + 100;

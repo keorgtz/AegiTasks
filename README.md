@@ -47,6 +47,8 @@ Los paneles del sidebar usan la altura de su contenido, sin reservar mitades igu
 
 ## Arquitectura
 
+Los **roles de equipo** se gestionan en **Ajustes → Workspace**. Cada workspace compartido tiene su catálogo propio: por ejemplo Dirección general, Dirección técnica, Gerencia y Soporte técnico. Su propietario o un Admin miembro puede crear, editar, eliminar y asignar un rol opcional a cada integrante, incluido el propietario. Los miembros pueden consultar estas funciones; los permisos de Admin/User y de páginas se mantienen independientes. Consulta [la guía de roles de equipo](docs/TEAM_ROLES.md).
+
 | Capa                         | Tecnología                                                                                             |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Cliente                      | React 19, TypeScript, Vite, vite-plugin-pwa, Lucide                                                    |

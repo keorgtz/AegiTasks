@@ -293,6 +293,24 @@ try {
     path.join(artifact, 'migration-reminders.sql'),
   ]);
   sql('legacy', await readFile(path.join(artifact, 'migration-reminders.sql'), 'utf8'));
+  run('dotnet', [
+    'ef',
+    'migrations',
+    'script',
+    'Reminders',
+    'WorkspaceTeamRoles',
+    '--project',
+    'server/AegiTasks.Api',
+    '--output',
+    path.join(artifact, 'migration-team-roles.sql'),
+  ]);
+  sql('legacy', await readFile(path.join(artifact, 'migration-team-roles.sql'), 'utf8'));
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "TeamRoles";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "TeamRoleAssignments";').trim(), '0');
+  assert.equal(sql('legacy', 'SELECT count(*) FROM "SpaceMembers";').trim(), '2');
+  console.log(
+    'PASS PostgreSQL team-role migration preserves existing memberships and starts with no job-role assignments',
+  );
   assert.equal(sql('legacy', 'SELECT count(*) FROM "Reminders";').trim(), '0');
   assert.equal(sql('legacy', 'SELECT length("Message") FROM "Notifications";').trim(), '600');
   assert.equal(sql('legacy', 'SELECT "Body" FROM "ChatMessages";').trim(), 'Retained message');
@@ -412,6 +430,7 @@ try {
         chatMigration: true,
         chatNotificationsMigration: true,
         remindersMigration: true,
+        teamRolesMigration: true,
         testedAt: new Date().toISOString(),
       },
       null,

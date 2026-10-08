@@ -1,0 +1,68 @@
+.team-roles {
+  margin-block: 20px;
+}
+.team-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.team-role-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+.team-role-list li > div:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.team-role-list small {
+  display: block;
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+.team-role-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.team-role-actions .btn-icon {
+  padding: 0;
+}
+.team-role-actions svg {
+  flex-shrink: 0;
+}
+.member-team-role {
+  width: min(100%, 220px);
+  min-height: 44px;
+}
+.member-role-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.workspace-member-row > span:first-of-type {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .workspace-member-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .workspace-member-row > span:first-of-type {
+    flex-basis: calc(100% - 38px);
+  }
+  .member-team-role {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .team-roles .section-heading {
+    flex-wrap: wrap;
+  }
+}

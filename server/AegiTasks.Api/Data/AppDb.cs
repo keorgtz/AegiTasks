@@ -10,6 +10,8 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
     public Guid CurrentSpaceId => scope.SpaceId;
     public DbSet<Space> Spaces => Set<Space>();
     public DbSet<SpaceMember> SpaceMembers => Set<SpaceMember>();
+    public DbSet<TeamRole> TeamRoles => Set<TeamRole>();
+    public DbSet<TeamRoleAssignment> TeamRoleAssignments => Set<TeamRoleAssignment>();
     public DbSet<AppRole> Roles => Set<AppRole>();
     public DbSet<PagePermission> PagePermissions => Set<PagePermission>();
     public DbSet<NoteFolder> NoteFolders => Set<NoteFolder>();
@@ -113,6 +115,17 @@ public class AppDb(DbContextOptions<AppDb> options, SpaceScope scope) : DbContex
         b.Entity<SpaceMember>().HasKey(x => new { x.SpaceId, x.UserId });
         b.Entity<SpaceMember>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SpaceMember>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<TeamRole>().HasOne<Space>().WithMany().HasForeignKey(x => x.SpaceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<TeamRole>().HasAlternateKey(x => new { x.Id, x.SpaceId });
+        b.Entity<TeamRole>().Property(x => x.Name).HasMaxLength(80);
+        b.Entity<TeamRole>().Property(x => x.NormalizedName).HasMaxLength(160);
+        b.Entity<TeamRole>().Property(x => x.Description).HasMaxLength(400);
+        b.Entity<TeamRole>().Property(x => x.Version).IsConcurrencyToken();
+        b.Entity<TeamRole>().HasIndex(x => new { x.SpaceId, x.NormalizedName }).IsUnique();
+        b.Entity<TeamRoleAssignment>().HasKey(x => new { x.SpaceId, x.UserId });
+        b.Entity<TeamRoleAssignment>().Property(x => x.Version).IsConcurrencyToken();
+        b.Entity<TeamRoleAssignment>().HasOne<SpaceMember>().WithMany().HasForeignKey(x => new { x.SpaceId, x.UserId }).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<TeamRoleAssignment>().HasOne<TeamRole>().WithMany().HasForeignKey(x => new { x.TeamRoleId, x.SpaceId }).HasPrincipalKey(x => new { x.Id, x.SpaceId }).OnDelete(DeleteBehavior.Cascade);
         b.Entity<AppRole>().HasKey(x => x.Name);
         b.Entity<AppRole>().Property(x => x.Name).HasMaxLength(40);
         b.Entity<PagePermission>().HasKey(x => new { x.RoleName, x.Page });
