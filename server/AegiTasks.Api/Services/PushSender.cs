@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AegiTasks.Api.Services;
 
-public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPushTransport transport, ILogger<PushSender> logger) : BackgroundService
+public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPushTransport transport, ILogger<PushSender> logger, PushWakeup wakeup, PushPreview preview) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -13,11 +13,21 @@ public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPush
             try { await Dispatch(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogWarning("Push queue unavailable ({ErrorType}); retrying", e.GetType().Name); }
-            try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
+            try { await wakeup.Wait(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }
     }
     public async Task Dispatch(CancellationToken stoppingToken)
+    {
+        // Separate DbContexts keep a slow task provider request from blocking all chat deliveries.
+        await Task.WhenAll(DispatchTasks(stoppingToken), DispatchChatQueue(stoppingToken));
+    }
+    private async Task DispatchChatQueue(CancellationToken ct)
+    {
+        using var scope = scopes.CreateScope();
+        await DispatchChats(scope.ServiceProvider.GetRequiredService<AppDb>(), ct);
+    }
+    private async Task DispatchTasks(CancellationToken stoppingToken)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDb>();
@@ -34,7 +44,8 @@ public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPush
             try
             {
                 // No task titles, comments or evidence contents leave the application server.
-                var payload = JsonSerializer.Serialize(new { notificationId = notification!.Id, deviceId = device!.Id });
+                var payload = JsonSerializer.Serialize(new { notificationId = notification!.Id, deviceId = device!.Id,
+                    backgroundToken = preview.Create(device!, notification!.Id, false), expiresAt = DateTime.UtcNow.AddDays(1) });
                 if (await transport.Send(device!, payload, keys.Details, stoppingToken)) delivery.FinishedAt = DateTime.UtcNow;
                 else db.PushDevices.Remove(device!);
             }
@@ -49,7 +60,6 @@ public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPush
         }
         // Bound the outbox without removing the user's notification history.
         await db.PushDeliveries.Where(d => d.FinishedAt < now.AddDays(-7)).ExecuteDeleteAsync(stoppingToken);
-        await DispatchChats(db, stoppingToken);
     }
     private async Task DispatchChats(AppDb db, CancellationToken ct)
     {
@@ -64,7 +74,9 @@ public sealed class PushSender(IServiceScopeFactory scopes, PushKeys keys, IPush
             foreach (var row in group) row.delivery.Attempts++;
             try {
                 // Content stays behind authentication; one grouped push per conversation/device/batch.
-                var payload = JsonSerializer.Serialize(new { chatNotificationId = notice!.Id, deviceId = device!.Id });
+                var payload = JsonSerializer.Serialize(new { chatNotificationId = notice!.Id, deviceId = device!.Id,
+                    backgroundToken = preview.Create(device!, notice!.Id, true), expiresAt = DateTime.UtcNow.AddDays(1),
+                    userId = notice.UserId, roomId = notice.RoomId, sequence = notice.Sequence, count = notice.Count });
                 if (await transport.Send(device!, payload, keys.Details, ct)) foreach (var row in group) row.delivery.FinishedAt = DateTime.UtcNow;
                 else db.PushDevices.Remove(device!);
             } catch (Exception e) when (!ct.IsCancellationRequested) {

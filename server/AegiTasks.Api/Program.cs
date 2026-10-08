@@ -15,6 +15,8 @@ builder.Services.AddSingleton<ChangeFeed>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ChatPresence>();
 builder.Services.AddSingleton<PushKeys>();
+builder.Services.AddSingleton<PushWakeup>();
+builder.Services.AddSingleton<PushPreview>();
 builder.Services.AddHttpClient<IPushTransport, WebPushTransport>(http => http.Timeout = TimeSpan.FromSeconds(15))
     .RemoveAllLoggers()
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
@@ -100,6 +102,8 @@ app.Use(async (c, next) => {
     var space = c.RequestServices.GetRequiredService<SpaceScope>().SpaceId;
     foreach (var recipient in c.RequestServices.GetRequiredService<SpaceScope>().NotificationUsers)
         feed.Publish(null, recipient, "notifications");
+    if (c.RequestServices.GetRequiredService<SpaceScope>().NotificationUsers.Count > 0)
+        c.RequestServices.GetRequiredService<PushWakeup>().Notify();
     var area = c.Request.Path.Value?.Split('/').ElementAtOrDefault(2);
     switch (area) {
         case "projects":
@@ -123,6 +127,7 @@ app.Use(async (c, next) => {
 app.MapGet("/api/events", (HttpContext c, Guid space, ChangeFeed feed, IServiceScopeFactory scopes) => feed.Stream(c, space, scopes)).RequireAuthorization();
 app.MapGet("/api/health", async (AppDb db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503));
 app.MapAuth(); app.MapCatalog(); app.MapTasks(); app.MapSpaces(); app.MapNotes(); app.MapFocus(); app.MapRoles(); app.MapPlanning(); app.MapNotifications(); app.MapChat(); app.MapChatNotifications();
+app.MapPushPreviews();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();

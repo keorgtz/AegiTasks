@@ -181,6 +181,7 @@ public static class ChatEndpoints
             catch { foreach (var path in written) File.Delete(path); throw; }
             foreach (var uid in await db.ChatMembers.Where(m => m.ChatRoomId == id).Select(m => m.UserId).ToListAsync(ct)) feed.Publish(null, uid, "chat");
             foreach (var uid in notified) feed.Publish(null, uid, "chat-notifications");
+            if (notified.Count > 0) request.HttpContext.RequestServices.GetRequiredService<PushWakeup>().Notify();
             return Results.Ok(new { message.Id });
         });
         routes.MapGet("/files/{id:guid}", async (Guid id, bool? download, AppDb db, ClaimsPrincipal user, IConfiguration config) =>

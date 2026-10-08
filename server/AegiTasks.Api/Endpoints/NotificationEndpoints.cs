@@ -73,6 +73,17 @@ public static class NotificationEndpoints
             var version = int.Parse(user.FindFirstValue("sv")!);
             return Results.Ok(new { enabled = await db.PushDevices.AnyAsync(d => d.Id == id && d.UserId == user.UserId() && d.SessionVersion == version) });
         });
+        group.MapPost("/device/restore", async (DeviceInput input, HttpContext http, AppDb db, ClaimsPrincipal user) => {
+            Validate(input);
+            var endpointHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input.Endpoint)));
+            var version = int.Parse(user.FindFirstValue("sv")!);
+            // Recover an expired binding cookie, never create/rebind or revive a revoked device.
+            var device = await db.PushDevices.AsNoTracking().SingleOrDefaultAsync(d => d.EndpointHash == endpointHash && d.UserId == user.UserId() && d.SessionVersion == version);
+            if (device == null || device.P256dh != input.Keys.P256dh || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(device.Auth), Encoding.UTF8.GetBytes(input.Keys.Auth)))
+                return Results.Ok(new { enabled = false });
+            http.Response.Cookies.Append(DeviceCookie, device.Id.ToString(), new CookieOptions { HttpOnly = true, Secure = app.Environment.IsProduction() || http.Request.IsHttps, SameSite = SameSiteMode.Strict, MaxAge = TimeSpan.FromDays(7), Path = "/" });
+            return Results.Ok(new { enabled = true });
+        });
         group.MapDelete("/device", async (HttpContext http, AppDb db, ClaimsPrincipal user) => {
             await RemoveDevice(http, db, user.UserId()); return Results.NoContent();
         });

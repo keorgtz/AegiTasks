@@ -109,7 +109,7 @@ export function DeviceNotificationsProvider({
         return;
       }
       setPermission(Notification.permission);
-      const status = await api<{ enabled: boolean }>(
+      let status = await api<{ enabled: boolean }>(
         '/notifications/device',
         'GET',
         undefined,
@@ -120,8 +120,17 @@ export function DeviceNotificationsProvider({
         : await navigator.serviceWorker.getRegistration();
       const subscription = await registration?.pushManager.getSubscription();
       if (mutating.current || signal?.aborted || !alive.current) return;
-      if (status.enabled && subscription && Notification.permission === 'granted')
-        await api('/notifications/devices', 'POST', subscription.toJSON(), signal);
+      if (subscription && Notification.permission === 'granted') {
+        if (status.enabled)
+          await api('/notifications/devices', 'POST', subscription.toJSON(), signal);
+        else
+          status = await api<{ enabled: boolean }>(
+            '/notifications/device/restore',
+            'POST',
+            subscription.toJSON(),
+            signal,
+          );
+      }
       if (!signal?.aborted && alive.current) {
         setEnabled(status.enabled && !!subscription && Notification.permission === 'granted');
         checked.current = true;

@@ -5,12 +5,18 @@ using System.Text.Json;
 using AegiTasks.Api.Data;
 using AegiTasks.Api.Domain;
 using AegiTasks.Api.Services;
+using AegiTasks.Api.Endpoints;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Identity;
 using WebPush;
 using TaskStatus = AegiTasks.Api.Domain.TaskStatus;
@@ -38,7 +44,9 @@ using (var scope = provider.CreateScope()) {
     db.Roles.Add(new AppRole { Name = "Admin" }); db.Users.Add(user); db.Spaces.Add(space); db.Projects.Add(project); db.Statuses.Add(status); db.Tasks.Add(task); await db.SaveChangesAsync();
 }
 var fake = new FakeTransport();
-var sender = new PushSender(provider.GetRequiredService<IServiceScopeFactory>(), keys, fake, NullLogger<PushSender>.Instance);
+var wakeup = new PushWakeup();
+var preview = new PushPreview(provider.GetRequiredService<IDataProtectionProvider>());
+var sender = new PushSender(provider.GetRequiredService<IServiceScopeFactory>(), keys, fake, NullLogger<PushSender>.Instance, wakeup, preview);
 async Task<(Guid Notice, Guid Device, Guid Delivery)> Queue(DateTime? readAt = null, int sessionVersion = 0, DateTime? created = null) {
     using var scope = provider.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDb>();
     var notice = new TaskNotification { UserId = user.Id, SpaceId = space.Id, WorkItemId = task.Id, ReadAt = readAt, CreatedAt = created ?? DateTime.UtcNow, Message = "Created" };
@@ -51,7 +59,40 @@ var success = await Queue(); await sender.Dispatch(default);
 using (var scope = provider.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<AppDb>(); Assert((await db.PushDeliveries.SingleAsync(d => d.Id == success.Delivery)).FinishedAt != null, "Successful delivery is finished");
 }
-using (var payload = JsonDocument.Parse(fake.Payload!)) Assert(payload.RootElement.EnumerateObject().Count() == 2 && !fake.Payload!.Contains(task.Title), "Push payload contains identifiers only");
+using (var payload = JsonDocument.Parse(fake.Payload!)) {
+    Assert(payload.RootElement.EnumerateObject().Count() == 4 && !fake.Payload!.Contains(task.Title), "Push payload contains IDs and a protected capability, never task contents");
+    var token = payload.RootElement.GetProperty("backgroundToken").GetString()!;
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
+    builder.Logging.ClearProviders(); builder.WebHost.UseUrls("http://127.0.0.1:0");
+    builder.Services.AddSingleton(preview).AddScoped(_ => new AppDb(new DbContextOptionsBuilder<AppDb>().UseSqlite(connection).Options, new SpaceScope()));
+    await using var web = builder.Build(); web.MapPushPreviews(); await web.StartAsync();
+    using var capabilityHttp = new HttpClient(new HttpClientHandler { UseCookies = false }) { BaseAddress = new Uri(web.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
+    var path = $"/api/push/task/{success.Notice}";
+    Assert((await capabilityHttp.GetAsync(path)).StatusCode == HttpStatusCode.NotFound, "Anonymous background HTTP requests without a capability cannot read notices");
+    capabilityHttp.DefaultRequestHeaders.Add("X-AegiTasks-Push", token);
+    using var backgroundResponse = await capabilityHttp.GetAsync(path);
+    Assert(backgroundResponse.StatusCode == HttpStatusCode.OK && backgroundResponse.Headers.CacheControl?.NoStore == true, "Real background HTTP endpoint works with no session or device cookie and forbids caching private previews");
+    Assert((await capabilityHttp.GetAsync($"/api/push/chat/{success.Notice}")).StatusCode == HttpStatusCode.NotFound && (await capabilityHttp.GetAsync($"/api/push/task/{Guid.NewGuid()}")).StatusCode == HttpStatusCode.NotFound, "Real HTTP capability cannot cross notification IDs or kinds");
+    await web.StopAsync();
+    using var scope = provider.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    Assert(await preview.Get(db, success.Notice, false, token, default) != null, "Device capability reads its authorized preview without browser cookies");
+    Assert(await preview.Get(db, Guid.NewGuid(), false, token, default) == null && await preview.Get(db, success.Notice, true, token, default) == null, "Preview capability is bound to one notice and cannot switch task/chat scope");
+    Assert(preview.Read(token + "broken") == null && preview.Read("") == null, "Forged and missing preview tokens are rejected");
+    var grant = preview.Read(token)!;
+    var expiredToken = provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("AegiTasks.PushPreview.v1").ToTimeLimitedDataProtector().Protect(JsonSerializer.Serialize(grant), DateTimeOffset.UtcNow.AddSeconds(-1));
+    Assert(preview.Read(expiredToken) == null, "Expired background capabilities cannot authorize private content");
+    var device = await db.PushDevices.SingleAsync(d => d.Id == success.Device);
+    device.SessionVersion++; await db.SaveChangesAsync();
+    Assert(await preview.Get(db, success.Notice, false, token, default) == null, "Revoking/rebinding a device immediately invalidates its background capability");
+    device.SessionVersion--; await db.SaveChangesAsync();
+    await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(p => p.SetProperty(u => u.SessionVersion, 1));
+    Assert(await preview.Get(db, success.Notice, false, token, default) == null, "Account session revocation denies background previews even without cookie authentication");
+    await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(p => p.SetProperty(u => u.SessionVersion, 0).SetProperty(u => u.Active, false));
+    Assert(await preview.Get(db, success.Notice, false, token, default) == null, "Deactivated accounts cannot use an issued background capability");
+    await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(p => p.SetProperty(u => u.Active, true));
+    await db.Notifications.Where(n => n.Id == success.Notice).ExecuteUpdateAsync(p => p.SetProperty(n => n.ReadAt, DateTime.UtcNow));
+    Assert(await preview.Get(db, success.Notice, false, token, default) == null, "Reading a notification suppresses even a previously issued preview capability");
+}
 await sender.Dispatch(default); Assert(fake.Calls == 1, "Finished deliveries do not repeat");
 fake.Mode = "fail"; var retry = await Queue(); await sender.Dispatch(default);
 using (var scope = provider.CreateScope()) {
@@ -96,6 +137,7 @@ var sample = new PushDevice { Endpoint = "https://fcm.googleapis.com/push/test",
 var handler = new CaptureHandler(); using var http = new HttpClient(handler); using var transport = new WebPushTransport(http);
 Assert(await transport.Send(sample, "private-payload-test", keys.Details, default), "Real WebPush library sends through the HTTP transport");
 Assert(handler.Authorization && handler.Body!.Length > 20 && !Encoding.UTF8.GetString(handler.Body).Contains("private-payload-test"), "WebPush signs VAPID and encrypts payloads");
+Assert(handler.Urgency == "high" && handler.Ttl == "86400", "Real WebPush requests high urgency while retaining messages for temporarily disconnected devices");
 handler.Status = HttpStatusCode.Gone; Assert(!await transport.Send(sample, "test", keys.Details, default), "HTTP 410 is an expired subscription");
 handler.Status = HttpStatusCode.ServiceUnavailable;
 try { await transport.Send(sample, "test", keys.Details, default); throw new Exception("Expected provider failure"); }
@@ -153,6 +195,13 @@ using (var scope = provider.CreateScope()) {
 }
 fake.Mode = "success"; calls = fake.Calls; await sender.Dispatch(default);
 Assert(fake.Calls == calls + 1 && fake.Payload!.Contains("chatNotificationId") && !fake.Payload.Contains("private chat"), "Multiple chat messages coalesce into one durable push with identifiers only");
+using var deliveredChat = JsonDocument.Parse(fake.Payload!);
+var chatToken = deliveredChat.RootElement.GetProperty("backgroundToken").GetString()!;
+var chatNoticeId = deliveredChat.RootElement.GetProperty("chatNotificationId").GetGuid();
+using (var scope = provider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    Assert(await preview.Get(db, chatNoticeId, true, chatToken, default) is ChatNotificationEvents.ChatNotice { Count: 2 }, "A chat capability returns authorized grouped previews without opening the application");
+}
 using (var scope = provider.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<AppDb>();
     var msg = new ChatMessage { ChatRoomId = chatRoom.Id, UserId = user.Id, ClientId = Guid.NewGuid(), Sequence = ++chatRoom.NextSequence, Body = "Queued before mute" };
@@ -165,6 +214,7 @@ using (var scope = provider.CreateScope()) {
     Assert(retryChat.Attempts == 1 && retryChat.NextAttemptAt > DateTime.UtcNow, "Chat provider failures persist retries without changing messages or alerts");
     retryChat.NextAttemptAt = DateTime.UtcNow.AddSeconds(-1);
     db.ChatNotificationPreferences.Add(new() { ChatRoomId = chatRoom.Id, UserId = recipient.Id, Settings = new ChatSilence("always").Serialize() }); await db.SaveChangesAsync();
+    Assert(await preview.Get(db, chatNoticeId, true, chatToken, default) == null, "Muting after provider acceptance suppresses even an already-issued chat preview capability");
 }
 fake.Mode = "success";
 calls = fake.Calls; await sender.Dispatch(default);
@@ -212,6 +262,14 @@ using (var emptySeedConnection = new SqliteConnection("Data Source=:memory:")) {
 }
 
 var presenceClock = new PresenceClock();
+var waitingForPush = wakeup.Wait(default);
+Assert(!waitingForPush.IsCompleted, "An idle push worker waits without polling the UI");
+wakeup.Notify(); await waitingForPush.WaitAsync(TimeSpan.FromSeconds(1));
+Assert(waitingForPush.IsCompletedSuccessfully, "Committed work wakes the sender immediately instead of waiting five seconds");
+for (var index = 0; index < 100; index++) wakeup.Notify();
+await wakeup.Wait(default).WaitAsync(TimeSpan.FromSeconds(1));
+Assert(true, "Burst wakeups remain bounded and preserve a pending signal while delivery is busy");
+
 var presence = new ChatPresence(presenceClock);
 var tab1 = Guid.NewGuid(); var tab2 = Guid.NewGuid(); var presenceUser = Guid.NewGuid();
 string PresenceStatus() => presence.Snapshot([presenceUser])[presenceUser];
@@ -248,8 +306,10 @@ sealed class FakeTransport : IPushTransport {
 }
 sealed class CaptureHandler : HttpMessageHandler {
     public HttpStatusCode Status { get; set; } = HttpStatusCode.Created; public byte[]? Body { get; private set; } public bool Authorization { get; private set; }
+    public string? Urgency { get; private set; } public string? Ttl { get; private set; }
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
         Body = await request.Content!.ReadAsByteArrayAsync(ct); Authorization = request.Headers.Contains("Authorization");
+        Urgency = request.Headers.GetValues("Urgency").Single(); Ttl = request.Headers.GetValues("TTL").Single();
         return new HttpResponseMessage(Status) { Content = new StringContent("") };
     }
 }

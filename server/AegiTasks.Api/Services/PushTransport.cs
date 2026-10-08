@@ -16,7 +16,8 @@ public sealed class WebPushTransport(HttpClient http) : IPushTransport, IDisposa
         try
         {
             await client.SendNotificationAsync(new PushSubscription(device.Endpoint, device.P256dh, device.Auth), payload,
-                new Dictionary<string, object> { ["vapidDetails"] = keys, ["TTL"] = 86400 }, ct);
+                new Dictionary<string, object> { ["vapidDetails"] = keys, ["TTL"] = 86400,
+                    ["headers"] = new Dictionary<string, object> { ["Urgency"] = "high" } }, ct);
             return true;
         }
         catch (WebPushException e) when (e.StatusCode is HttpStatusCode.Gone or HttpStatusCode.NotFound) { return false; }

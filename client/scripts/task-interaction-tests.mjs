@@ -132,9 +132,17 @@ export async function testTaskInteractions({
   const handle = () => page.getByRole('button', { name: 'Mover ' + drag.title, exact: true });
   const mouseDrag = async (target, sourceHandle = handle()) => {
     await sourceHandle.hover();
+    // Let nested scrolling settle before measuring the handle's pointer coordinates.
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
     const from = await sourceHandle.boundingBox();
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
+    // Give the sensor a frame to attach its document listeners before activation movement.
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
     await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 3 });
     await page.locator('.task-draggable.is-dragging').waitFor({ timeout: 5000 });
     await target.scrollIntoViewIfNeeded();

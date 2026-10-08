@@ -11,6 +11,9 @@ let status = 200;
 let reads = 0;
 const current = new Map();
 let chatNotice = null;
+let fetchMode = 'normal';
+let noWindows = false;
+let rejectDeferred;
 const self = {
   location: { origin: 'https://task.example.com' },
   addEventListener: (name, callback) => handlers.set(name, callback),
@@ -29,22 +32,41 @@ const self = {
       [...current.values()].filter((n) => !options?.tag || n.tag === options.tag),
   },
   clients: {
-    matchAll: async () => [{ postMessage: (message) => messages.push(message) }],
+    matchAll: async () => (noWindows ? [] : [{ postMessage: (message) => messages.push(message) }]),
     openWindow: async (url) => opened.push(url),
   },
 };
 vm.runInNewContext(source, {
   self,
   URL,
+  AbortController,
+  setTimeout: (callback, milliseconds) =>
+    setTimeout(callback, milliseconds === 4000 ? 20 : milliseconds),
+  clearTimeout,
   fetch: async (url, options) => {
     reads++;
-    assert.ok(url.startsWith('/api/notifications/') || url.startsWith('/api/chat/notifications/'));
-    assert.equal(options.credentials, 'same-origin');
+    assert.ok(
+      url.startsWith('/api/notifications/') ||
+        url.startsWith('/api/chat/notifications/') ||
+        url.startsWith('/api/push/'),
+    );
+    assert.equal(options.credentials, url.startsWith('/api/push/') ? 'omit' : 'same-origin');
+    if (url.startsWith('/api/push/')) assert.ok(options.headers['X-AegiTasks-Push']);
     assert.equal(options.cache, 'no-store');
+    if (fetchMode === 'offline') throw new TypeError('Network unavailable');
+    if (fetchMode === 'deferred')
+      return new Promise((_, reject) => {
+        rejectDeferred = reject;
+      });
+    if (fetchMode === 'stalled')
+      return new Promise((_, reject) =>
+        options.signal.addEventListener('abort', () => reject(new Error('Aborted'))),
+      );
     return {
       ok: status === 200,
+      status,
       json: async () =>
-        url.startsWith('/api/chat/')
+        url.startsWith('/api/chat/') || url.startsWith('/api/push/chat/')
           ? { ...chatNotice }
           : {
               title: 'Corregir cierre del POS',
@@ -183,4 +205,104 @@ for (const code of [401, 403, 404, 503]) {
 assert.ok(!current.has(chatNotice.tag));
 console.log(
   'PASS Unauthorized, muted, read and unavailable chat previews never display an OS notification',
+);
+
+noWindows = true;
+status = 200;
+const background = {
+  ...data,
+  backgroundToken: 'opaque-protected-token',
+  expiresAt: new Date(Date.now() + 60_000).toISOString(),
+};
+await dispatch('push', { data: { json: () => background } });
+assert.equal(displays.at(-1).title, 'Corregir cierre del POS');
+assert.equal(displays.at(-1).options.icon, '/aegitasks-icon-192.png');
+console.log('PASS Background preview displays with no app windows and no browser-session cookies');
+let count = displays.length;
+for (const code of [401, 403, 404, 410]) {
+  status = code;
+  await dispatch('push', { data: { json: () => background } });
+}
+assert.equal(displays.length, count);
+console.log(
+  'PASS Revoked/read/deleted background capabilities never display private or fallback notifications',
+);
+status = 503;
+await dispatch('push', { data: { json: () => background } });
+assert.equal(displays.at(-1).title, 'AegiTasks');
+assert.ok(!displays.at(-1).options.body.includes('María'));
+assert.equal(displays.at(-1).options.data.url, '/#inbox');
+fetchMode = 'offline';
+await dispatch('push', { data: { json: () => background } });
+assert.equal(displays.at(-1).title, 'AegiTasks');
+fetchMode = 'stalled';
+await dispatch('push', { data: { json: () => background } });
+assert.equal(displays.at(-1).title, 'AegiTasks');
+console.log(
+  'PASS Transient server errors, offline preview fetches and stalled requests retain a generic notice without revealing private content',
+);
+count = displays.length;
+fetchMode = 'normal';
+status = 200;
+const countReads = reads;
+await dispatch('push', {
+  data: { json: () => ({ ...background, expiresAt: new Date(0).toISOString() }) },
+});
+await dispatch('push', {
+  data: { json: () => ({ ...background, backgroundToken: 'x'.repeat(2001) }) },
+});
+assert.equal(reads, countReads);
+assert.equal(displays.length, count);
+console.log('PASS Expired and malformed background pushes are discarded before network or display');
+const backgroundChat = {
+  ...background,
+  notificationId: undefined,
+  ...chatData,
+  userId: '66666666-6666-4666-8666-666666666666',
+  roomId: '77777777-7777-4777-8777-777777777777',
+  sequence: 8,
+  count: 3,
+};
+fetchMode = 'offline';
+await dispatch('push', { data: { json: () => backgroundChat } });
+await dispatch('push', { data: { json: () => ({ ...backgroundChat, sequence: 9, count: 4 }) } });
+const fallbackTag = displays.at(-1).options.tag;
+assert.equal(displays.at(-1).title, 'AegiTasks');
+assert.equal(displays.at(-1).options.data.sequence, 9);
+assert.equal(current.get(fallbackTag).data.count, 4);
+count = displays.length;
+await dispatch('push', { data: { json: () => backgroundChat } });
+assert.equal(displays.length, count);
+await dispatch('message', {
+  data: {
+    type: 'AEGITASKS_CHAT_CLEAR',
+    userId: backgroundChat.userId,
+    roomId: backgroundChat.roomId,
+    sequence: 9,
+  },
+});
+assert.ok(!current.has(fallbackTag));
+console.log(
+  'PASS Offline chat fallbacks still group by conversation, reject old sequences and close when read or muted',
+);
+fetchMode = 'deferred';
+count = displays.length;
+const pendingPush = dispatch('push', {
+  data: { json: () => ({ ...backgroundChat, sequence: 10, count: 1 }) },
+});
+await dispatch('message', {
+  data: {
+    type: 'AEGITASKS_CHAT_CLEAR',
+    userId: backgroundChat.userId,
+    roomId: backgroundChat.roomId,
+  },
+});
+rejectDeferred(new TypeError('Network unavailable'));
+await pendingPush;
+assert.equal(displays.length, count);
+fetchMode = 'offline';
+await dispatch('push', { data: { json: () => ({ ...backgroundChat, sequence: 11, count: 1 }) } });
+assert.equal(displays.length, count + 1);
+console.log(
+  'PASS Muting/clearing while a preview is pending prevents a late display without suppressing future valid receipts',
 );

@@ -181,6 +181,50 @@ export async function testNotifications({ page, request, admin, json, pass, arti
   const device = await json(target, 'POST', '/notifications/devices', subscription);
   assert.equal((await json(target, 'POST', '/notifications/devices', subscription)).id, device.id);
   assert.equal((await json(target, 'GET', '/notifications/device')).enabled, true);
+  const cookieLost = await target.storageState();
+  cookieLost.cookies = cookieLost.cookies.filter((c) => c.name !== 'AegiTasks.PushDevice');
+  const recovery = await ctx(cookieLost);
+  const recoveryLost = await ctx(cookieLost);
+  const recoverySubscription = {
+    ...subscription,
+    endpoint: 'https://fcm.googleapis.com/fcm/send/recovery-' + randomBytes(12).toString('hex'),
+  };
+  try {
+    await json(recovery, 'POST', '/notifications/devices', recoverySubscription);
+    assert.equal((await json(recoveryLost, 'GET', '/notifications/device')).enabled, false);
+    assert.equal(
+      (await json(other, 'POST', '/notifications/device/restore', recoverySubscription)).enabled,
+      false,
+    );
+    assert.equal(
+      (
+        await json(recoveryLost, 'POST', '/notifications/device/restore', {
+          ...recoverySubscription,
+          keys: { ...recoverySubscription.keys, auth: randomBytes(16).toString('base64url') },
+        })
+      ).enabled,
+      false,
+    );
+    assert.equal(
+      (await json(recoveryLost, 'POST', '/notifications/device/restore', recoverySubscription))
+        .enabled,
+      true,
+    );
+    assert.equal((await json(recoveryLost, 'GET', '/notifications/device')).enabled, true);
+    await json(recovery, 'DELETE', '/notifications/device', undefined, 204);
+    assert.equal(
+      (await json(recoveryLost, 'POST', '/notifications/device/restore', recoverySubscription))
+        .enabled,
+      false,
+    );
+    assert.equal((await json(target, 'GET', '/notifications/device')).enabled, true);
+    pass(
+      'Expired device binding cookies recover only an existing own subscription with matching keys; foreign accounts, wrong keys and explicitly disabled devices stay disabled',
+    );
+  } finally {
+    await recovery.dispose();
+    await recoveryLost.dispose();
+  }
   const config = await json(target, 'GET', '/notifications/push-config');
   assert.equal(Buffer.from(config.publicKey, 'base64url').length, 65);
   assert.deepEqual(Object.keys(config), ['publicKey']);
