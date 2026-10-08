@@ -13,6 +13,11 @@ public static class ChatEndpoints
     public static void MapChat(this WebApplication app)
     {
         var routes = app.MapGroup("/api/chat").RequireAuthorization("page:chat");
+        routes.MapGet("/gif-provider", (IConfiguration config, HttpContext http) => {
+            http.Response.Headers.CacheControl = "no-store";
+            // KLIPY requires client-originated API calls. This is its public integration key.
+            return Results.Ok(new { key = config["GifCatalog:KlipyKey"] ?? "" });
+        });
         routes.MapGet("/gifs", async (int? page, string? q, AppDb db, ClaimsPrincipal user, CancellationToken ct) =>
         {
             var uid = user.UserId();
@@ -64,7 +69,7 @@ public static class ChatEndpoints
                     preview = db.ChatMessages.Where(m => m.ChatRoomId == r.Id).OrderByDescending(m => m.Sequence).Select(m => m.Body != "" ? m.Body : m.TaskId != null ? "Pendiente compartido" : db.ChatFiles.Any(f => f.ChatMessageId == m.Id && f.ContentType == "image/gif") ? "GIF adjunto" : "Archivo adjunto").FirstOrDefault()
                 }).ToListAsync();
             var preferences = await db.ChatNotificationPreferences.Where(p => p.UserId == uid).ToDictionaryAsync(p => p.ChatRoomId, p => p.Settings);
-            return Results.Ok(rooms.Select(r => new { r.Id, r.Name, r.isGroup, r.OwnerId, r.Version, r.UpdatedAt, r.members, r.unread, r.preview,
+            return Results.Ok(rooms.Select(r => new { r.Id, r.Name, r.isGroup, r.OwnerId, r.Version, r.UpdatedAt, r.members, r.unread, preview = r.preview == null ? null : ChatGif.Preview(r.preview),
                 muted = ChatSilence.Parse(preferences.GetValueOrDefault(r.Id)).Muted(DateTime.UtcNow), notificationMode = ChatSilence.Parse(preferences.GetValueOrDefault(r.Id)).Mode }));
         });
         routes.MapPost("/", async (CreateInput input, AppDb db, ClaimsPrincipal user, ChangeFeed feed) =>

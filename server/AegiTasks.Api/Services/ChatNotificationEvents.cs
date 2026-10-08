@@ -40,7 +40,7 @@ public static class ChatNotificationEvents
     }
     private static string Preview(string body, bool task, int files, bool gif)
     {
-        var text = body.Length > 0 ? body.Replace('\r', ' ').Replace('\n', ' ') : task ? "Pendiente compartido" : gif ? files == 1 ? "GIF adjunto" : $"GIF y {files - 1} archivo(s) adjunto(s)" : files == 1 ? "Archivo adjunto" : $"{files} archivos adjuntos";
+        var text = body.Length > 0 ? ChatGif.Preview(body).Replace('\r', ' ').Replace('\n', ' ') : task ? "Pendiente compartido" : gif ? files == 1 ? "GIF adjunto" : $"GIF y {files - 1} archivo(s) adjunto(s)" : files == 1 ? "Archivo adjunto" : $"{files} archivos adjuntos";
         return string.Concat(text.EnumerateRunes().Take(140).Select(r => r.ToString())) + (text.EnumerateRunes().Count() > 140 ? "…" : "");
     }
     public record ChatNotice(Guid Id, Guid RoomId, Guid UserId, string Title, int Count, long Sequence, string[] Previews, DateTime CreatedAt)

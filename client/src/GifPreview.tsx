@@ -32,6 +32,7 @@ export function GifPreview({
     <div className="chat-gif-preview">
       <img
         src={src}
+        referrerPolicy="no-referrer"
         alt={name}
         loading={playing ? 'lazy' : 'eager'}
         hidden={!playing || failed}

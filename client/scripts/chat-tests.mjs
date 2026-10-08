@@ -299,6 +299,56 @@ export async function testChat({
     'Task shortcuts require access for every participant, hide titles after revocation and never bind the conversation to a workspace',
   );
   const roomAdmin = await json(admin, 'POST', '/chat', { isGroup: false, users: [alice.id] });
+  const providerRequests = [];
+  const remoteUrl = 'https://static.klipy.com/unit/hola.gif?delivery=preserved';
+  await page.route('**/api/chat/gif-provider', (route) =>
+    route.fulfill({ json: { key: 'test-browser-key' } }),
+  );
+  await page.route('https://static.klipy.com/**', (route) =>
+    route.fulfill({ contentType: 'image/gif', body: gifBytes }),
+  );
+  await page.route('https://media.tenor.com/**', (route) =>
+    route.fulfill({ contentType: 'image/gif', body: gifBytes }),
+  );
+  await page.route('https://api.klipy.com/**', async (route) => {
+    const url = new URL(route.request().url());
+    providerRequests.push(url);
+    assert.equal(route.request().headers().cookie, undefined);
+    assert.equal(url.searchParams.get('locale'), 'es');
+    assert.ok(url.searchParams.get('customer_id'));
+    const query = url.searchParams.get('q');
+    if (query === 'limite') return route.fulfill({ status: 429, json: {} });
+    const title = url.searchParams.get('page') === '2' ? 'Segunda página' : 'Hola equipo';
+    return route.fulfill({
+      json: {
+        result: true,
+        data: {
+          data:
+            query === 'vacio'
+              ? []
+              : [
+                  {
+                    id: 701,
+                    title,
+                    slug: 'hola-equipo',
+                    type: 'gif',
+                    file: {
+                      hd: { gif: { url: remoteUrl } },
+                      sm: { gif: { url: 'https://static.klipy.com/unit/preview.gif' } },
+                    },
+                  },
+                ],
+          has_next: query !== 'vacio' && url.searchParams.get('page') !== '2',
+        },
+      },
+    });
+  });
+  const providerConfig = await admin.get('/api/chat/gif-provider');
+  assert.equal(providerConfig.status(), 200);
+  assert.equal(providerConfig.headers()['cache-control'], 'no-store');
+  const noLogin = await request.newContext({ baseURL: 'http://localhost:5213' });
+  assert.equal((await noLogin.get('/api/chat/gif-provider')).status(), 401);
+  await noLogin.dispose();
   const openMediaPicker = async () => {
     if (page.viewportSize().width <= 480) {
       await page.getByRole('button', { name: 'Agregar al mensaje', exact: true }).click();
@@ -326,7 +376,7 @@ export async function testChat({
   await mediaPicker.getByLabel('Buscar emojis').fill('pulgar arriba');
   await mediaPicker.getByLabel('Tono de piel').selectOption('3');
   await mediaPicker
-    .getByRole('button', { name: 'Insertar pulgar arriba bien ok', exact: true })
+    .getByRole('button', { name: 'Insertar pulgar hacia arriba', exact: true })
     .click();
   await mediaPicker.getByLabel('Buscar emojis').fill('corazon morado');
   await mediaPicker.getByRole('button', { name: 'Insertar corazón morado', exact: true }).click();
@@ -345,6 +395,13 @@ export async function testChat({
   );
   await openMediaPicker();
   await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker.getByLabel('Origen de GIFs').selectOption('chats');
+  await mediaPicker
+    .getByText(
+      'Adjunta tu primer GIF. Los GIFs de los chats a los que tienes acceso aparecerán aquí para reutilizarlos.',
+      { exact: true },
+    )
+    .waitFor();
   await mediaPicker
     .locator('input[type=file]')
     .setInputFiles({ name: 'fake.gif', mimeType: 'image/gif', buffer: pngBytes });
@@ -389,6 +446,7 @@ export async function testChat({
     .click();
   await openMediaPicker();
   await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker.getByLabel('Origen de GIFs').selectOption('chats');
   await mediaPicker
     .getByRole('button', { name: `Adjuntar GIF ${gifUpload.name}`, exact: true })
     .click();
@@ -403,9 +461,7 @@ export async function testChat({
   await composerText.fill('a'.repeat(4000));
   await openMediaPicker();
   await mediaPicker.getByLabel('Buscar emojis').fill('cohete');
-  await mediaPicker
-    .getByRole('button', { name: 'Insertar cohete lanzamiento', exact: true })
-    .click();
+  await mediaPicker.getByRole('button', { name: 'Insertar cohete', exact: true }).click();
   await mediaPicker
     .getByRole('alert')
     .getByText('El mensaje admite hasta 4000 caracteres.')
@@ -428,6 +484,7 @@ export async function testChat({
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openMediaPicker();
   await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker.getByLabel('Origen de GIFs').selectOption('chats');
   assert.equal(await mediaPicker.getByLabel('Animar', { exact: true }).isChecked(), false);
   const galleryGif = mediaPicker
     .getByRole('button', { name: `Adjuntar GIF ${gifUpload.name}`, exact: true })
@@ -437,6 +494,145 @@ export async function testChat({
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   pass(
     'Emoji limits reject overflow without losing the draft; pasted GIFs attach without sending and reduced-motion previews default to still frames',
+  );
+  await openMediaPicker();
+  await mediaPicker.getByLabel('Categoría de emojis').selectOption('Banderas');
+  await mediaPicker.getByLabel('Buscar emojis').fill('Mexico');
+  await mediaPicker.getByRole('button', { name: 'Insertar Bandera: México', exact: true }).click();
+  await mediaPicker.getByLabel('Categoría de emojis').selectOption('Variantes de piel');
+  await mediaPicker.getByLabel('Buscar emojis').fill('apreton manos claro medio');
+  await mediaPicker
+    .getByRole('button', {
+      name: 'Insertar apretón de manos: tono de piel claro y tono de piel medio',
+      exact: true,
+    })
+    .click();
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  assert.ok((await composerText.inputValue()).includes('🇲🇽'));
+  assert.ok((await composerText.inputValue()).includes('🫱🏻‍🫲🏽'));
+  await composerText.fill('');
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker.getByLabel('Buscar GIFs en KLIPY').fill('hola');
+  await mediaPicker.getByRole('button', { name: 'Elegir GIF Hola equipo', exact: true }).waitFor();
+  await mediaPicker.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir GIF Segunda página', exact: true })
+    .waitFor();
+  await mediaPicker.getByRole('button', { name: 'Anterior', exact: true }).click();
+  await mediaPicker.getByRole('button', { name: 'Elegir GIF Hola equipo', exact: true }).click();
+  assert.equal(await composerText.inputValue(), remoteUrl);
+  await composerText.press('Enter');
+  await page.getByAltText('GIF de KLIPY', { exact: true }).waitFor();
+  const remoteMessage = (await json(admin, 'GET', `/chat/${roomAdmin.id}/messages`)).items.find(
+    (m) => m.body === remoteUrl,
+  );
+  assert.ok(remoteMessage);
+  assert.equal(remoteMessage.files.length, 0);
+  assert.ok(
+    (await json(a, 'GET', '/chat/notifications'))
+      .find((n) => n.roomId === roomAdmin.id)
+      .previews.some((p) => p.includes('GIF compartido')),
+  );
+  assert.ok(
+    providerRequests.some(
+      (url) => url.pathname.endsWith('/search') && url.searchParams.get('q') === 'hola',
+    ),
+  );
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker.getByLabel('Buscar GIFs en KLIPY').fill('vacio');
+  await mediaPicker.getByText('No hay resultados. Prueba otra palabra.', { exact: true }).waitFor();
+  await mediaPicker.getByLabel('Buscar GIFs en KLIPY').fill('limite');
+  await mediaPicker
+    .getByRole('alert')
+    .getByText('El catálogo alcanzó su límite de consultas. Intenta más tarde.')
+    .waitFor();
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  pass(
+    'Unicode 17 exposes flags and mixed skin variants; online keyword search, paging, selection, error/empty states and attribution work with client-only provider requests and preserved GIF URLs',
+  );
+  await composerText.fill('Primera línea');
+  await composerText.press('Shift+Enter');
+  await composerText.pressSequentially('Segunda línea');
+  assert.equal(await composerText.inputValue(), 'Primera línea\nSegunda línea');
+  await composerText.press('Enter');
+  await page.getByText('Primera línea\nSegunda línea', { exact: true }).waitFor();
+  await composerText.fill('Composición protegida');
+  await composerText.evaluate((el) =>
+    el.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  assert.equal(await composerText.inputValue(), 'Composición protegida');
+  await composerText.fill('');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const richUrl = 'https://media.giphy.com/media/test/keyboard.gif';
+  await composerText.evaluate((el, url) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', url);
+    el.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'insertFromPaste',
+        dataTransfer: transfer,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }, richUrl);
+  assert.equal(await composerText.inputValue(), richUrl);
+  await page.getByRole('button', { name: 'Quitar GIF de GIPHY', exact: true }).click();
+  await composerText.evaluate(
+    (el, bytes) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array(bytes)], 'keyboard-no-mime.gif'));
+      el.dispatchEvent(
+        new InputEvent('beforeinput', {
+          inputType: 'insertFromPaste',
+          dataTransfer: transfer,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    },
+    [...gifBytes],
+  );
+  await page
+    .locator('.chat-draft-chip')
+    .getByText('keyboard-no-mime.gif', { exact: true })
+    .waitFor();
+  await page.getByRole('button', { name: 'Quitar keyboard-no-mime.gif', exact: true }).click();
+  await composerText.evaluate((el, url) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/uri-list', url);
+    el.dispatchEvent(
+      new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }),
+    );
+  }, richUrl);
+  assert.equal(await composerText.inputValue(), richUrl);
+  await page.getByRole('button', { name: 'Quitar GIF de GIPHY', exact: true }).click();
+  const keyboardUrl = 'https://media.tenor.com/test/keyboard.gif';
+  await composerText.evaluate((el, url) => {
+    const data = new DataTransfer();
+    data.setData('text/html', `<img src="${url}">`);
+    el.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+    );
+  }, keyboardUrl);
+  assert.equal(await composerText.inputValue(), keyboardUrl);
+  await page.locator('.chat-draft-remote-gifs').getByText('GIF · Tenor', { exact: true }).waitFor();
+  await composerText.press('Enter');
+  assert.equal(await composerText.inputValue(), keyboardUrl + '\n');
+  await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+  await page.getByAltText('GIF de Tenor', { exact: true }).waitFor();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  pass(
+    'Desktop Enter sends and Shift+Enter preserves line breaks; IME composition never sends early, mobile Enter stays multiline and keyboard HTML GIFs become animated message links',
   );
   await page.getByLabel('Mensaje', { exact: true }).fill('Hola desde la interfaz');
   await page.getByRole('button', { name: 'Enviar', exact: true }).click();
@@ -572,7 +768,7 @@ export async function testChat({
     );
     await page.screenshot({ path: path.join(artifacts, `chat-media-${width}-${theme}.png`) });
     const emojiBounds = await mediaPicker
-      .getByRole('button', { name: 'Insertar cohete lanzamiento', exact: true })
+      .getByRole('button', { name: 'Insertar cohete', exact: true })
       .boundingBox();
     const pickerScroll = await mediaPicker.locator('.chat-media-scroll').boundingBox();
     assert.ok(
@@ -580,6 +776,7 @@ export async function testChat({
       'Emoji is fully reachable in the picker',
     );
     await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+    await mediaPicker.getByLabel('Origen de GIFs').selectOption('chats');
     await mediaPicker.locator('.chat-gif-option').first().waitFor();
     await page.screenshot({ path: path.join(artifacts, `chat-gifs-${width}-${theme}.png`) });
     const gifBounds = await mediaPicker.locator('.chat-gif-option').first().boundingBox();
@@ -587,6 +784,17 @@ export async function testChat({
     assert.ok(
       gifBounds.y + gifBounds.height <= gifScroll.y + gifScroll.height + 1,
       'GIF choice is fully reachable in the picker',
+    );
+    await mediaPicker.getByLabel('Origen de GIFs').selectOption('online');
+    await mediaPicker
+      .getByRole('button', { name: 'Elegir GIF Hola equipo', exact: true })
+      .waitFor();
+    await page.screenshot({ path: path.join(artifacts, `chat-catalog-${width}-${theme}.png`) });
+    const onlineBounds = await mediaPicker.locator('.chat-gif-option').first().boundingBox();
+    const onlineScroll = await mediaPicker.locator('.chat-media-scroll').boundingBox();
+    assert.ok(
+      onlineBounds.y + onlineBounds.height <= onlineScroll.y + onlineScroll.height + 1,
+      'Online GIF option fits even with paging and attribution',
     );
     await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
     if (width < 768) {
@@ -652,6 +860,7 @@ export async function testChat({
   await json(b, 'POST', '/auth/login', { email: bob.email, password });
   await json(b, 'GET', '/chat', undefined, 403);
   await json(b, 'GET', '/chat/gifs', undefined, 403);
+  await json(b, 'GET', '/chat/gif-provider', undefined, 403);
   assert.equal((await b.get(`/api/chat/files/${file.id}`)).status(), 403);
   assert.ok(!(await json(a, 'GET', '/chat/users?q=Chat Bob')).items.some((u) => u.id === bob.id));
   pass(

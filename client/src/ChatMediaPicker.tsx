@@ -7,10 +7,14 @@ import {
   emojiGroups,
   emojiSearch,
   emojiWithTone,
+  emojiVariants,
+  emojiCount,
+  isKnownEmoji,
   skinTones,
   toneNames,
 } from './chatEmoji';
 import { GifPreview } from './GifPreview';
+import { searchKlipy, type CataloguePage, type RemoteGif } from './chatGif';
 
 interface Gif {
   id: string;
@@ -27,19 +31,25 @@ export function ChatMediaPicker({
   onClose,
   onEmoji,
   onFiles,
+  onRemoteGif,
 }: {
   userId: string;
   initialTab?: 'emoji' | 'gif';
   onClose: () => void;
   onEmoji: (emoji: string) => boolean;
   onFiles: (files: File[]) => boolean;
+  onRemoteGif: (gif: RemoteGif) => boolean;
 }) {
   const [tab, setTab] = useState(initialTab);
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('Todos');
+  const [emojiLimit, setEmojiLimit] = useState(240);
   const [tone, setTone] = useState(0);
   const [recent, setRecent] = useState<string[]>([]);
   const [gifs, setGifs] = useState<GifPage>({ items: [], total: 0 });
+  const [source, setSource] = useState('online');
+  const [key, setKey] = useState<string | null>(null);
+  const [catalogue, setCatalogue] = useState<CataloguePage>({ items: [], hasNext: false });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -55,16 +65,11 @@ export function ChatMediaPicker({
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(marker) || '{}');
-      const valid = new Set(
-        emojiGroups.flatMap((g) =>
-          g.items.flatMap((item) =>
-            skinTones.map((_, tone) => emojiWithTone(item[0], item.length > 2, tone)),
-          ),
-        ),
-      );
       setRecent(
         Array.isArray(saved.recent)
-          ? saved.recent.filter((e: unknown) => typeof e === 'string' && valid.has(e)).slice(0, 18)
+          ? saved.recent
+              .filter((e: unknown) => typeof e === 'string' && isKnownEmoji(e))
+              .slice(0, 18)
           : [],
       );
       setTone(
@@ -78,34 +83,61 @@ export function ChatMediaPicker({
     return () => controller.current?.abort();
   }, [marker]);
   useEffect(() => {
+    const abort = new AbortController();
+    void api<{ key: string }>('/chat/gif-provider', 'GET', undefined, abort.signal)
+      .then((value) => {
+        if (!abort.signal.aborted) setKey(value.key);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setKey('');
+      });
+    return () => abort.abort();
+  }, [retry]);
+  useEffect(() => {
     if (tab !== 'gif') return;
+    if (source === 'online' && !key) {
+      setLoading(key === null);
+      return;
+    }
     const abort = new AbortController();
     setLoading(true);
     const timer = setTimeout(() => {
-      void api<GifPage>(
-        `/chat/gifs?page=${page}&q=${encodeURIComponent(query)}`,
-        'GET',
-        undefined,
-        abort.signal,
-      )
-        .then((value) => {
-          if (!abort.signal.aborted) {
-            setGifs(value);
-            setError('');
-          }
-        })
+      const task =
+        source === 'online'
+          ? searchKlipy(key!, query, page, abort.signal).then((value) => {
+              if (!abort.signal.aborted) {
+                setCatalogue(value);
+                setError('');
+              }
+            })
+          : api<GifPage>(
+              `/chat/gifs?page=${page}&q=${encodeURIComponent(query)}`,
+              'GET',
+              undefined,
+              abort.signal,
+            ).then((value) => {
+              if (!abort.signal.aborted) {
+                setGifs(value);
+                setError('');
+              }
+            });
+      void task
         .catch((e) => {
-          if (!abort.signal.aborted) setError(errorMessage(e));
+          if (!abort.signal.aborted) {
+            setError(errorMessage(e));
+            if (source === 'online') setCatalogue({ items: [], hasNext: false });
+            else setGifs({ items: [], total: 0 });
+          }
         })
         .finally(() => {
           if (!abort.signal.aborted) setLoading(false);
         });
-    }, 180);
+    }, 300);
     return () => {
       clearTimeout(timer);
       abort.abort();
     };
-  }, [tab, page, query, retry]);
+  }, [tab, page, query, retry, source, key]);
   function remember(next: string[], nextTone: number) {
     try {
       localStorage.setItem(marker, JSON.stringify({ recent: next, tone: nextTone }));
@@ -151,6 +183,15 @@ export function ChatMediaPicker({
     }
   }
   const search = emojiSearch(query);
+  const filtered = (
+    group === 'Variantes de piel'
+      ? emojiVariants
+      : emojiGroups.filter((g) => group === 'Todos' || g.name === group).flatMap((g) => g.items)
+  ).filter(
+    (item) =>
+      search.split(/\s+/).every((word) => emojiSearch(item[3]).includes(word)) ||
+      item[0].includes(query),
+  );
   return (
     <Modal title="Emojis y GIFs" onClose={onClose}>
       <div className="modal-body chat-media-picker">
@@ -182,13 +223,26 @@ export function ChatMediaPicker({
         <div className="chat-search">
           <Search size={16} />
           <input
-            aria-label={tab === 'emoji' ? 'Buscar emojis' : 'Buscar GIFs por nombre'}
-            placeholder={tab === 'emoji' ? 'Buscar emoji…' : 'Buscar en tus GIFs…'}
+            aria-label={
+              tab === 'emoji'
+                ? 'Buscar emojis'
+                : source === 'online'
+                  ? 'Buscar GIFs en KLIPY'
+                  : 'Buscar GIFs por nombre'
+            }
+            placeholder={
+              tab === 'emoji'
+                ? 'Buscar emoji…'
+                : source === 'online'
+                  ? 'Search KLIPY'
+                  : 'Buscar en tus GIFs…'
+            }
             maxLength={80}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setPage(1);
+              setEmojiLimit(240);
             }}
           />
         </div>
@@ -199,11 +253,16 @@ export function ChatMediaPicker({
               <select
                 aria-label="Categoría de emojis"
                 value={group}
-                onChange={(e) => setGroup(e.target.value)}
+                onChange={(e) => {
+                  setGroup(e.target.value);
+                  setEmojiLimit(240);
+                }}
               >
-                {['Todos', 'Recientes', ...emojiGroups.map((g) => g.name)].map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
+                {['Todos', 'Recientes', ...emojiGroups.map((g) => g.name), 'Variantes de piel'].map(
+                  (name) => (
+                    <option key={name}>{name}</option>
+                  ),
+                )}
               </select>
               <select
                 aria-label="Tono de piel"
@@ -248,46 +307,36 @@ export function ChatMediaPicker({
                   )}
                 </div>
               ) : (
-                emojiGroups
-                  .filter((g) => group === 'Todos' || g.name === group)
-                  .map((g) => {
-                    const items = g.items.filter(
-                      (item) => emojiSearch(item[1]).includes(search) || item[0].includes(query),
-                    );
-                    return items.length ? (
-                      <section key={g.name} aria-label={g.name}>
-                        <h3>{g.name}</h3>
-                        <div className="chat-emoji-grid">
-                          {items.map((item) => {
-                            const emoji = emojiWithTone(item[0], item.length > 2, tone);
-                            return (
-                              <button
-                                type="button"
-                                key={item[0]}
-                                title={item[1]}
-                                aria-label={`Insertar ${item[1]}`}
-                                onClick={() => select(emoji)}
-                              >
-                                {emoji}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    ) : null;
-                  })
+                <>
+                  <div className="chat-emoji-grid">
+                    {filtered.slice(0, emojiLimit).map((item) => (
+                      <button
+                        type="button"
+                        key={item[0]}
+                        title={item[1]}
+                        aria-label={`Insertar ${item[1]}`}
+                        onClick={() => select(emojiWithTone(item[0], item[2], tone))}
+                      >
+                        {emojiWithTone(item[0], item[2], tone)}
+                      </button>
+                    ))}
+                  </div>
+                  {filtered.length > emojiLimit && (
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => setEmojiLimit(emojiLimit + 240)}
+                    >
+                      Mostrar más emojis
+                    </button>
+                  )}
+                  {!filtered.length && (
+                    <p className="muted small">No hay emojis con esa búsqueda.</p>
+                  )}
+                </>
               )}
-              {group !== 'Recientes' &&
-                !emojiGroups
-                  .filter((g) => group === 'Todos' || g.name === group)
-                  .some((g) =>
-                    g.items.some(
-                      (item) => emojiSearch(item[1]).includes(search) || item[0].includes(query),
-                    ),
-                  ) && <p className="muted small">No hay emojis con esa búsqueda.</p>}
             </div>
             <p className="muted small" role="status">
-              {status || 'Elige varios emojis y cierra para seguir escribiendo.'}
+              {status || `${emojiCount} emojis y variantes. Elige varios antes de cerrar.`}
             </p>
           </>
         ) : (
@@ -327,15 +376,29 @@ export function ChatMediaPicker({
                 }
               }}
             />
-            <button
-              className="btn btn-primary"
-              disabled={!!busy}
-              onClick={() => input.current?.click()}
-            >
-              <ImagePlus size={18} /> Adjuntar GIF
-            </button>
+            {(source !== 'online' || !key) && (
+              <button
+                className="btn btn-primary"
+                disabled={!!busy}
+                onClick={() => input.current?.click()}
+              >
+                <ImagePlus size={18} /> Adjuntar GIF
+              </button>
+            )}
             <div className="chat-gif-heading">
-              <h3>GIFs de tus chats</h3>
+              <select
+                aria-label="Origen de GIFs"
+                value={source}
+                onChange={(e) => {
+                  setSource(e.target.value);
+                  setPage(1);
+                  setQuery('');
+                  setError('');
+                }}
+              >
+                <option value="online">Buscar en KLIPY</option>
+                <option value="chats">GIFs de tus chats</option>
+              </select>
               <label>
                 <input
                   type="checkbox"
@@ -350,26 +413,53 @@ export function ChatMediaPicker({
                 <p role="status">Cargando GIFs…</p>
               ) : (
                 <div className="chat-gif-grid">
-                  {gifs.items.map((gif) => (
-                    <button
-                      key={gif.id}
-                      className="chat-gif-option"
-                      disabled={!!busy}
-                      aria-label={`Adjuntar GIF ${gif.name}`}
-                      onClick={() => void reuse(gif)}
-                    >
-                      <GifPreview
-                        src={`/api/chat/files/${gif.id}`}
-                        name={gif.name}
-                        animate={animate}
-                        controls={false}
-                      />
-                      <span>{busy === gif.id ? 'Preparando…' : gif.name}</span>
-                    </button>
-                  ))}
+                  {source === 'online'
+                    ? catalogue.items.map((gif) => (
+                        <button
+                          key={gif.id}
+                          className="chat-gif-option"
+                          aria-label={`Elegir GIF ${gif.title}`}
+                          onClick={() => {
+                            if (onRemoteGif({ url: gif.url, provider: 'KLIPY' })) onClose();
+                            else setError('El mensaje admite hasta 4000 caracteres.');
+                          }}
+                        >
+                          <GifPreview
+                            src={gif.preview}
+                            name={gif.title}
+                            animate={animate}
+                            controls={false}
+                          />
+                          <span>{gif.title}</span>
+                        </button>
+                      ))
+                    : gifs.items.map((gif) => (
+                        <button
+                          key={gif.id}
+                          className="chat-gif-option"
+                          disabled={!!busy}
+                          aria-label={`Adjuntar GIF ${gif.name}`}
+                          onClick={() => void reuse(gif)}
+                        >
+                          <GifPreview
+                            src={`/api/chat/files/${gif.id}`}
+                            name={gif.name}
+                            animate={animate}
+                            controls={false}
+                          />
+                          <span>{busy === gif.id ? 'Preparando…' : gif.name}</span>
+                        </button>
+                      ))}
                 </div>
               )}
-              {!loading && !gifs.items.length && (
+              {!loading && !error && source === 'online' && !catalogue.items.length && (
+                <p className="muted small">
+                  {!key
+                    ? 'El catálogo no está activado. Tu administrador debe configurar KLIPY. Puedes adjuntar archivos o elegir GIFs de tus chats.'
+                    : 'No hay resultados. Prueba otra palabra.'}
+                </p>
+              )}
+              {!loading && source !== 'online' && !gifs.items.length && (
                 <p className="muted small">
                   {query
                     ? 'No hay GIFs con ese nombre.'
@@ -377,7 +467,7 @@ export function ChatMediaPicker({
                 </p>
               )}
             </div>
-            {gifs.total > 24 && (
+            {(page > 1 || (source === 'online' ? catalogue.hasNext : gifs.total > 24)) && (
               <div className="chat-pagination">
                 <button
                   className="btn btn-ghost"
@@ -387,11 +477,17 @@ export function ChatMediaPicker({
                   Anterior
                 </button>
                 <span>
-                  {page} / {Math.ceil(gifs.total / 24)}
+                  {source === 'online'
+                    ? `Página ${page}`
+                    : `${page} / ${Math.max(1, Math.ceil(gifs.total / 24))}`}
                 </span>
                 <button
                   className="btn btn-ghost"
-                  disabled={page * 24 >= gifs.total || loading || !!busy}
+                  disabled={
+                    (source === 'online' ? !catalogue.hasNext : page * 24 >= gifs.total) ||
+                    loading ||
+                    !!busy
+                  }
                   onClick={() => setPage(page + 1)}
                 >
                   Siguiente
@@ -407,8 +503,14 @@ export function ChatMediaPicker({
                 Reintentar galería
               </button>
             )}
-            <p className="muted small">
-              Hasta 10 MB por GIF. Se adjunta al borrador; tú decides cuándo enviarlo.
+            <p className={`muted small ${source === 'online' ? 'chat-gif-attribution' : ''}`}>
+              {source === 'online' ? (
+                <a href="https://klipy.com" target="_blank" rel="noreferrer">
+                  Powered by KLIPY
+                </a>
+              ) : (
+                'Hasta 10 MB por GIF. Se agrega al borrador.'
+              )}
             </p>
           </>
         )}

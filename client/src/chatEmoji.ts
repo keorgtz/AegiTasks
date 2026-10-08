@@ -1,168 +1,7 @@
-// Native Unicode keeps emoji available offline without fetching third-party images.
-export const emojiGroups = [
-  {
-    name: 'Caras',
-    items: [
-      ['😀', 'sonrisa feliz'],
-      ['😃', 'alegría feliz'],
-      ['😄', 'risa feliz'],
-      ['😁', 'sonrisa dientes'],
-      ['😆', 'carcajada'],
-      ['😅', 'risa nerviosa sudor'],
-      ['😂', 'lágrimas risa'],
-      ['🤣', 'carcajada suelo'],
-      ['🙂', 'sonrisa leve'],
-      ['🙃', 'cara invertida'],
-      ['😉', 'guiño'],
-      ['😊', 'sonrisa tímida'],
-      ['🥰', 'amor corazones'],
-      ['😍', 'enamorado'],
-      ['🤩', 'estrellas emoción'],
-      ['😘', 'beso'],
-      ['😋', 'rico delicioso'],
-      ['😛', 'lengua'],
-      ['😜', 'guiño lengua'],
-      ['🤪', 'locura'],
-      ['🤔', 'pensando duda'],
-      ['🤨', 'ceja sospecha'],
-      ['😐', 'neutral'],
-      ['😶', 'sin palabras'],
-      ['🙄', 'ojos arriba'],
-      ['😏', 'sonrisa pícara'],
-      ['😴', 'dormido sueño'],
-      ['🥱', 'bostezo'],
-      ['😎', 'gafas sol genial'],
-      ['🤓', 'nerd programador'],
-      ['🧐', 'investigar monóculo'],
-      ['🤯', 'sorpresa mente'],
-      ['😮', 'sorprendido'],
-      ['😱', 'miedo grito'],
-      ['😢', 'triste lágrima'],
-      ['😭', 'llanto'],
-      ['🥺', 'por favor súplica'],
-      ['😤', 'frustración'],
-      ['😡', 'enojado'],
-      ['🤬', 'furioso'],
-      ['🤒', 'enfermo fiebre'],
-      ['🤕', 'herido'],
-      ['🤢', 'náusea'],
-      ['🤧', 'estornudo'],
-      ['🥳', 'fiesta celebrar'],
-      ['🤗', 'abrazo'],
-      ['🤭', 'risa tapada'],
-      ['🫡', 'saludo militar'],
-    ],
-  },
-  {
-    name: 'Gestos',
-    items: [
-      ['👍', 'pulgar arriba bien ok', true],
-      ['👎', 'pulgar abajo mal', true],
-      ['👏', 'aplauso', true],
-      ['🙌', 'celebrar manos arriba', true],
-      ['👋', 'saludar hola adiós', true],
-      ['🤚', 'mano parar', true],
-      ['✋', 'alto mano', true],
-      ['👌', 'perfecto ok', true],
-      ['🤌', 'dedos juntos', true],
-      ['🤏', 'pequeño poquito', true],
-      ['✌️', 'victoria paz', true],
-      ['🤞', 'suerte dedos cruzados', true],
-      ['🤟', 'te quiero mano', true],
-      ['🤘', 'rock', true],
-      ['🤙', 'llámame', true],
-      ['👈', 'izquierda', true],
-      ['👉', 'derecha', true],
-      ['👆', 'arriba', true],
-      ['👇', 'abajo', true],
-      ['☝️', 'índice atención', true],
-      ['✊', 'puño', true],
-      ['👊', 'chocar puños', true],
-      ['🙏', 'gracias oración por favor', true],
-      ['💪', 'fuerza músculo', true],
-      ['🫶', 'manos corazón', true],
-      ['🤝', 'acuerdo manos'],
-      ['👀', 'ojos mirando'],
-      ['🧠', 'cerebro idea'],
-      ['🧑‍💻', 'programador código'],
-    ],
-  },
-  {
-    name: 'Corazones',
-    items: [
-      ['💜', 'corazón morado'],
-      ['❤️', 'corazón rojo amor'],
-      ['🧡', 'corazón naranja'],
-      ['💛', 'corazón amarillo'],
-      ['💚', 'corazón verde'],
-      ['💙', 'corazón azul'],
-      ['🩷', 'corazón rosa'],
-      ['🤍', 'corazón blanco'],
-      ['🖤', 'corazón negro'],
-      ['🤎', 'corazón café'],
-      ['💔', 'corazón roto'],
-      ['💕', 'dos corazones'],
-      ['💖', 'corazón brillante'],
-      ['💯', 'cien perfecto'],
-      ['💥', 'explosión'],
-      ['💫', 'estrellas mareo'],
-      ['✨', 'brillo estrellas'],
-      ['🔥', 'fuego'],
-      ['💤', 'dormir'],
-      ['💬', 'mensaje conversación'],
-    ],
-  },
-  {
-    name: 'Objetos',
-    items: [
-      ['🎉', 'confeti celebración'],
-      ['🎊', 'fiesta confeti'],
-      ['🎈', 'globo cumpleaños'],
-      ['🎁', 'regalo'],
-      ['🏆', 'trofeo logro'],
-      ['🥇', 'medalla primero'],
-      ['🎯', 'objetivo meta'],
-      ['🚀', 'cohete lanzamiento'],
-      ['💻', 'computadora laptop código'],
-      ['🖥️', 'monitor pantalla'],
-      ['📱', 'teléfono móvil'],
-      ['⌨️', 'teclado'],
-      ['🛠️', 'herramientas arreglo fix'],
-      ['⚙️', 'configuración engrane'],
-      ['🐛', 'bug error'],
-      ['🔧', 'llave reparar'],
-      ['💡', 'idea foco'],
-      ['🔍', 'buscar lupa'],
-      ['🔒', 'candado seguridad'],
-      ['🔑', 'llave acceso'],
-      ['📌', 'pin importante'],
-      ['📎', 'adjunto clip'],
-      ['📝', 'nota escribir'],
-      ['📚', 'libros documentación'],
-      ['📅', 'calendario fecha'],
-      ['⏰', 'reloj alarma'],
-      ['⌛', 'tiempo espera'],
-      ['✅', 'completado listo check'],
-      ['❌', 'cancelar error'],
-      ['⚠️', 'advertencia atención'],
-      ['❓', 'pregunta'],
-      ['❗', 'importante exclamación'],
-      ['🟢', 'verde disponible'],
-      ['🟡', 'amarillo ausente'],
-      ['🔴', 'rojo ocupado'],
-      ['☕', 'café pausa'],
-      ['🍕', 'pizza'],
-      ['🍿', 'palomitas'],
-      ['🌈', 'arcoíris'],
-      ['🌊', 'ola agua'],
-      ['🌞', 'sol día'],
-      ['🌙', 'luna noche'],
-      ['🌻', 'flor'],
-      ['🐈', 'gato'],
-      ['🐕', 'perro'],
-    ],
-  },
-] as const;
+import data from 'emojibase-data/es/data.json';
+import messages from 'emojibase-data/es/messages.json';
+
+// Emojibase/CLDR Unicode 17 data is bundled locally, including real ZWJ/skin sequences.
 export const skinTones = ['', '🏻', '🏼', '🏽', '🏾', '🏿'];
 export const toneNames = [
   'Predeterminado',
@@ -172,8 +11,41 @@ export const toneNames = [
   'Medio oscuro',
   'Oscuro',
 ];
+const normalize = (value: string) => value.replaceAll('\uFE0F', '');
+const lookup = new Map(
+  data
+    .flatMap((item) => [item, ...(item.skins || [])])
+    .map((item) => [normalize(item.emoji), item]),
+);
+export const emojiCount = data.reduce((count, item) => count + 1 + (item.skins?.length || 0), 0);
+export const emojiGroups = messages.groups.map((group) => ({
+  name: group.message[0]!.toLocaleUpperCase('es') + group.message.slice(1),
+  items: data
+    .filter((item) => (item.group ?? 2) === group.order)
+    .map(
+      (item) =>
+        [
+          item.emoji,
+          item.label,
+          !!item.skins?.length,
+          [item.label, ...(item.tags || [])].join(' '),
+        ] as const,
+    ),
+}));
+export const emojiVariants = data.flatMap((item) =>
+  (item.skins || []).map(
+    (skin) =>
+      [skin.emoji, skin.label, false, [skin.label, ...(item.tags || [])].join(' ')] as const,
+  ),
+);
 export function emojiWithTone(emoji: string, supported: boolean, tone: number) {
-  return supported && tone > 0 ? emoji.replace('\uFE0F', '') + (skinTones[tone] || '') : emoji;
+  if (!supported || tone === 0) return emoji;
+  const item = lookup.get(normalize(emoji));
+  return (
+    item?.skins?.find((skin) =>
+      Array.isArray(skin.tone) ? skin.tone.every((t) => t === tone) : skin.tone === tone,
+    )?.emoji || emoji
+  );
 }
 export function emojiSearch(value: string) {
   return value
@@ -182,9 +54,8 @@ export function emojiSearch(value: string) {
     .toLocaleLowerCase('es');
 }
 export function emojiDescription(value: string) {
-  for (const group of emojiGroups)
-    for (const item of group.items)
-      if (skinTones.some((_, tone) => emojiWithTone(item[0], item.length > 2, tone) === value))
-        return item[1];
-  return value;
+  return lookup.get(normalize(value))?.label || value;
+}
+export function isKnownEmoji(value: string) {
+  return lookup.has(normalize(value));
 }

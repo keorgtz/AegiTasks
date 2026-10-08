@@ -24,6 +24,7 @@ import { ChatNotificationSettings, clearChatNotices } from './ChatNotifications'
 import { PresenceBadge, RoomPresence } from './ChatPresence';
 import { ChatMediaPicker } from './ChatMediaPicker';
 import { GifPreview } from './GifPreview';
+import { gifLinks, transferredGif, withoutGifLinks, type RemoteGif } from './chatGif';
 import type { Space, User } from './types';
 import './styles/chat.css';
 
@@ -68,7 +69,9 @@ export default function ChatPage({
   const [attachments, setAttachments] = useState(false);
   const [media, setMedia] = useState<{ room: string; tab: 'emoji' | 'gif' } | null>(null);
   const emojiCursor = useRef({ start: 0, end: 0 });
+  const mediaValue = useRef('');
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const incomingTransfer = useRef<(value: DataTransfer) => boolean>(() => false);
   const input = useRef<HTMLInputElement>(null);
   const page = useRef<HTMLElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
@@ -78,6 +81,17 @@ export default function ChatPage({
   selectedRef.current = selected;
   const draft = chat.drafts[selected] || { body: '', files: [], task: null };
   const busy = chat.busyId === selected;
+  useEffect(() => {
+    const element = textarea.current;
+    if (!element) return;
+    // Native beforeinput exposes rich keyboard content that React's synthetic fallback can omit.
+    const receive = (event: InputEvent) => {
+      if (event.dataTransfer && incomingTransfer.current(event.dataTransfer))
+        event.preventDefault();
+    };
+    element.addEventListener('beforeinput', receive);
+    return () => element.removeEventListener('beforeinput', receive);
+  }, [selected, !!room]);
   useEffect(() => {
     const content = page.current?.closest<HTMLElement>('.app-content');
     const viewport = window.visualViewport;
@@ -247,6 +261,7 @@ export default function ChatPage({
     return true;
   }
   function openMedia(tab: 'emoji' | 'gif') {
+    mediaValue.current = draft.body;
     emojiCursor.current = {
       start: textarea.current?.selectionStart ?? draft.body.length,
       end: textarea.current?.selectionEnd ?? draft.body.length,
@@ -254,10 +269,15 @@ export default function ChatPage({
     setMedia({ room: selected, tab });
   }
   function closeMedia() {
+    const roomId = selected;
+    const value = mediaValue.current;
+    const cursor = { ...emojiCursor.current };
     setMedia(null);
     requestAnimationFrame(() => {
-      textarea.current?.focus();
-      textarea.current?.setSelectionRange(emojiCursor.current.start, emojiCursor.current.end);
+      const element = textarea.current;
+      if (!element || element.value !== value || selectedRef.current !== roomId) return;
+      element.focus();
+      element.setSelectionRange(cursor.start, cursor.end);
     });
   }
   function insertEmoji(emoji: string) {
@@ -266,9 +286,44 @@ export default function ChatPage({
     const body = draft.body.slice(0, start) + emoji + draft.body.slice(end);
     if (body.length > 4000) return false;
     chat.update(selected, { body });
+    mediaValue.current = body;
     emojiCursor.current = { start: start + emoji.length, end: start + emoji.length };
     return true;
   }
+  function insertRemoteGif(gif: RemoteGif) {
+    if (busy) return false;
+    if (gifLinks(draft.body).some((item) => item.url === gif.url)) return true;
+    const body = draft.body ? `${draft.body.trimEnd()}\n${gif.url}` : gif.url;
+    if (body.length > 4000) {
+      setError('El mensaje admite hasta 4000 caracteres.');
+      return false;
+    }
+    chat.update(selected, { body });
+    mediaValue.current = body;
+    emojiCursor.current = { start: body.length, end: body.length };
+    setError('');
+    return true;
+  }
+  function transferContent(transfer: DataTransfer) {
+    const files = Array.from(
+      transfer.files.length
+        ? transfer.files
+        : Array.from(transfer.items).flatMap((item) =>
+            item.kind === 'file' ? [item.getAsFile()].filter((f): f is File => !!f) : [],
+          ),
+    ).filter((f) => f.type.startsWith('image/') || /\.gif$/i.test(f.name));
+    if (files.length) {
+      attach(files);
+      return true;
+    }
+    const gif = transferredGif(transfer);
+    if (gif) {
+      insertRemoteGif(gif);
+      return true;
+    }
+    return false;
+  }
+  incomingTransfer.current = transferContent;
   return (
     <section
       ref={page}
@@ -423,7 +478,23 @@ export default function ChatPage({
                         })}
                       </time>
                     </div>
-                    {m.body && <p className="chat-message-text">{m.body}</p>}
+                    {withoutGifLinks(m.body) && (
+                      <p className="chat-message-text">{withoutGifLinks(m.body)}</p>
+                    )}
+                    {gifLinks(m.body).map((gif) => (
+                      <div className="chat-file" key={gif.url}>
+                        <GifPreview src={gif.url} name={`GIF de ${gif.provider}`} />
+                        <a
+                          href={gif.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          referrerPolicy="no-referrer"
+                          className="chat-download"
+                        >
+                          GIF · {gif.provider}
+                        </a>
+                      </div>
+                    ))}
                     {m.task &&
                       (m.task.available ? (
                         <button
@@ -487,6 +558,26 @@ export default function ChatPage({
                 void send();
               }}
             >
+              {gifLinks(draft.body).length > 0 && (
+                <div className="chat-draft-remote-gifs">
+                  {gifLinks(draft.body).map((gif) => (
+                    <div className="chat-draft-chip" key={gif.url}>
+                      <span>GIF · {gif.provider}</span>
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        aria-label={`Quitar GIF de ${gif.provider}`}
+                        disabled={busy}
+                        onClick={() =>
+                          chat.update(selected, { body: draft.body.replaceAll(gif.url, '').trim() })
+                        }
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {draft.task && (
                 <div className="chat-draft-chip">
                   <Link2 size={17} />
@@ -566,16 +657,30 @@ export default function ChatPage({
                   disabled={busy}
                   onChange={(e) => chat.update(selected, { body: e.target.value })}
                   onPaste={(e) => {
-                    const files = Array.from(e.clipboardData.files).filter((f) =>
-                      f.type.startsWith('image/'),
-                    );
-                    if (files.length) {
+                    if (transferContent(e.clipboardData)) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (transferContent(e.dataTransfer)) e.preventDefault();
+                  }}
+                  onDragOver={(e) => {
+                    if (
+                      e.dataTransfer.types.some((type) =>
+                        ['Files', 'text/html', 'text/uri-list'].includes(type),
+                      )
+                    )
                       e.preventDefault();
-                      attach(files);
-                    }
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    if (
+                      e.key === 'Enter' &&
+                      !e.shiftKey &&
+                      !e.nativeEvent.isComposing &&
+                      e.keyCode !== 229 &&
+                      (e.ctrlKey ||
+                        e.metaKey ||
+                        matchMedia('(min-width: 768px) and (hover: hover) and (pointer: fine)')
+                          .matches)
+                    ) {
                       e.preventDefault();
                       void send();
                     }
@@ -640,6 +745,7 @@ export default function ChatPage({
           onClose={closeMedia}
           onEmoji={insertEmoji}
           onFiles={attach}
+          onRemoteGif={insertRemoteGif}
         />
       )}
       {newChat && (

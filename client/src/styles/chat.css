@@ -372,10 +372,10 @@ body:has(.app-shell.is-chat) {
     display: none;
   }
   .chat-media-picker .chat-gif-option .chat-gif-preview {
-    height: 72px;
+    height: 64px;
   }
   .chat-media-picker .chat-gif-option .chat-gif-preview :is(img, canvas) {
-    max-height: 72px;
+    max-height: 64px;
   }
 }
 .chat-media-picker .chat-search {
@@ -451,6 +451,29 @@ body:has(.app-shell.is-chat) {
 .chat-gif-heading input {
   width: 16px;
   height: 16px;
+}
+.chat-gif-heading select {
+  min-width: 0;
+  max-width: 70%;
+  min-height: 40px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.chat-media-picker > .chat-gif-attribution {
+  display: block;
+  margin: 0;
+  flex-shrink: 0;
+}
+.chat-media-picker .chat-pagination {
+  margin: 0;
+  flex-shrink: 0;
+}
+.chat-draft-remote-gifs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-height: 90px;
+  overflow-y: auto;
 }
 .chat-gif-grid {
   display: grid;

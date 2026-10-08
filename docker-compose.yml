@@ -31,6 +31,7 @@ services:
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD?Set SEED_ADMIN_PASSWORD in .env}
       StoragePath: /app/storage/uploads
       DataProtectionPath: /app/storage/keys
+      GifCatalog__KlipyKey: ${KLIPY_API_KEY:-}
     volumes:
       - storage:/app/storage
     depends_on:
