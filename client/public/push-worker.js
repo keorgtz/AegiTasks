@@ -35,7 +35,7 @@ self.addEventListener('push', (event) => {
       }
       await self.registration.showNotification(notice.title, {
         body: notice.body,
-        icon: '/aegitasks-icon-192.png',
+        // Keep the native app identity/badge without an additional large content icon.
         badge: '/aegitasks-notification-badge.png',
         tag: notice.tag,
         ...(chat ? { renotify } : {}),

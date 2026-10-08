@@ -70,6 +70,9 @@ assert.equal(messages.length, 1);
 assert.equal(displays[0].options.tag, 'unique-notice');
 assert.equal(displays[0].title, 'Corregir cierre del POS');
 assert.equal(displays[0].options.body, 'María cambió el estado a «Resuelto».');
+assert.equal(displays[0].options.badge, '/aegitasks-notification-badge.png');
+assert.ok(!Object.hasOwn(displays[0].options, 'icon'));
+assert.ok(!Object.hasOwn(displays[0].options, 'image'));
 console.log(
   'PASS Push worker rechecks authenticated access, displays the notice and updates the open app',
 );
@@ -120,7 +123,8 @@ await dispatch('push', { data: { json: () => chatData } });
 await dispatch('push', { data: { json: () => chatData } });
 assert.equal(displays.length, 2);
 assert.equal(displays.at(-1).options.badge, '/aegitasks-notification-badge.png');
-assert.equal(displays.at(-1).options.icon, '/aegitasks-icon-192.png');
+assert.ok(!Object.hasOwn(displays.at(-1).options, 'icon'));
+assert.ok(!Object.hasOwn(displays.at(-1).options, 'image'));
 chatNotice = {
   ...chatNotice,
   body: '2 mensajes nuevos\nAlice: Primer mensaje\nBob: Segundo mensaje',
