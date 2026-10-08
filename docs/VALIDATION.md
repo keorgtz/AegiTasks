@@ -1,5 +1,15 @@
 # Evidencia de validación
 
+## Stickers de KLIPY — 8 de octubre de 2026
+
+El selector incorpora la pestaña Stickers, con tendencias, búsqueda y páginas de 12 resultados. Reutiliza la configuración pública `KLIPY_API_KEY` y las consultas directas del navegador, manteniendo atribución y URLs originales. Admite WebP, GIF y PNG en el contrato documentado del proveedor. El marcador Markdown permite persistir y distinguir stickers sin migración; lista y avisos muestran “Sticker compartido”. Se mantienen participación, silencios, movimiento reducido y borradores. Los errores explican falta de clave, límites o fallo del servicio; superar 4000 caracteres o cinco medios enlazados conserva el mensaje y permite corregirlo.
+
+Pasaron **72 comprobaciones enfocadas de chat en SQLite y 72 en PostgreSQL real**, con las migraciones existentes. Incluyen stickers en chat individual y grupo, búsqueda/tendencias/paginación, envío explícito, URL exacta, eliminación del borrador, recarga, previews privadas, acceso denegado, movimiento reducido, vacío/429 y falta de configuración. La última revisión de SQLite también verificó el portapapeles con un borrador lleno. Se revisaron capturas claras/oscuras en escritorio, 320/390 px vertical y 844 × 450 px horizontal, con un PNG transparente propio como fixture; la opción, tabs y paginación permanecen accesibles.
+
+Pasaron build de API/cliente, TypeScript, lint, formato y whitespace; **76 comprobaciones .NET**, **6 de parsing/contrato de medios**, **13 del worker push** y **12 PWA con dos builds reales**. La prueba de contrato también cubre WebP/GIF/PNG, orden de medios, query strings intactos, hosts/protocolos/formatos rechazados y respuestas de anuncios incompatibles. Se agregó al workflow de CI. Evidencia local: `artifacts/chat-stickers-sqlite-results.json`, `chat-stickers-postgres-results.json`, logs `chat-stickers-*.log` y capturas `chat-stickers-*.png`.
+
+Las bases, API y conexiones de chat fueron reales; **el catálogo y medios externos de KLIPY fueron simulados**. No se validó una clave real, teléfono físico, despliegue Docker ni ejecución remota de CI. La clave usada en producción debe tener acceso a Stickers API. No se repitió la suite completa de otras páginas.
+
 ## Catálogo online, Unicode completo y teclado de chat — 8 de octubre de 2026
 
 Se reemplazó la lista pequeña por Emojibase 17.0.0/CLDR, con 3979 registros incluyendo variantes, categorías, banderas, profesiones y tonos mixtos. Los datos españoles y licencia MIT se incluyen localmente; se presentan bloques de 240 opciones para limitar el DOM. Los tonos utilizan secuencias reales del dataset, incluidos ZWJ, en lugar de concatenar modificadores. Se conserva búsqueda sin acentos, selección, recientes por cuenta y límite del mensaje.

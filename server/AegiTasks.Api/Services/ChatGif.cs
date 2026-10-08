@@ -10,7 +10,13 @@ public static partial class ChatGif
     };
     [GeneratedRegex("https://[^\\s<>\"']+")]
     private static partial Regex Links();
-    public static string Preview(string body) => Links().Replace(body, match =>
+    [GeneratedRegex("!\\[Sticker KLIPY\\]\\(<(https://[^\\s<>\"']+)>\\)")]
+    private static partial Regex Stickers();
+    public static string Preview(string body) => Links().Replace(Stickers().Replace(body, match =>
+        Uri.TryCreate(match.Groups[1].Value, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo == "" && uri.IsDefaultPort && uri.Fragment == "" &&
+        (uri.Host.Equals("static.klipy.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("static1.klipy.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("static2.klipy.com", StringComparison.OrdinalIgnoreCase)) &&
+        (uri.AbsolutePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            ? "Sticker compartido" : match.Value), match =>
         Uri.TryCreate(match.Value, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo == "" && uri.IsDefaultPort && uri.Fragment == "" && Hosts.Contains(uri.Host) && uri.AbsolutePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
             ? "GIF compartido" : match.Value);
 }

@@ -301,11 +301,17 @@ export async function testChat({
   const roomAdmin = await json(admin, 'POST', '/chat', { isGroup: false, users: [alice.id] });
   const providerRequests = [];
   const remoteUrl = 'https://static.klipy.com/unit/hola.gif?delivery=preserved';
+  const stickerBytes = await readFile(new URL('./fixtures/chat-sticker.png', import.meta.url));
+  const stickerUrl = 'https://static.klipy.com/unit/sticker.png?delivery=preserved';
+  const stickerToken = `![Sticker KLIPY](<${stickerUrl}>)`;
   await page.route('**/api/chat/gif-provider', (route) =>
     route.fulfill({ json: { key: 'test-browser-key' } }),
   );
   await page.route('https://static.klipy.com/**', (route) =>
-    route.fulfill({ contentType: 'image/gif', body: gifBytes }),
+    route.fulfill({
+      contentType: route.request().url().includes('.png') ? 'image/png' : 'image/gif',
+      body: route.request().url().includes('.png') ? stickerBytes : gifBytes,
+    }),
   );
   await page.route('https://media.tenor.com/**', (route) =>
     route.fulfill({ contentType: 'image/gif', body: gifBytes }),
@@ -316,9 +322,16 @@ export async function testChat({
     assert.equal(route.request().headers().cookie, undefined);
     assert.equal(url.searchParams.get('locale'), 'es');
     assert.ok(url.searchParams.get('customer_id'));
+    assert.ok(url.pathname.startsWith('/api/v1/test-browser-key/'));
+    const stickers = url.pathname.includes('/stickers/');
     const query = url.searchParams.get('q');
     if (query === 'limite') return route.fulfill({ status: 429, json: {} });
-    const title = url.searchParams.get('page') === '2' ? 'Segunda página' : 'Hola equipo';
+    const title =
+      url.searchParams.get('page') === '2'
+        ? 'Segunda página'
+        : stickers
+          ? 'Saludo transparente'
+          : 'Hola equipo';
     return route.fulfill({
       json: {
         result: true,
@@ -331,10 +344,12 @@ export async function testChat({
                     id: 701,
                     title,
                     slug: 'hola-equipo',
-                    type: 'gif',
+                    type: stickers ? 'sticker' : 'gif',
                     file: {
-                      hd: { gif: { url: remoteUrl } },
-                      sm: { gif: { url: 'https://static.klipy.com/unit/preview.gif' } },
+                      hd: stickers ? { png: { url: stickerUrl } } : { gif: { url: remoteUrl } },
+                      sm: stickers
+                        ? { png: { url: stickerUrl } }
+                        : { gif: { url: 'https://static.klipy.com/unit/preview.gif' } },
                     },
                   },
                 ],
@@ -354,12 +369,12 @@ export async function testChat({
       await page.getByRole('button', { name: 'Agregar al mensaje', exact: true }).click();
       await page
         .getByRole('dialog', { name: 'Agregar al mensaje', exact: true })
-        .getByRole('button', { name: 'Emojis y GIFs', exact: true })
+        .getByRole('button', { name: 'Emojis, GIFs y stickers', exact: true })
         .click();
     } else
       await page
         .locator('.chat-composer')
-        .getByRole('button', { name: 'Emojis y GIFs', exact: true })
+        .getByRole('button', { name: 'Emojis, GIFs y stickers', exact: true })
         .click();
   };
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -372,7 +387,7 @@ export async function testChat({
     el.setSelectionRange(7, 12);
   });
   await openMediaPicker();
-  const mediaPicker = page.getByRole('dialog', { name: 'Emojis y GIFs', exact: true });
+  const mediaPicker = page.getByRole('dialog', { name: 'Emojis, GIFs y stickers', exact: true });
   await mediaPicker.getByLabel('Buscar emojis').fill('pulgar arriba');
   await mediaPicker.getByLabel('Tono de piel').selectOption('3');
   await mediaPicker
@@ -551,6 +566,172 @@ export async function testChat({
   await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
   pass(
     'Unicode 17 exposes flags and mixed skin variants; online keyword search, paging, selection, error/empty states and attribution work with client-only provider requests and preserved GIF URLs',
+  );
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .waitFor();
+  await mediaPicker.getByLabel('Buscar stickers en KLIPY').fill('saludo');
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .waitFor();
+  await mediaPicker.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Segunda página', exact: true })
+    .waitFor();
+  await mediaPicker.getByRole('button', { name: 'Anterior', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .click();
+  assert.equal(await composerText.inputValue(), stickerToken);
+  await page.getByRole('button', { name: 'Quitar sticker de KLIPY', exact: true }).click();
+  assert.equal(await composerText.inputValue(), '');
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .click();
+  await composerText.press('Enter');
+  const stickerImage = page.getByAltText('Sticker de KLIPY', { exact: true });
+  await stickerImage.waitFor();
+  await page.waitForFunction(() =>
+    [...document.images].some((i) => i.alt === 'Sticker de KLIPY' && i.naturalWidth > 0),
+  );
+  assert.equal(await stickerImage.getAttribute('src'), stickerUrl);
+  const savedSticker = (await json(admin, 'GET', `/chat/${roomAdmin.id}/messages`)).items.find(
+    (m) => m.body === stickerToken,
+  );
+  assert.ok(savedSticker);
+  assert.equal(savedSticker.files.length, 0);
+  assert.ok(
+    (await json(a, 'GET', '/chat/notifications'))
+      .find((n) => n.roomId === roomAdmin.id)
+      .previews.some((p) => p.includes('Sticker compartido')),
+  );
+  assert.ok(
+    (await json(a, 'GET', '/chat'))
+      .find((r) => r.id === roomAdmin.id)
+      .preview.includes('Sticker compartido'),
+  );
+  await page.reload();
+  await stickerImage.waitFor();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page
+    .locator('.chat-file')
+    .filter({ has: page.getByRole('img', { name: 'Sticker de KLIPY', exact: true }) })
+    .getByRole('button', { name: 'Reproducir sticker Sticker de KLIPY', exact: true })
+    .waitFor();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const stickerGroup = await json(admin, 'POST', '/chat', {
+    isGroup: true,
+    name: 'Stickers compartidos',
+    users: [alice.id, bob.id],
+  });
+  await page.goto(`/?space=${shared.id}#chat/${stickerGroup.id}`);
+  await page.getByRole('heading', { name: 'Stickers compartidos', exact: true }).waitFor();
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .click();
+  await composerText.press('Enter');
+  await stickerImage.waitFor();
+  for (const participant of [a, b]) {
+    assert.ok(
+      (await json(participant, 'GET', `/chat/${stickerGroup.id}/messages`)).items.some(
+        (m) => m.body === stickerToken,
+      ),
+    );
+    assert.ok(
+      (await json(participant, 'GET', '/chat/notifications'))
+        .find((n) => n.roomId === stickerGroup.id)
+        .previews.some((p) => p.includes('Sticker compartido')),
+    );
+  }
+  await json(x, 'GET', `/chat/${stickerGroup.id}/messages`, undefined, 404);
+  await page.goto(`/?space=${shared.id}#chat/${roomAdmin.id}`);
+  await page.getByRole('heading', { name: 'Chat Alice', exact: true }).waitFor();
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker.getByLabel('Buscar stickers en KLIPY').fill('vacio');
+  await mediaPicker.getByText('No hay resultados. Prueba otra palabra.', { exact: true }).waitFor();
+  await mediaPicker.getByLabel('Buscar stickers en KLIPY').fill('limite');
+  await mediaPicker
+    .getByRole('alert')
+    .getByText('El catálogo alcanzó su límite de consultas. Intenta más tarde.')
+    .waitFor();
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  assert.ok(providerRequests.some((u) => u.pathname.endsWith('/stickers/trending')));
+  assert.ok(
+    providerRequests.some(
+      (u) => u.pathname.endsWith('/stickers/search') && u.searchParams.get('q') === 'saludo',
+    ),
+  );
+  pass(
+    'KLIPY stickers reuse the browser key, search/trending/paging work, original transparent media survives send/reload and draft removal, reduced motion works and direct/group previews remain private',
+  );
+  await composerText.fill('x'.repeat(4000));
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .click();
+  await mediaPicker
+    .getByRole('alert')
+    .getByText('El mensaje admite hasta 4000 caracteres.')
+    .waitFor();
+  assert.equal((await composerText.inputValue()).length, 4000);
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await composerText.fill('');
+  await composerText.fill('y'.repeat(4000));
+  await composerText.evaluate((el, url) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', url);
+    el.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
+    );
+  }, stickerToken);
+  await page.getByRole('alert').getByText('El mensaje admite hasta 4000 caracteres.').waitFor();
+  assert.equal(await composerText.inputValue(), 'y'.repeat(4000));
+  await composerText.fill('');
+  const fullMediaDraft = Array.from(
+    { length: 5 },
+    (_, i) => `https://static.klipy.com/unit/item-${i}.gif`,
+  ).join('\n');
+  await composerText.fill(fullMediaDraft);
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker
+    .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+    .click();
+  await mediaPicker.getByRole('alert').getByText('Máximo 5 GIFs o stickers por mensaje.').waitFor();
+  assert.equal(await composerText.inputValue(), fullMediaDraft);
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await composerText.fill('');
+  await page.unroute('**/api/chat/gif-provider');
+  await page.route('**/api/chat/gif-provider', (route) => route.fulfill({ json: { key: '' } }));
+  await openMediaPicker();
+  await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+  await mediaPicker
+    .getByText(
+      'El catálogo no está activado. Tu administrador debe configurar KLIPY con acceso a stickers.',
+      { exact: true },
+    )
+    .waitFor();
+  const noKeyRequests = providerRequests.length;
+  await mediaPicker.getByLabel('Buscar stickers en KLIPY').fill('hola');
+  await page.waitForTimeout(500);
+  assert.equal(providerRequests.length, noKeyRequests);
+  await mediaPicker.getByRole('button', { name: 'GIFs', exact: true }).click();
+  await mediaPicker.getByRole('button', { name: 'Adjuntar GIF', exact: true }).waitFor();
+  await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.unroute('**/api/chat/gif-provider');
+  await page.route('**/api/chat/gif-provider', (route) =>
+    route.fulfill({ json: { key: 'test-browser-key' } }),
+  );
+  pass(
+    'Stickers preserve a full draft on overflow and explain missing configuration while local GIF upload remains usable',
   );
   await composerText.fill('Primera línea');
   await composerText.press('Shift+Enter');
@@ -796,6 +977,21 @@ export async function testChat({
       onlineBounds.y + onlineBounds.height <= onlineScroll.y + onlineScroll.height + 1,
       'Online GIF option fits even with paging and attribution',
     );
+    await mediaPicker.getByRole('button', { name: 'Stickers', exact: true }).click();
+    await mediaPicker
+      .getByRole('button', { name: 'Elegir Sticker Saludo transparente', exact: true })
+      .waitFor();
+    const stickerBounds = await mediaPicker.locator('.chat-gif-option').first().boundingBox();
+    const stickerScroll = await mediaPicker.locator('.chat-media-scroll').boundingBox();
+    assert.ok(stickerBounds.y + stickerBounds.height <= stickerScroll.y + stickerScroll.height + 1);
+    const stickerDialog = await mediaPicker.boundingBox();
+    assert.ok(
+      stickerDialog.x >= 0 &&
+        stickerDialog.x + stickerDialog.width <= width + 1 &&
+        stickerDialog.y >= 0 &&
+        stickerDialog.y + stickerDialog.height <= height + 1,
+    );
+    await page.screenshot({ path: path.join(artifacts, `chat-stickers-${width}-${theme}.png`) });
     await mediaPicker.getByRole('button', { name: 'Cerrar', exact: true }).click();
     if (width < 768) {
       await page.getByRole('button', { name: 'Volver a conversaciones' }).click();

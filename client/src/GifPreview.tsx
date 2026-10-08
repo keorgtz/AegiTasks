@@ -6,11 +6,13 @@ export function GifPreview({
   name,
   animate,
   controls = true,
+  kind = 'gif',
 }: {
   src: string;
   name: string;
   animate?: boolean;
   controls?: boolean;
+  kind?: 'gif' | 'sticker';
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [playing, setPlaying] = useState(
@@ -54,10 +56,11 @@ export function GifPreview({
         <button
           type="button"
           className="chat-gif-toggle"
-          aria-label={`${playing ? 'Pausar' : 'Reproducir'} GIF ${name}`}
+          aria-label={`${playing ? 'Pausar' : 'Reproducir'} ${kind === 'sticker' ? 'sticker' : 'GIF'} ${name}`}
           onClick={() => setPlaying(!playing)}
         >
-          {playing ? <Pause size={14} /> : <Play size={14} />} GIF
+          {playing ? <Pause size={14} /> : <Play size={14} />}{' '}
+          {kind === 'sticker' ? 'Sticker' : 'GIF'}
         </button>
       )}
     </div>

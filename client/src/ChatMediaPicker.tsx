@@ -34,11 +34,11 @@ export function ChatMediaPicker({
   onRemoteGif,
 }: {
   userId: string;
-  initialTab?: 'emoji' | 'gif';
+  initialTab?: 'emoji' | 'gif' | 'sticker';
   onClose: () => void;
   onEmoji: (emoji: string) => boolean;
   onFiles: (files: File[]) => boolean;
-  onRemoteGif: (gif: RemoteGif) => boolean;
+  onRemoteGif: (gif: RemoteGif) => true | string;
 }) {
   const [tab, setTab] = useState(initialTab);
   const [query, setQuery] = useState('');
@@ -48,6 +48,8 @@ export function ChatMediaPicker({
   const [recent, setRecent] = useState<string[]>([]);
   const [gifs, setGifs] = useState<GifPage>({ items: [], total: 0 });
   const [source, setSource] = useState('online');
+  const online = tab === 'sticker' || source === 'online';
+  const mediaName = tab === 'sticker' ? 'Sticker' : 'GIF';
   const [key, setKey] = useState<string | null>(null);
   const [catalogue, setCatalogue] = useState<CataloguePage>({ items: [], hasNext: false });
   const [page, setPage] = useState(1);
@@ -94,38 +96,44 @@ export function ChatMediaPicker({
     return () => abort.abort();
   }, [retry]);
   useEffect(() => {
-    if (tab !== 'gif') return;
-    if (source === 'online' && !key) {
+    if (tab === 'emoji') return;
+    setCatalogue({ items: [], hasNext: false });
+    if (online && !key) {
       setLoading(key === null);
       return;
     }
     const abort = new AbortController();
     setLoading(true);
     const timer = setTimeout(() => {
-      const task =
-        source === 'online'
-          ? searchKlipy(key!, query, page, abort.signal).then((value) => {
-              if (!abort.signal.aborted) {
-                setCatalogue(value);
-                setError('');
-              }
-            })
-          : api<GifPage>(
-              `/chat/gifs?page=${page}&q=${encodeURIComponent(query)}`,
-              'GET',
-              undefined,
-              abort.signal,
-            ).then((value) => {
-              if (!abort.signal.aborted) {
-                setGifs(value);
-                setError('');
-              }
-            });
+      const task = online
+        ? searchKlipy(
+            key!,
+            query,
+            page,
+            abort.signal,
+            tab === 'sticker' ? 'stickers' : 'gifs',
+          ).then((value) => {
+            if (!abort.signal.aborted) {
+              setCatalogue(value);
+              setError('');
+            }
+          })
+        : api<GifPage>(
+            `/chat/gifs?page=${page}&q=${encodeURIComponent(query)}`,
+            'GET',
+            undefined,
+            abort.signal,
+          ).then((value) => {
+            if (!abort.signal.aborted) {
+              setGifs(value);
+              setError('');
+            }
+          });
       void task
         .catch((e) => {
           if (!abort.signal.aborted) {
             setError(errorMessage(e));
-            if (source === 'online') setCatalogue({ items: [], hasNext: false });
+            if (online) setCatalogue({ items: [], hasNext: false });
             else setGifs({ items: [], total: 0 });
           }
         })
@@ -137,7 +145,7 @@ export function ChatMediaPicker({
       clearTimeout(timer);
       abort.abort();
     };
-  }, [tab, page, query, retry, source, key]);
+  }, [tab, page, query, retry, online, key]);
   function remember(next: string[], nextTone: number) {
     try {
       localStorage.setItem(marker, JSON.stringify({ recent: next, tone: nextTone }));
@@ -193,7 +201,7 @@ export function ChatMediaPicker({
       item[0].includes(query),
   );
   return (
-    <Modal title="Emojis y GIFs" onClose={onClose}>
+    <Modal title="Emojis, GIFs y stickers" onClose={onClose}>
       <div className="modal-body chat-media-picker">
         <div className="chat-media-tabs" role="group" aria-label="Tipo de contenido">
           <button
@@ -219,6 +227,18 @@ export function ChatMediaPicker({
           >
             GIFs
           </button>
+          <button
+            className="btn btn-ghost"
+            aria-pressed={tab === 'sticker'}
+            onClick={() => {
+              setTab('sticker');
+              setQuery('');
+              setPage(1);
+              setError('');
+            }}
+          >
+            Stickers
+          </button>
         </div>
         <div className="chat-search">
           <Search size={16} />
@@ -226,16 +246,12 @@ export function ChatMediaPicker({
             aria-label={
               tab === 'emoji'
                 ? 'Buscar emojis'
-                : source === 'online'
-                  ? 'Buscar GIFs en KLIPY'
+                : online
+                  ? `Buscar ${tab === 'sticker' ? 'stickers' : 'GIFs'} en KLIPY`
                   : 'Buscar GIFs por nombre'
             }
             placeholder={
-              tab === 'emoji'
-                ? 'Buscar emoji…'
-                : source === 'online'
-                  ? 'Search KLIPY'
-                  : 'Buscar en tus GIFs…'
+              tab === 'emoji' ? 'Buscar emoji…' : online ? 'Search KLIPY' : 'Buscar en tus GIFs…'
             }
             maxLength={80}
             value={query}
@@ -376,7 +392,7 @@ export function ChatMediaPicker({
                 }
               }}
             />
-            {(source !== 'online' || !key) && (
+            {tab === 'gif' && (!online || !key) && (
               <button
                 className="btn btn-primary"
                 disabled={!!busy}
@@ -386,19 +402,23 @@ export function ChatMediaPicker({
               </button>
             )}
             <div className="chat-gif-heading">
-              <select
-                aria-label="Origen de GIFs"
-                value={source}
-                onChange={(e) => {
-                  setSource(e.target.value);
-                  setPage(1);
-                  setQuery('');
-                  setError('');
-                }}
-              >
-                <option value="online">Buscar en KLIPY</option>
-                <option value="chats">GIFs de tus chats</option>
-              </select>
+              {tab === 'gif' ? (
+                <select
+                  aria-label="Origen de GIFs"
+                  value={source}
+                  onChange={(e) => {
+                    setSource(e.target.value);
+                    setPage(1);
+                    setQuery('');
+                    setError('');
+                  }}
+                >
+                  <option value="online">Buscar en KLIPY</option>
+                  <option value="chats">GIFs de tus chats</option>
+                </select>
+              ) : (
+                <span className="muted small">Stickers de KLIPY</span>
+              )}
               <label>
                 <input
                   type="checkbox"
@@ -410,18 +430,23 @@ export function ChatMediaPicker({
             </div>
             <div className="chat-media-scroll">
               {loading ? (
-                <p role="status">Cargando GIFs…</p>
+                <p role="status">Cargando {tab === 'sticker' ? 'stickers' : 'GIFs'}…</p>
               ) : (
                 <div className="chat-gif-grid">
-                  {source === 'online'
+                  {online
                     ? catalogue.items.map((gif) => (
                         <button
                           key={gif.id}
                           className="chat-gif-option"
-                          aria-label={`Elegir GIF ${gif.title}`}
+                          aria-label={`Elegir ${mediaName} ${gif.title}`}
                           onClick={() => {
-                            if (onRemoteGif({ url: gif.url, provider: 'KLIPY' })) onClose();
-                            else setError('El mensaje admite hasta 4000 caracteres.');
+                            const result = onRemoteGif({
+                              url: gif.url,
+                              provider: 'KLIPY',
+                              kind: tab === 'sticker' ? 'sticker' : 'gif',
+                            });
+                            if (result === true) onClose();
+                            else setError(result);
                           }}
                         >
                           <GifPreview
@@ -452,14 +477,16 @@ export function ChatMediaPicker({
                       ))}
                 </div>
               )}
-              {!loading && !error && source === 'online' && !catalogue.items.length && (
+              {!loading && !error && online && !catalogue.items.length && (
                 <p className="muted small">
                   {!key
-                    ? 'El catálogo no está activado. Tu administrador debe configurar KLIPY. Puedes adjuntar archivos o elegir GIFs de tus chats.'
+                    ? tab === 'sticker'
+                      ? 'El catálogo no está activado. Tu administrador debe configurar KLIPY con acceso a stickers.'
+                      : 'El catálogo no está activado. Tu administrador debe configurar KLIPY. Puedes adjuntar archivos o elegir GIFs de tus chats.'
                     : 'No hay resultados. Prueba otra palabra.'}
                 </p>
               )}
-              {!loading && source !== 'online' && !gifs.items.length && (
+              {!loading && !online && !gifs.items.length && (
                 <p className="muted small">
                   {query
                     ? 'No hay GIFs con ese nombre.'
@@ -467,7 +494,7 @@ export function ChatMediaPicker({
                 </p>
               )}
             </div>
-            {(page > 1 || (source === 'online' ? catalogue.hasNext : gifs.total > 24)) && (
+            {(page > 1 || (online ? catalogue.hasNext : gifs.total > 24)) && (
               <div className="chat-pagination">
                 <button
                   className="btn btn-ghost"
@@ -477,16 +504,14 @@ export function ChatMediaPicker({
                   Anterior
                 </button>
                 <span>
-                  {source === 'online'
+                  {online
                     ? `Página ${page}`
                     : `${page} / ${Math.max(1, Math.ceil(gifs.total / 24))}`}
                 </span>
                 <button
                   className="btn btn-ghost"
                   disabled={
-                    (source === 'online' ? !catalogue.hasNext : page * 24 >= gifs.total) ||
-                    loading ||
-                    !!busy
+                    (online ? !catalogue.hasNext : page * 24 >= gifs.total) || loading || !!busy
                   }
                   onClick={() => setPage(page + 1)}
                 >
@@ -503,8 +528,8 @@ export function ChatMediaPicker({
                 Reintentar galería
               </button>
             )}
-            <p className={`muted small ${source === 'online' ? 'chat-gif-attribution' : ''}`}>
-              {source === 'online' ? (
+            <p className={`muted small ${online ? 'chat-gif-attribution' : ''}`}>
+              {online ? (
                 <a href="https://klipy.com" target="_blank" rel="noreferrer">
                   Powered by KLIPY
                 </a>

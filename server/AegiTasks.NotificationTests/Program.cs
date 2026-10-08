@@ -21,6 +21,12 @@ using Microsoft.AspNetCore.Identity;
 using WebPush;
 using TaskStatus = AegiTasks.Api.Domain.TaskStatus;
 
+Assert(ChatGif.Preview("![Sticker KLIPY](<https://static.klipy.com/unit/sticker.png?token=original>)") == "Sticker compartido", "KLIPY sticker previews identify shared PNG content without exposing URLs");
+Assert(ChatGif.Preview("GIF https://static1.klipy.com/unit/animation.gif and ![Sticker KLIPY](<https://static2.klipy.com/unit/sticker.webp>)") == "GIF GIF compartido and Sticker compartido", "Mixed GIF and WebP sticker previews preserve surrounding text");
+foreach (var url in new[] { "https://static.klipy.com.evil.example/sticker.png", "http://static.klipy.com/sticker.png", "https://static.klipy.com/sticker.svg", "https://user@static.klipy.com/sticker.png", "https://static.klipy.com:444/sticker.png", "https://static.klipy.com/sticker.png#fragment", "https://media.tenor.com/sticker.png" }) {
+    var text = $"![Sticker KLIPY](<{url}>)";
+    Assert(ChatGif.Preview(text) == text, "Unsupported sticker URL stays plain text: " + url);
+}
 var directory = Path.Combine(Path.GetTempPath(), "aegitasks-notifications-" + Guid.NewGuid());
 Directory.CreateDirectory(directory);
 var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["DataProtectionPath"] = directory }).Build();

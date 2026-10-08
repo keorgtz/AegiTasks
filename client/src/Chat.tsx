@@ -24,7 +24,7 @@ import { ChatNotificationSettings, clearChatNotices } from './ChatNotifications'
 import { PresenceBadge, RoomPresence } from './ChatPresence';
 import { ChatMediaPicker } from './ChatMediaPicker';
 import { GifPreview } from './GifPreview';
-import { gifLinks, transferredGif, withoutGifLinks, type RemoteGif } from './chatGif';
+import { mediaToken, gifLinks, transferredGif, withoutGifLinks, type RemoteGif } from './chatGif';
 import type { Space, User } from './types';
 import './styles/chat.css';
 
@@ -291,12 +291,17 @@ export default function ChatPage({
     return true;
   }
   function insertRemoteGif(gif: RemoteGif) {
-    if (busy) return false;
+    if (busy) return 'Espera a que termine el envío actual.';
     if (gifLinks(draft.body).some((item) => item.url === gif.url)) return true;
-    const body = draft.body ? `${draft.body.trimEnd()}\n${gif.url}` : gif.url;
+    if (gifLinks(draft.body).length >= 5) {
+      setError('Máximo 5 GIFs o stickers por mensaje.');
+      return 'Máximo 5 GIFs o stickers por mensaje.';
+    }
+    const token = mediaToken(gif);
+    const body = draft.body ? `${draft.body.trimEnd()}\n${token}` : token;
     if (body.length > 4000) {
       setError('El mensaje admite hasta 4000 caracteres.');
-      return false;
+      return 'El mensaje admite hasta 4000 caracteres.';
     }
     chat.update(selected, { body });
     mediaValue.current = body;
@@ -483,7 +488,11 @@ export default function ChatPage({
                     )}
                     {gifLinks(m.body).map((gif) => (
                       <div className="chat-file" key={gif.url}>
-                        <GifPreview src={gif.url} name={`GIF de ${gif.provider}`} />
+                        <GifPreview
+                          src={gif.url}
+                          name={`${gif.kind === 'sticker' ? 'Sticker' : 'GIF'} de ${gif.provider}`}
+                          kind={gif.kind}
+                        />
                         <a
                           href={gif.url}
                           target="_blank"
@@ -491,7 +500,7 @@ export default function ChatPage({
                           referrerPolicy="no-referrer"
                           className="chat-download"
                         >
-                          GIF · {gif.provider}
+                          {gif.kind === 'sticker' ? 'Sticker' : 'GIF'} · {gif.provider}
                         </a>
                       </div>
                     ))}
@@ -562,14 +571,18 @@ export default function ChatPage({
                 <div className="chat-draft-remote-gifs">
                   {gifLinks(draft.body).map((gif) => (
                     <div className="chat-draft-chip" key={gif.url}>
-                      <span>GIF · {gif.provider}</span>
+                      <span>
+                        {gif.kind === 'sticker' ? 'Sticker' : 'GIF'} · {gif.provider}
+                      </span>
                       <button
                         type="button"
                         className="btn-icon"
-                        aria-label={`Quitar GIF de ${gif.provider}`}
+                        aria-label={`Quitar ${gif.kind === 'sticker' ? 'sticker' : 'GIF'} de ${gif.provider}`}
                         disabled={busy}
                         onClick={() =>
-                          chat.update(selected, { body: draft.body.replaceAll(gif.url, '').trim() })
+                          chat.update(selected, {
+                            body: draft.body.replaceAll(mediaToken(gif), '').trim(),
+                          })
                         }
                       >
                         <X size={15} />
@@ -640,8 +653,8 @@ export default function ChatPage({
                 <button
                   type="button"
                   className="btn-icon chat-media-open"
-                  aria-label="Emojis y GIFs"
-                  title="Emojis y GIFs"
+                  aria-label="Emojis, GIFs y stickers"
+                  title="Emojis, GIFs y stickers"
                   disabled={busy}
                   onClick={() => openMedia('emoji')}
                 >
@@ -711,7 +724,7 @@ export default function ChatPage({
                 openMedia('emoji');
               }}
             >
-              <Smile size={20} /> Emojis y GIFs
+              <Smile size={20} /> Emojis, GIFs y stickers
             </button>
             <button
               className="btn btn-ghost"

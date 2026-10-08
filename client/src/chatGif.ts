@@ -1,6 +1,8 @@
 export interface RemoteGif {
   url: string;
   provider: string;
+  kind?: 'gif' | 'sticker';
+  token?: string;
 }
 const providers: Record<string, string> = {
   'static.klipy.com': 'KLIPY',
@@ -17,7 +19,7 @@ const providers: Record<string, string> = {
   'media4.giphy.com': 'GIPHY',
   'i.giphy.com': 'GIPHY',
 };
-export function remoteGif(value: string): RemoteGif | null {
+export function remoteGif(value: string, kind: 'gif' | 'sticker' = 'gif'): RemoteGif | null {
   try {
     const url = new URL(value);
     const provider = Object.hasOwn(providers, url.hostname) ? providers[url.hostname] : undefined;
@@ -28,27 +30,32 @@ export function remoteGif(value: string): RemoteGif | null {
       url.password ||
       url.port ||
       url.hash ||
-      !url.pathname.toLowerCase().endsWith('.gif')
+      (kind === 'sticker'
+        ? provider !== 'KLIPY' || !/\.(gif|webp|png)$/i.test(url.pathname)
+        : !url.pathname.toLowerCase().endsWith('.gif')) ||
+      /[\s<>"']/.test(value)
     )
       return null;
-    return { url: value, provider };
+    return { url: value, provider, kind };
   } catch {
     return null;
   }
 }
+export function mediaToken(media: RemoteGif) {
+  return media.token || (media.kind === 'sticker' ? `![Sticker KLIPY](<${media.url}>)` : media.url);
+}
 export function gifLinks(body: string) {
-  return Array.from(
-    new Map(
-      (body.match(/https:\/\/[^\s<>"']+/g) || []).flatMap((value) => {
-        const gif = remoteGif(value);
-        return gif ? [[gif.url, gif] as const] : [];
-      }),
-    ).values(),
-  ).slice(0, 5);
+  const links = new Map<string, RemoteGif>();
+  const pattern = /!\[Sticker KLIPY\]\(<(https:\/\/[^\s<>"']+)>\)|https:\/\/[^\s<>"']+/g;
+  for (const match of body.matchAll(pattern)) {
+    const media = remoteGif(match[1] || match[0], match[1] ? 'sticker' : 'gif');
+    if (media && !links.has(media.url)) links.set(media.url, { ...media, token: match[0] });
+  }
+  return Array.from(links.values()).slice(0, 5);
 }
 export function withoutGifLinks(body: string) {
   return gifLinks(body)
-    .reduce((text, gif) => text.replaceAll(gif.url, ''), body)
+    .reduce((text, gif) => text.replaceAll(mediaToken(gif), ''), body)
     .trim();
 }
 export function transferredGif(transfer: DataTransfer): RemoteGif | null {
@@ -80,6 +87,7 @@ export async function searchKlipy(
   query: string,
   page: number,
   signal: AbortSignal,
+  kind: 'gifs' | 'stickers' = 'gifs',
 ): Promise<CataloguePage> {
   let customer: string;
   try {
@@ -102,7 +110,7 @@ export async function searchKlipy(
     });
     if (query.trim()) params.set('q', query.trim());
     const response = await fetch(
-      `https://api.klipy.com/api/v1/${encodeURIComponent(key)}/gifs/${query.trim() ? 'search' : 'trending'}?${params}`,
+      `https://api.klipy.com/api/v1/${encodeURIComponent(key)}/${kind}/${query.trim() ? 'search' : 'trending'}?${params}`,
       {
         credentials: 'omit',
         referrerPolicy: 'no-referrer',
@@ -125,22 +133,30 @@ export async function searchKlipy(
         title: string;
         slug: string;
         type?: string;
-        file?: { hd?: { gif?: { url?: string } }; sm?: { gif?: { url?: string } } };
+        file?: {
+          hd?: Partial<Record<'gif' | 'webp' | 'png', { url?: string }>>;
+          sm?: Partial<Record<'gif' | 'webp' | 'png', { url?: string }>>;
+        };
       }) => {
-        const url = item.file?.hd?.gif?.url;
-        const preview = item.file?.sm?.gif?.url || url;
+        const format =
+          kind === 'stickers'
+            ? (['webp', 'gif', 'png'] as const).find((format) => item.file?.hd?.[format]?.url)
+            : 'gif';
+        const url = format && item.file?.hd?.[format]?.url;
+        const preview = (format && item.file?.sm?.[format]?.url) || url;
+        const mediaKind = kind === 'stickers' ? 'sticker' : 'gif';
         if (
           !url ||
           !preview ||
-          remoteGif(url)?.provider !== 'KLIPY' ||
-          remoteGif(preview)?.provider !== 'KLIPY' ||
+          remoteGif(url, mediaKind)?.provider !== 'KLIPY' ||
+          remoteGif(preview, mediaKind)?.provider !== 'KLIPY' ||
           !item.slug ||
           item.type === 'ad'
         )
-          throw new Error('La configuración de KLIPY debe usar el catálogo de GIFs sin anuncios.');
+          throw new Error('La configuración de KLIPY debe usar catálogos de medios sin anuncios.');
         return {
           id: String(item.id),
-          title: item.title || 'GIF de KLIPY',
+          title: item.title || `${mediaKind === 'sticker' ? 'Sticker' : 'GIF'} de KLIPY`,
           slug: item.slug,
           url,
           preview,
