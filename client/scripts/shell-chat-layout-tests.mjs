@@ -100,8 +100,22 @@ export async function testShellChatLayout({ page, admin, adminUser, json, pass, 
           );
         }
       }
+      const standaloneOptions = await menu.locator(':scope > button.sidebar-link').all();
+      const collapsedHeights = await Promise.all(
+        standaloneOptions.map(async (button) => (await button.boundingBox()).height),
+      );
       await more.getByRole('button', { name: 'Ajustes', exact: true }).click();
       await more.getByRole('navigation', { name: 'Submenú de ajustes', exact: true }).waitFor();
+      for (const [index, button] of standaloneOptions.entries()) {
+        near(
+          (await button.boundingBox()).height,
+          collapsedHeights[index],
+          `${route}/${width}/${theme}: opening settings must not stretch ${await button.innerText()}`,
+        );
+      }
+      await page.screenshot({
+        path: path.join(artifacts, `more-menu-expanded-${route}-${width}-${theme}.png`),
+      });
       await more.getByRole('button', { name: 'Ajustes', exact: true }).click();
       await page.screenshot({
         path: path.join(artifacts, `more-menu-${route}-${width}-${theme}.png`),
@@ -119,7 +133,7 @@ export async function testShellChatLayout({ page, admin, adminUser, json, pass, 
   await page.waitForURL((url) => url.hash === '#notes');
   assert.equal(await navigationMenu.count(), 0);
   pass(
-    'Mobile navigation puts Chat second; More options retain full-width buttons/icons on Inbox, Notes, Focus and Chat in both themes, with working settings/close/navigation',
+    'Mobile More options keep natural button heights with expanded Settings on Inbox, Notes, Focus and Chat at 320/390/430px in both themes; icons, close and navigation work',
   );
   await page.goto('/#inbox');
   for (const [width, height, theme] of [

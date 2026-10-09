@@ -1,5 +1,11 @@
 # Evidencia de validación
 
+## Altura de opciones junto a submenús móviles — 9 de octubre de 2026
+
+Se reprodujo en navegador real que abrir Ajustes dentro de Más opciones estiraba el botón vecino Chat de **44 a 278 px** en la bandeja a 320 px. La cuadrícula de dos columnas usaba la alineación vertical predeterminada, que estira sus elementos para llenar la fila. `.mobile-menu` ahora alinea cada elemento al inicio y conserva su altura natural; no fija alturas que puedan recortar etiquetas de varias líneas.
+
+Pasaron **44 comprobaciones focalizadas de API/navegación/layout** con SQLite y Chromium real, además del build del cliente, TypeScript, lint, formato y whitespace. La prueba compara las alturas de todas las opciones directas antes/después de abrir Ajustes en Bandeja, Notas, Focus y Chat a 320/390/430 px, con temas claros/oscuros. También valida cerrar/navegar, iconos, áreas táctiles, sidebar de escritorio, navegación inferior y compositor de chat. Se revisaron capturas con el submenú abierto. Evidencia: `artifacts/mobile-menu-height-before.log`, `mobile-menu-height-after.log`, `mobile-menu-height-results.json` y `more-menu-expanded-*.png`. No se probó un teléfono físico ni un despliegue en producción.
+
 ## Roles de equipo por workspace — 8 de octubre de 2026
 
 Se agregó el catálogo de roles de equipo en **Ajustes → Workspace**, con ejemplos en español, nombre/descripción, edición y eliminación confirmada. El propietario o un Admin que pertenezca al workspace compartido puede asignar un rol opcional a cada integrante, incluido el propietario. Los miembros comunes consultan las funciones sin controles de gestión. Cada workspace tiene su catálogo y asignaciones; Admin/User y los permisos por página siguen independientes. Los cambios actualizan las vistas conectadas mediante SSE.
